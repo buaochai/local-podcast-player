@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.30.0">
+<meta name="app-version" content="0.30.1">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -104,7 +104,7 @@ body.has-player .list-scroll{padding-bottom:170px}
 .search-in{flex:1;min-width:0;height:38px;border:1px solid var(--line);border-radius:19px;background:var(--card);color:var(--text);font:inherit;font-size:16px;padding:0 14px;outline-color:var(--accent);transform-origin:right center;animation:sin .22s ease-out;-webkit-appearance:none;appearance:none}
 .search-in[hidden]{display:none}
 @keyframes sin{from{opacity:0;transform:scaleX(.15)}to{opacity:1;transform:none}}
-header.searching h1{display:none}
+header.searching h1,header.searching #bFav,header.searching #bRss,header.searching #bNewAlbum,header.searching #bAdd{display:none}   /* 搜索时，输入框占满左边，从搜索按钮向左展开 */
 #bSearch.on{color:var(--accent)}
 .sr-sec{font-size:13px;color:var(--muted);margin:14px 2px 6px}
 .sr-item{display:block;width:100%;text-align:left;border:none;background:var(--card);border-radius:12px;padding:10px 12px;margin:0 0 8px;color:var(--text)}
@@ -323,8 +323,6 @@ input[type=file]{display:none}
 <header>
   <button class="icon-btn" id="bBack" aria-label="返回" hidden><svg viewBox="0 0 24 24"><path d="M15.4 5.4 14 4l-8 8 8 8 1.4-1.4L8.8 12z"/></svg></button>
   <h1 id="title" class="line1">播客节目</h1>
-  <input class="search-in" id="searchIn" type="search" placeholder="搜索节目、单集、文稿" enterkeyhint="search" autocomplete="off" hidden>
-  <button class="icon-btn" id="bSearch" aria-label="搜索" hidden><svg viewBox="0 0 24 24"><path d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg></button>
   <button class="icon-btn" id="bTrJob" aria-label="AI 识别进度" hidden><svg viewBox="0 0 24 24"><path d="M3 10h2v4H3zm4-4h2v12H7zm4-3h2v18h-2zm4 3h2v12h-2zm4 4h2v4h-2z"/></svg><i class="trdot"></i></button>
   <button class="icon-btn" id="bHome" aria-label="首页" hidden><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg></button>
   <button class="icon-btn" id="bEpMore" aria-label="更多" hidden><svg viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg></button>
@@ -335,6 +333,8 @@ input[type=file]{display:none}
   <button class="icon-btn" id="bRss" aria-label="订阅播客" hidden><svg viewBox="0 0 24 24"><path d="M6.18 15.64a2.18 2.18 0 1 1 0 4.36 2.18 2.18 0 0 1 0-4.36zM4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27zm0 5.66A9.9 9.9 0 0 1 13.9 20h-2.83A7.07 7.07 0 0 0 4 12.93z"/></svg></button>
   <button class="icon-btn" id="bNewAlbum" aria-label="新建专辑" hidden><svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"/></svg></button>
   <button class="icon-btn add" id="bAdd" aria-label="添加音频"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg></button>
+  <input class="search-in" id="searchIn" type="search" placeholder="搜索节目、单集、文稿" enterkeyhint="search" autocomplete="off" hidden>
+  <button class="icon-btn" id="bSearch" aria-label="搜索" hidden><svg viewBox="0 0 24 24"><path d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg></button>
   <button class="icon-btn" id="bAbout" aria-label="关于"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-11h2V7h-2zm0 8h2v-6h-2z"/></svg></button>
 </header>
 <!-- 只接受音频文件 -->
