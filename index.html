@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.13.0">
+<meta name="app-version" content="0.14.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -178,6 +178,22 @@ li.has-edit{position:relative}
 .opt-edit svg{width:20px;height:20px;fill:currentColor}
 .mini-cover{cursor:pointer}
 .ep-top{flex:none;position:relative}
+#aiStatus{white-space:pre-line}
+.chap-wrap{position:relative;margin-bottom:8px}
+.chap-bar{display:flex;align-items:center;gap:10px;width:100%;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 8px 8px 12px;text-align:left;min-height:46px}
+.chap-bar.plain{color:var(--muted);font-size:14px}
+.chap-bar.plain .chap-name{font-weight:normal}
+.chap-bar .chap-go{min-height:32px;padding:3px 12px;font-size:14px;flex:none}
+.chap-t{flex:none;font-size:12px;color:var(--accent);font-variant-numeric:tabular-nums;min-width:3.2em}
+.chap-name{flex:1;min-width:0;font-weight:600;font-size:15px}
+.chap-chev{flex:none;display:flex;color:var(--muted);transition:transform .2s}
+.chap-chev svg{width:24px;height:24px;fill:currentColor}
+.chap-bar.open .chap-chev{transform:rotate(180deg)}
+.chap-list{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:6;max-height:56vh;overflow-y:auto;overscroll-behavior:contain;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+.chap-item{display:flex;gap:10px;align-items:baseline;width:100%;border:none;border-top:1px solid var(--line);background:transparent;padding:11px 12px;text-align:left;font-size:15px}
+.chap-item:first-child{border-top:none}
+.chap-item.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.chap-title{flex:1;min-width:0}
 .ep-sub{font-size:13px;color:var(--muted);margin:0 2px 6px}
 .check{display:flex;gap:8px;align-items:flex-start;margin:12px 2px 0;font-size:14px;color:var(--muted)}
 .check input{margin-top:4px;flex:none}
@@ -341,9 +357,11 @@ input[type=file]{display:none}
 
 <!-- AI 设置 -->
 <div class="sheet" id="aiSheet" hidden>
-  <div class="sheet-box" role="dialog" aria-label="AI 识别文稿设置">
-    <div class="sheet-head"><h2>AI 识别文稿</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
+  <div class="sheet-box" role="dialog" aria-label="AI 设置">
+    <div class="sheet-head"><h2>AI 设置</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
     <div class="sheet-body">
+      <h3>① 语音转文字</h3>
+      <p>把音频识别成文字，需要支持语音的服务商（Claude、DeepSeek 不行）。</p>
       <div class="sec">服务商</div>
       <select class="input" id="aiProvider"></select>
       <p id="aiHelp"></p>
@@ -360,10 +378,29 @@ input[type=file]{display:none}
         <option value="ja">日语</option><option value="ko">韩语</option><option value="fr">法语</option><option value="de">德语</option><option value="es">西班牙语</option>
       </select>
       <label class="check"><input type="checkbox" id="aiWav"><span>先转成 wav 再发送（服务商不认 mp3 / m4a 时才用；会多花一点手机的时间）</span></label>
-      <div class="tools"><button class="btn" id="bAiTest">测试连接</button><button class="btn primary" id="bAiSave">保存</button></div>
+      <button class="btn block" id="bAiTest">测试语音服务连接</button>
       <p id="aiTestResult"></p>
+
+      <h3>② 文本模型（自动分章节）</h3>
+      <p>识别完文稿后，用文本模型读一遍，按话题分章节。Claude、DeepSeek、通义、Kimi 等都可以，选一个就行。</p>
+      <div class="sec">服务商</div>
+      <select class="input" id="llmProvider"></select>
+      <p id="llmHelp"></p>
+      <div id="llmFields" hidden>
+        <div class="sec">API Key</div>
+        <input class="input" id="llmKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="粘贴你的 API Key">
+        <div class="sec">模型</div>
+        <input class="input" id="llmModel" list="llmModels" autocapitalize="off" spellcheck="false" placeholder="模型名称">
+        <datalist id="llmModels"></datalist>
+        <div class="sec">接口地址</div>
+        <input class="input" id="llmBase" autocapitalize="off" spellcheck="false" placeholder="https://…/v1">
+        <button class="btn block" id="bLlmTest">测试文本模型连接</button>
+        <p id="llmTestResult"></p>
+      </div>
+
+      <button class="btn primary block" id="bAiSave">保存</button>
       <p>API Key 只保存在这台手机的浏览器里，只会发给你选的服务商，不会传到别处，导出播放记录时也不会带上它。</p>
-      <button class="btn danger block" id="bAiClear">清除 API Key</button>
+      <button class="btn danger block" id="bAiClear">清除所有 API Key</button>
     </div>
   </div>
 </div>
@@ -448,11 +485,11 @@ input[type=file]{display:none}
         <li>锁屏和通知栏显示节目封面，可以用锁屏和耳机按钮控制播放</li>
       </ul>
 
-      <h3>AI 识别文稿</h3>
-      <p>用你自己的 API Key，把一集音频识别成带时间的文字，点一句话就跳到那里播放。支持 OpenAI、Groq、硅基流动、Google Gemini、OpenRouter，也可以填任何兼容的接口。</p>
+      <h3>AI 文稿</h3>
+      <p>用你自己的 API Key，把音频识别成带时间的文字，再由文本模型自动分章节。语音识别支持 OpenAI、Groq、硅基流动、Gemini、OpenRouter 和自定义接口；分章节支持 Claude、DeepSeek、通义千问、智谱、Kimi、豆包、混元、OpenAI、Gemini 等。</p>
       <div class="ver-row">
         <div class="ver-text">
-          <div class="ver-num">服务商</div>
+          <div class="ver-num">AI 设置</div>
           <div class="ver-status" id="aiStatus"></div>
         </div>
         <button class="btn" id="bAiSet">设置</button>
@@ -813,7 +850,7 @@ function open(ep, autoplay, at){
   if(startAt > 0 && autoplay && at == null) toast('从 ' + fmt(startAt) + ' 继续');
   setMediaSession();
   if(view.page === 'ep' && view.key !== ep.key){   // 文稿页跟着正在播放的这一集走
-    view.key = ep.key; history.replaceState({ep:ep.key}, ''); loadTr(ep.key);
+    view.key = ep.key; chapOpen = false; history.replaceState({ep:ep.key}, ''); loadTr(ep.key);
   }
   render();
 }
@@ -1953,7 +1990,50 @@ function aiProv(){ return AI_PROVIDERS[ai.provider] || AI_PROVIDERS.openai; }
 function aiBase(){ return (ai.base || aiProv().base || '').replace(/\/+$/, ''); }
 function aiModel(){ return ai.model || aiProv().model || ''; }
 function aiReady(){ return !!(ai.key && aiBase() && aiModel()); }
-function showAiStatus(){ $('aiStatus').textContent = aiReady() ? aiProv().name + ' · ' + aiModel() : '还没有设置'; }
+/* ---- 文本模型（用来自动分章节）---- */
+// Claude、DeepSeek 这类没有语音输入，不能转文字，但能读文稿来分章节
+var LLM_PROVIDERS = {
+  anthropic:{name:'Anthropic Claude', style:'anthropic', base:'https://api.anthropic.com', model:'claude-haiku-5-5',
+    models:['claude-haiku-5-5','claude-sonnet-5-5','claude-opus-5-5','claude-fable-5-1'],
+    help:'Claude 官方接口，网页可以直接连（我实测过它允许跨域）。Haiku 5.5 便宜又快，分章节足够；想要更好的标题可以选 Sonnet 5.5。'},
+  openai:{name:'OpenAI', style:'openai', base:'https://api.openai.com/v1', model:'gpt-4o-mini',
+    models:['gpt-4o-mini','gpt-4o','gpt-4.1-mini','gpt-4.1'], help:'OpenAI 官方，模型名以官方文档为准，可以自己改。'},
+  gemini:{name:'Google Gemini', style:'openai', base:'https://generativelanguage.googleapis.com/v1beta/openai', model:'gemini-2.5-flash',
+    models:['gemini-2.5-flash','gemini-2.5-pro','gemini-2.0-flash'], help:'Gemini，我实测过它允许网页直接访问，有免费额度。'},
+  deepseek:{name:'DeepSeek', style:'openai', base:'https://api.deepseek.com', model:'deepseek-chat',
+    models:['deepseek-chat','deepseek-reasoner'],
+    help:'国内便宜好用。我没法在开发环境测试它是否允许网页直接访问；如果连不上，可以改用 OpenRouter，模型选 deepseek/deepseek-chat。'},
+  qwen:{name:'通义千问（阿里百炼）', style:'openai', base:'https://dashscope.aliyuncs.com/compatible-mode/v1', model:'qwen-plus',
+    models:['qwen-plus','qwen-turbo','qwen-max'], help:'阿里百炼的 OpenAI 兼容接口。我没法在开发环境测试它是否允许网页直接访问。'},
+  zhipu:{name:'智谱 GLM', style:'openai', base:'https://open.bigmodel.cn/api/paas/v4', model:'glm-4-flash',
+    models:['glm-4-flash','glm-4-air','glm-4-plus'], help:'智谱开放平台，glm-4-flash 免费。我没法在开发环境测试它是否允许网页直接访问。'},
+  moonshot:{name:'月之暗面 Kimi', style:'openai', base:'https://api.moonshot.cn/v1', model:'moonshot-v1-32k',
+    models:['moonshot-v1-8k','moonshot-v1-32k','moonshot-v1-128k'], help:'Kimi 开放平台。我没法在开发环境测试它是否允许网页直接访问。'},
+  doubao:{name:'豆包（火山方舟）', style:'openai', base:'https://ark.cn-beijing.volces.com/api/v3', model:'', models:[],
+    help:'模型一栏要填你在火山方舟控制台创建的「推理接入点 ID」（ep- 开头）。我没法在开发环境测试它是否允许网页直接访问。'},
+  hunyuan:{name:'腾讯混元', style:'openai', base:'https://api.hunyuan.cloud.tencent.com/v1', model:'hunyuan-turbos-latest',
+    models:['hunyuan-turbos-latest','hunyuan-lite'], help:'腾讯混元的 OpenAI 兼容接口，接口地址和模型名以官方文档为准。我没法测试。'},
+  siliconflow:{name:'硅基流动', style:'openai', base:'https://api.siliconflow.cn/v1', model:'deepseek-ai/DeepSeek-V3',
+    models:['deepseek-ai/DeepSeek-V3','Qwen/Qwen2.5-72B-Instruct'], help:'国内聚合平台，可以选 DeepSeek、Qwen 等开源模型。'},
+  groq:{name:'Groq', style:'openai', base:'https://api.groq.com/openai/v1', model:'llama-3.3-70b-versatile',
+    models:['llama-3.3-70b-versatile','llama-3.1-8b-instant'], help:'Groq，速度很快，有免费额度。'},
+  openrouter:{name:'OpenRouter', style:'openai', base:'https://openrouter.ai/api/v1', model:'deepseek/deepseek-chat',
+    models:['deepseek/deepseek-chat','google/gemini-2.5-flash','anthropic/claude-sonnet-4.5','openai/gpt-4o-mini'],
+    help:'一个 Key 调用上百个模型（DeepSeek、Claude、GPT、Gemini…），网页可以直接连；国内接口连不上时可以用它。模型名以 openrouter.ai 为准。'},
+  custom:{name:'自定义（OpenAI 兼容接口）', style:'openai', base:'', model:'', models:[],
+    help:'任何兼容 OpenAI 聊天接口（/chat/completions）的服务：填接口地址（到 /v1 为止）和模型名。'}
+};
+if(!ai.chat) ai.chat = {provider:'', key:'', base:'', model:''};
+function llmCfg(){
+  var c = ai.chat || {}, pr = LLM_PROVIDERS[c.provider];
+  if(!pr) return null;
+  return {provider:c.provider, style:pr.style, name:pr.name, key:c.key || '', base:(c.base || pr.base || '').replace(/\/+$/, ''), model:c.model || pr.model || ''};
+}
+function llmReady(){ var c = llmCfg(); return !!(c && c.key && c.base && c.model); }
+function showAiStatus(){
+  var l = llmCfg();
+  $('aiStatus').textContent = '语音识别：' + (aiReady() ? aiProv().name + ' · ' + aiModel() : '还没有设置') + '\n分章节：' + (llmReady() ? l.name + ' · ' + l.model : '还没有设置');
+}
 
 /* ---- 设置界面 ---- */
 function aiFormFill(id){
@@ -1967,50 +2047,98 @@ function aiFormFill(id){
   $('aiWav').checked = own ? !!ai.wav : false;
   $('aiTestResult').textContent = '';
 }
+function llmFormFill(id){
+  var c = ai.chat || {}, pr = LLM_PROVIDERS[id], own = c.provider === id;
+  $('llmProvider').value = id || '';
+  $('llmFields').hidden = !pr;
+  $('llmModels').innerHTML = '';
+  $('llmTestResult').textContent = '';
+  if(!pr){ $('llmHelp').textContent = '不选就不会自动分章节，文稿照样能用。'; return; }
+  $('llmBase').value = own && c.base ? c.base : pr.base;
+  $('llmModel').value = own && c.model ? c.model : pr.model;
+  (pr.models || []).forEach(function(m){ var o = document.createElement('option'); o.value = m; $('llmModels').appendChild(o); });
+  $('llmHelp').textContent = pr.help;
+  if(own) $('llmKey').value = c.key || '';
+  else if(!clean($('llmKey').value) && $('aiProvider').value === id && clean($('aiKey').value)) $('llmKey').value = clean($('aiKey').value);   // 语音和分章节选了同一家，顺手带上 Key
+}
 function openAiSettings(){
   var sel = $('aiProvider');
   if(!sel.children.length) Object.keys(AI_PROVIDERS).forEach(function(k){ var o = document.createElement('option'); o.value = k; o.textContent = AI_PROVIDERS[k].name; sel.appendChild(o); });
+  var lsel = $('llmProvider');
+  if(!lsel.children.length){
+    var none = document.createElement('option'); none.value = ''; none.textContent = '（不用，不自动分章节）'; lsel.appendChild(none);
+    Object.keys(LLM_PROVIDERS).forEach(function(k){ var o = document.createElement('option'); o.value = k; o.textContent = LLM_PROVIDERS[k].name; lsel.appendChild(o); });
+  }
   $('aiKey').value = ai.key || '';
   $('aiLang').value = ai.lang == null ? 'zh' : ai.lang;
   aiFormFill(AI_PROVIDERS[ai.provider] ? ai.provider : 'openai');
+  $('llmKey').value = (ai.chat && ai.chat.key) || '';
+  llmFormFill(ai.chat && LLM_PROVIDERS[ai.chat.provider] ? ai.chat.provider : '');
   closeSheet('about'); openSheet('aiSheet');
 }
 function readAiForm(){
   return {provider:$('aiProvider').value, key:clean($('aiKey').value).replace(/\s/g, ''), base:clean($('aiBase').value), model:clean($('aiModel').value), lang:$('aiLang').value, wav:$('aiWav').checked};
 }
+function readLlmForm(){
+  return {provider:$('llmProvider').value, key:clean($('llmKey').value).replace(/\s/g, ''), base:clean($('llmBase').value), model:clean($('llmModel').value)};
+}
 $('aiProvider').addEventListener('change', function(){ aiFormFill(this.value); });
+$('llmProvider').addEventListener('change', function(){ llmFormFill(this.value); });
 $('bAiSet').onclick = openAiSettings;
 $('bAiSave').onclick = function(){
-  var f = readAiForm();
-  if(!f.key){ toast('请填 API Key'); return; }
-  if(!f.base){ toast('请填接口地址'); return; }
-  if(!f.model){ toast('请填模型名称'); return; }
+  var f = readAiForm(), g = readLlmForm();
+  var useAsr = !!f.key, useLlm = !!(g.provider && g.key);
+  if(!useAsr && !useLlm){ toast('请至少填一个 API Key'); return; }
+  if(useAsr && !f.base){ toast('语音识别：请填接口地址'); return; }
+  if(useAsr && !f.model){ toast('语音识别：请填模型名称'); return; }
+  if(useLlm && !g.base){ toast('分章节：请填接口地址'); return; }
+  if(useLlm && !g.model){ toast('分章节：请填模型名称'); return; }
   var pr = AI_PROVIDERS[f.provider];
   ai.provider = f.provider; ai.key = f.key; ai.lang = f.lang; ai.wav = f.wav;
   ai.base = f.base === pr.base ? '' : f.base;
   ai.model = f.model === pr.model ? '' : f.model;
+  var lp = LLM_PROVIDERS[g.provider];
+  ai.chat = useLlm ? {provider:g.provider, key:g.key, base:g.base === lp.base ? '' : g.base, model:g.model === lp.model ? '' : g.model}
+                   : {provider:g.provider || '', key:'', base:'', model:''};
   saveAi(); showAiStatus(); closeSheet('aiSheet');
-  toast('已保存：' + pr.name);
+  toast('已保存' + (useAsr ? '：语音 ' + pr.name : '') + (useLlm ? (useAsr ? '，' : '：') + '章节 ' + lp.name : ''));
+  if(view.page === 'ep') render();
 };
 $('bAiClear').onclick = function(){
-  if(!confirm('清除保存在这台手机上的 API Key？')) return;
-  ai.key = ''; saveAi(); $('aiKey').value = ''; showAiStatus(); toast('已清除 API Key');
+  if(!confirm('清除保存在这台手机上的所有 API Key？')) return;
+  ai.key = ''; if(ai.chat) ai.chat.key = '';
+  saveAi(); $('aiKey').value = ''; $('llmKey').value = ''; showAiStatus(); toast('已清除 API Key');
 };
-$('bAiTest').onclick = function(){
-  var f = readAiForm(), out = $('aiTestResult'), pr = AI_PROVIDERS[f.provider];
+// 测试连接：列出模型。Claude 用 /v1/models + 浏览器直连要加的头，其余用 /models
+function testConn(f, style, testPath, out, btn){
   if(!f.key || !f.base){ out.textContent = '先填好 API Key 和接口地址'; return; }
-  out.textContent = '正在连接…'; this.disabled = true;
-  var btn = this;
-  fetch(f.base.replace(/\/+$/, '') + (pr.testPath || '/models'), {headers:{Authorization:'Bearer ' + f.key}}).then(function(r){
+  var base = f.base.replace(/\/+$/, ''), url, headers;
+  if(style === 'anthropic'){
+    url = base.replace(/\/v1$/, '') + '/v1/models';
+    headers = {'x-api-key':f.key, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true'};
+  }else{
+    url = base + (testPath || '/models'); headers = {Authorization:'Bearer ' + f.key};
+  }
+  out.textContent = '正在连接…'; btn.disabled = true;
+  fetch(url, {headers:headers}).then(function(r){
     btn.disabled = false;
     if(r.ok) out.textContent = '连接成功，Key 可以用。';
     else if(r.status === 401 || r.status === 403) out.textContent = 'Key 不对或没有权限（' + r.status + '）。';
-    else if(r.status === 404) out.textContent = '连上了，但这个服务商没有「模型列表」接口，不影响使用；识别时才能确认 Key 和模型对不对。';
+    else if(r.status === 404) out.textContent = '连上了，但这个服务商没有「模型列表」接口，不影响使用；真正用的时候才能确认 Key 和模型对不对。';
     else out.textContent = '服务商返回 ' + r.status + '。';
   }).catch(function(){
     btn.disabled = false;
-    out.textContent = '连不上：可能是网络不通，或者这家服务商不允许网页直接访问（跨域限制）。可以改用 OpenRouter 或 Gemini。';
+    out.textContent = '连不上：可能是网络不通，或者这家服务商不允许网页直接访问（跨域限制）。可以改用 OpenRouter、Gemini 或 Claude。';
   });
+}
+$('bAiTest').onclick = function(){
+  var f = readAiForm();
+  testConn(f, 'openai', AI_PROVIDERS[f.provider].testPath, $('aiTestResult'), this);
+};
+$('bLlmTest').onclick = function(){
+  var g = readLlmForm();
+  if(!g.provider){ $('llmTestResult').textContent = '先选一个服务商'; return; }
+  testConn(g, LLM_PROVIDERS[g.provider].style, LLM_PROVIDERS[g.provider].testPath, $('llmTestResult'), this);
 };
 
 /* ---- 音频切段：mp3 ---- */
@@ -2414,6 +2542,100 @@ function trPut(tr){ trCache[tr.key] = tr; hasTr[tr.key] = true; return store('re
 function trDelete(key){ delete trCache[key]; delete hasTr[key]; return store('readwrite', function(s){ return s.delete(key); }, 'transcripts').catch(function(){}); }
 function trKeys(){ return store('readonly', function(s){ return s.getAllKeys(); }, 'transcripts'); }
 
+/* ---- 用文本模型分章节 ---- */
+function postRaw(url, headers, body, signal){
+  return fetch(url, {method:'POST', headers:headers, body:JSON.stringify(body), signal:signal}).then(function(r){
+    if(r.ok) return r.json();
+    return r.text().then(function(t){ throw apiError(r.status, t); });
+  });
+}
+// 返回模型回复的文字。Claude 走 /v1/messages（浏览器直连要加 anthropic-dangerous-direct-browser-access），其余走 /chat/completions
+function llmCall(system, user, signal){
+  var c = llmCfg();
+  if(c.style === 'anthropic'){
+    return postRaw(c.base.replace(/\/v1$/, '') + '/v1/messages',
+      {'Content-Type':'application/json', 'x-api-key':c.key, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true'},
+      {model:c.model, max_tokens:16000, system:system, messages:[{role:'user', content:user}]}, signal).then(function(j){
+        return (j.content || []).filter(function(b){ return b.type === 'text'; }).map(function(b){ return b.text; }).join('');
+      });
+  }
+  return postRaw(c.base + '/chat/completions', {'Content-Type':'application/json', Authorization:'Bearer ' + c.key},
+    {model:c.model, messages:[{role:'system', content:system}, {role:'user', content:user}]}, signal).then(function(j){
+      var m = j.choices && j.choices[0] && j.choices[0].message, x = m && m.content;
+      if(Array.isArray(x)) x = x.map(function(p){ return p.text || ''; }).join('');
+      return String(x || '');
+    });
+}
+// 把整篇文稿压成「每隔一小段取开头几句」的大纲，长度控制在大部分模型都吃得下
+function chapterOutline(tr){
+  var segs = tr.segments, last = segs.length ? segs[segs.length - 1].t : 0, dur = Math.max(tr.duration || 0, last + 20);
+  var win = Math.max(45, Math.ceil(dur / 180)), n = Math.ceil(dur / win), per = Math.max(40, Math.min(300, Math.floor(20000 / n) - 12)), rows = [], i = 0;
+  for(var k = 0; k < n; k++){
+    var t1 = (k + 1) * win, txt = '';
+    while(i < segs.length && segs[i].t < t1){ if(txt.length < per) txt += (txt ? ' ' : '') + segs[i].text; i++; }
+    if(txt) rows.push('[' + Math.round(k * win) + '] ' + txt.slice(0, per));
+  }
+  return {text:rows.join('\n'), dur:dur};
+}
+function chapterPrompt(tr){
+  var o = chapterOutline(tr), maxCh = Math.max(3, Math.min(20, Math.round(o.dur / 300))), minCh = Math.max(2, Math.floor(maxCh / 2));
+  return '下面是一集播客文稿的大纲：每行开头方括号里是这一段开始的秒数，后面是这一段开头的文字。整集约 ' + fmtLong(o.dur) + '。\n' +
+    '请按话题的变化把它分成章节：\n' +
+    '- 章节数在 ' + minCh + ' 到 ' + maxCh + ' 个之间，太碎的话题合并；\n' +
+    '- 每章起一个 6 到 16 个字的标题，概括这一章在讲什么，用文稿的语言，不要写“第一章”这类字眼；\n' +
+    '- 每章的 start 必须取自下面出现过的秒数，第一章的 start 必须是 0；\n' +
+    '- 只输出 JSON，不要任何别的文字，格式：{"chapters":[{"start":0,"title":"…"}]}\n\n' + o.text;
+}
+function toSeconds(v){
+  if(typeof v === 'number') return v;
+  var s = String(v || '').trim(), m = /^(?:(\d+):)?(\d+):(\d+)(?:\.\d+)?$/.exec(s);
+  if(m) return (m[1] ? +m[1] * 3600 : 0) + +m[2] * 60 + +m[3];
+  var n = parseFloat(s); return isFinite(n) ? n : NaN;
+}
+function parseChapters(text, dur){
+  var s = String(text || ''), m = /\{[\s\S]*\}/.exec(s) || /\[[\s\S]*\]/.exec(s);
+  if(!m) throw new Error('模型没有返回章节');
+  var j; try{ j = JSON.parse(m[0]); }catch(e){ throw new Error('模型返回的章节格式不对'); }
+  var arr = Array.isArray(j) ? j : (j.chapters || j.chapter || []);
+  var out = [], seen = {};
+  arr.forEach(function(c){
+    var t = Math.round(toSeconds(c && (c.start != null ? c.start : c.t != null ? c.t : c.time))), title = clean(String(c && (c.title || c.name) || '')).slice(0, 40);
+    if(!isFinite(t) || t < 0 || !title || (dur && t >= dur) || seen[t]) return;
+    seen[t] = 1; out.push({t:t, title:title});
+  });
+  out.sort(function(a, b){ return a.t - b.t; });
+  if(out.length && out[0].t > 0) out.unshift({t:0, title:'开场'});
+  if(!out.length) throw new Error('模型没有返回有效的章节');   // 很短的音频只有一章也正常
+  return out;
+}
+function chapterize(key, signal){
+  var tr = trCache[key], c = llmCfg();
+  if(!tr || !tr.segments.length) return Promise.reject(new Error('还没有文稿'));
+  var dur = chapterOutline(tr).dur;
+  return withRetry(function(){ return llmCall('你是一位播客编辑，擅长给长音频的文稿划分章节。', chapterPrompt(tr), signal); }, signal, 3).then(function(txt){
+    tr.chapters = parseChapters(txt, dur);
+    tr.chapterModel = c.name + ' · ' + c.model;
+    return trPut(tr);
+  });
+}
+var chapBusy = null, chapOpen = false, lastChapIdx = -1;
+function chapIndexAt(chs, t){
+  for(var i = chs.length - 1; i > 0; i--) if(chs[i].t <= t + 0.5) return i;
+  return 0;
+}
+// 识别完以后自动分章节（没设置文本模型就跳过；分章节失败不影响文稿）
+function autoChapters(key){
+  if(!llmReady()) return Promise.resolve({noLlm:true});
+  trJob.msg = (trJob.batch ? '第 ' + trJob.batch.i + ' / ' + trJob.batch.n + ' 集 · ' : '') + '正在用 AI 分章节…'; trRender();
+  return chapterize(key, trJob.abort.signal).then(function(){ return {}; }, function(err){ return {chapterErr:err && err.cancelled ? null : err}; });
+}
+function chapterRun(key){
+  if(chapBusy || trJob){ toast('正在处理，请稍等'); return; }
+  if(!llmReady()){ toast('先设置文本模型'); openAiSettings(); return; }
+  chapBusy = key; render();
+  chapterize(key, new AbortController().signal).then(function(){ toast('已分好章节'); }, function(err){ toast('分章节失败：' + aiErrMsg(err), 5000); }).then(function(){ chapBusy = null; render(); });
+}
+
 /* ---- 识别任务 ---- */
 var trJob = null, wakeLock = null;
 function keepAwake(on){
@@ -2437,9 +2659,9 @@ function trRun(key, restart, batch){
         if(!ok) throw {cancelled:true};
       }
       var tr = rec || {key:key, provider:aiProv().name, model:aiModel(), lang:ai.lang, created:Date.now(), duration:plan.duration, total:plan.chunks.length, done:0, segments:[], status:'partial'};
-      return trLoop(plan, route, tr);
+      return trLoop(plan, route, tr).then(function(){ return autoChapters(key); });
     });
-  }).then(function(){ return {res:'done'}; }, function(err){ return {res:err && err.cancelled ? 'cancelled' : 'failed', err:err}; });
+  }).then(function(x){ x = x || {}; return {res:'done', noLlm:x.noLlm, chapterErr:x.chapterErr}; }, function(err){ return {res:err && err.cancelled ? 'cancelled' : 'failed', err:err}; });
 }
 function trFinish(){ keepAwake(false); trJob = null; trRender(); render(); }
 function trGuard(){
@@ -2452,7 +2674,9 @@ function trStart(key, restart){
   if(!trGuard()) return;
   keepAwake(true);
   trRun(key, restart, null).then(function(r){
-    toast(r.res === 'done' ? '文稿识别完成：' + titleOf(key) : r.res === 'cancelled' ? '已停止识别' : aiErrMsg(r.err), r.res === 'done' ? 3000 : 4000);
+    var msg = '文稿识别完成：' + titleOf(key);
+    if(r.res === 'done') msg += r.noLlm ? '（还没设置文本模型，没分章节）' : r.chapterErr ? '。分章节失败：' + aiErrMsg(r.chapterErr) + '，可在文稿页重试' : '，已分好章节';
+    toast(r.res === 'done' ? msg : r.res === 'cancelled' ? '已停止识别' : aiErrMsg(r.err), r.res === 'done' ? 4500 : 4000);
     trFinish();
   });
 }
@@ -2472,7 +2696,7 @@ function trBatch(keys){
       var dur = ds.reduce(function(n, d){ return n + (d || 0); }, 0);
       var ok = confirm('将依次识别 ' + run.length + ' 集' + (dur ? '，共约 ' + fmtLong(dur) : '') + (skipped ? '（另有 ' + skipped + ' 集已识别过，跳过）' : '') + '，使用 ' + aiProv().name + '（' + aiModel() + '）。\n\n这会用你自己的 API 额度，可能产生较多费用。识别期间请保持网页在前台、屏幕不要锁；中途可以点右上角的「识别」查看进度或停止。\n\n继续吗？');
       if(!ok) return;
-      var bs = {i:0, n:run.length, ok:0, fail:0, stop:false, error:null};
+      var bs = {i:0, n:run.length, ok:0, fail:0, chFail:0, noLlm:false, stop:false, error:null};
       keepAwake(true);
       toast('开始识别 ' + run.length + ' 集', 2500);
       var chain = Promise.resolve();
@@ -2481,7 +2705,7 @@ function trBatch(keys){
           if(bs.stop) return;
           bs.i++;
           return trRun(k, false, bs).then(function(r){
-            if(r.res === 'done') bs.ok++;
+            if(r.res === 'done'){ bs.ok++; if(r.noLlm) bs.noLlm = true; if(r.chapterErr) bs.chFail++; }
             else if(r.res === 'cancelled') bs.stop = true;
             else{
               bs.fail++;
@@ -2491,7 +2715,7 @@ function trBatch(keys){
         });
       });
       return chain.then(function(){
-        toast(bs.error ? aiErrMsg(bs.error) + '。已识别 ' + bs.ok + ' 集' : bs.stop ? '已停止，识别了 ' + bs.ok + ' 集' : '识别完成：成功 ' + bs.ok + ' 集' + (bs.fail ? '，失败 ' + bs.fail + ' 集' : ''), 5000);
+        toast(bs.error ? aiErrMsg(bs.error) + '。已识别 ' + bs.ok + ' 集' : bs.stop ? '已停止，识别了 ' + bs.ok + ' 集' : '识别完成：成功 ' + bs.ok + ' 集' + (bs.fail ? '，失败 ' + bs.fail + ' 集' : '') + (bs.noLlm ? '（没设置文本模型，没分章节）' : bs.chFail ? '（' + bs.chFail + ' 集分章节失败，可在文稿页重试）' : ''), 5000);
         trFinish();
       });
     });
@@ -2545,7 +2769,7 @@ function loadTr(key){
 function goEp(key){
   if(view.page === 'ep' && view.key === key){ render(); return; }
   if(view.page === 'ep') history.replaceState({ep:key}, ''); else history.pushState({ep:key}, '');
-  view = {page:'ep', key:key};
+  view = {page:'ep', key:key}; chapOpen = false;
   $('view').scrollTop = 0;
   loadTr(key);
   render();
@@ -2575,6 +2799,7 @@ function renderEp(box){
   var running = !!(trJob && trJob.key === key), other = !!(trJob && trJob.key !== key);
   box.classList.add('fixed');
   var top = el('div', 'ep-top'), au = authorOf(showOf(key), ep);
+  var cw = el('div', 'chap-wrap'); cw.id = 'chapWrap'; top.appendChild(cw); fillChapterBar(cw, key);
   top.appendChild(el('div', 'ep-sub line1', showOf(key) + (au ? ' · ' + au : '') + (ep ? '' : ' · 文件缺失')));
   var st = el('div', 'tr-status'); st.id = 'trStatus';
   st.textContent = !loaded ? '正在读取文稿…' : running ? trJob.msg
@@ -2613,12 +2838,70 @@ function renderEp(box){
   }else{
     scroll.appendChild(el('div', 'empty', !loaded ? '正在读取文稿…' : running ? '识别中，识别出来的内容会在这里一段一段出现。' : !ep ? '文件缺失，没法识别。' : '这一集还没有文稿。点上面的「开始识别」，用 AI 把它转成带时间的文字。'));
   }
+  scroll.addEventListener('click', function(){ if(chapOpen){ chapOpen = false; refreshChapterBar(); } });
   box.appendChild(scroll);
+}
+// 顶部固定的章节条：收起时一直显示正在播放的章节，点右边的向下箭头展开，选一章就跳过去
+var CHEV = '<svg viewBox="0 0 24 24"><path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg>';
+function refreshChapterBar(){ var w = $('chapWrap'); if(w && view.page === 'ep') fillChapterBar(w, view.key); }
+function fillChapterBar(wrap, key){
+  wrap.innerHTML = '';
+  var tr = trCache[key];
+  lastChapIdx = -1;
+  if(!tr || !tr.segments.length) return;
+  var chs = tr.chapters, running = !!(trJob && trJob.key === key);
+  if(!chs || !chs.length){
+    if(tr.status !== 'done' && !chapBusy) return;
+    var row = el('div', 'chap-bar plain'), busy = chapBusy === key || running;
+    row.appendChild(el('span', 'chap-name', busy ? '正在用 AI 分章节…' : '还没有章节'));
+    if(!busy){
+      var gb = el('button', 'btn chap-go', llmReady() ? 'AI 分章节' : '设置文本模型');
+      gb.onclick = function(){ if(llmReady()) chapterRun(key); else openAiSettings(); };
+      row.appendChild(gb);
+    }
+    wrap.appendChild(row);
+    return;
+  }
+  var idx = chapIndexAt(chs, trPos(key)); lastChapIdx = idx;
+  var bar = el('button', 'chap-bar' + (chapOpen ? ' open' : '')); bar.id = 'chapBar';
+  var ct = el('span', 'chap-t', fmt(chs[idx].t)); ct.id = 'chapTime';
+  var cn = el('span', 'chap-name line1', chs[idx].title); cn.id = 'chapName';
+  var cv = el('span', 'chap-chev'); cv.innerHTML = CHEV;
+  bar.appendChild(ct); bar.appendChild(cn); bar.appendChild(cv);
+  bar.onclick = function(){ chapOpen = !chapOpen; fillChapterBar(wrap, key); };
+  wrap.appendChild(bar);
+  if(chapOpen){
+    var list = el('div', 'chap-list'); list.id = 'chapList';
+    chs.forEach(function(c, i){
+      var it = el('button', 'chap-item' + (i === idx ? ' on' : ''));
+      it.appendChild(el('span', 'chap-t', fmt(c.t))); it.appendChild(el('span', 'chap-title clamp2', c.title));
+      it.onclick = function(){ chapOpen = false; fillChapterBar(wrap, key); chapSeek(key, c.t); };
+      list.appendChild(it);
+    });
+    wrap.appendChild(list);
+    var on = list.querySelector('.on'); if(on) list.scrollTop = Math.max(0, on.offsetTop - 48);
+  }
+}
+function chapSeek(key, t){
+  var ep = findEp(key);
+  if(!ep){ toast('文件缺失，没法播放'); return; }
+  trTouch = 0;                // 让文稿马上滚到这一章
+  open(ep, true, t);
+  trTick(true);
 }
 // 播放时高亮当前这一句，并让文稿跟着滚动
 function trTick(force, jump){
   if(view.page !== 'ep' || !trSegs.length) return;
   var key = view.key, t = trPos(key), lo = 0, hi = trSegs.length - 1, idx = -1;
+  var chs = trCache[key] && trCache[key].chapters;
+  if(chs && chs.length){                                  // 章节条上显示当前章节
+    var ci = chapIndexAt(chs, t);
+    if(ci !== lastChapIdx){
+      lastChapIdx = ci;
+      if($('chapName')){ $('chapName').textContent = chs[ci].title; $('chapTime').textContent = fmt(chs[ci].t); }
+      Array.prototype.forEach.call(document.querySelectorAll('#chapList .chap-item'), function(it, n){ it.classList.toggle('on', n === ci); });
+    }
+  }
   while(lo <= hi){ var mid = (lo + hi) >> 1; if(trSegs[mid].t <= t){ idx = mid; lo = mid + 1; } else hi = mid - 1; }
   if(idx === trLastIdx && !force) return;
   if(trNodes[trLastIdx]) trNodes[trLastIdx].classList.remove('now');
@@ -2639,6 +2922,12 @@ function showTrMore(key){
   if(tr && tr.segments.length){
     items.push({label:'复制全文（带时间）', pick:function(){ closeSheet('trMoreSheet'); copyText(tr.segments.map(function(s){ return '[' + fmt(s.t) + '] ' + s.text; }).join('\n')); }});
     items.push({label:'复制纯文字', pick:function(){ closeSheet('trMoreSheet'); copyText(tr.segments.map(function(s){ return s.text; }).join('\n')); }});
+  }
+  if(tr && tr.status === 'done'){
+    var lc = llmCfg();
+    items.push({label:tr.chapters && tr.chapters.length ? '重新分章节' : 'AI 分章节', note:llmReady() ? '用 ' + lc.name + ' · ' + lc.model : '要先设置文本模型', pick:function(){
+      closeSheet('trMoreSheet'); if(llmReady()) chapterRun(key); else openAiSettings();
+    }});
   }
   if(ep && !trJob){
     if(tr && tr.status !== 'done') items.push({label:'继续识别', pick:function(){ closeSheet('trMoreSheet'); trStart(key, false); }});
