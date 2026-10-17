@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.11.0">
+<meta name="app-version" content="0.12.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -60,7 +60,7 @@ header .icon-btn.add{color:var(--accent)}
 header .icon-btn:last-child{margin-right:-8px}
 
 /* 内容区（唯一可以滚动的地方） */
-.view{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:16px}
+.view{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:16px;margin:0 -16px;padding-left:16px;padding-right:16px}   /* 两边撑到屏幕边缘，封面的阴影才不会被切掉 */
 body.has-player .view{padding-bottom:170px}
 /* 节目页：封面和标题固定，只有每一集的列表滚动 */
 .view.fixed{overflow:hidden;display:flex;flex-direction:column;padding-bottom:0}
@@ -71,8 +71,20 @@ body.has-player .list-scroll{padding-bottom:170px}
 
 /* 首页：节目封面 */
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px 12px}
-.pod{border:none;background:transparent;padding:0;text-align:left;min-width:0;align-self:start;display:block}
+.pod{border:none;background:transparent;padding:0;text-align:left;min-width:0;align-self:start;display:block;perspective:620px}
 .pod-cover{display:block;width:100%;aspect-ratio:1;object-fit:cover;border-radius:12px;background:var(--line);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+/* 首页封面：微微侧转，有厚度、立体阴影和高光，看起来凸出来 */
+.pod-3d{position:relative;margin:2px 8px 10px 6px;transform-style:preserve-3d;transform:rotateY(18deg) rotateX(3deg);transition:transform .25s ease}
+.pod:active .pod-3d{transform:rotateY(8deg) rotateX(1deg) scale(.97)}
+.pod-3d::before{content:"";position:absolute;left:0;top:1%;width:20px;height:98%;transform-origin:left center;transform:rotateY(90deg);border-radius:2px;background:linear-gradient(180deg,#f1f3f5 0%,#b4bac1 55%,#7d848c 100%)}
+/* 图片和高光放在同一个平面里，免得和侧边的厚度互相切割 */
+.pod-face{position:relative;border-radius:3px 10px 10px 3px;box-shadow:12px 16px 14px -6px rgba(0,0,0,.45),3px 4px 8px rgba(0,0,0,.28)}
+.pod-face .pod-cover{border-radius:inherit;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
+.pod-face::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(125deg,rgba(255,255,255,.42) 0%,rgba(255,255,255,.08) 34%,rgba(0,0,0,0) 58%,rgba(0,0,0,.26) 100%)}
+@media (prefers-color-scheme: dark){
+  .pod-face{box-shadow:12px 16px 16px -6px rgba(0,0,0,.85),3px 4px 8px rgba(0,0,0,.5)}
+  .pod-3d::before{background:linear-gradient(180deg,#8a9097 0%,#575d64 55%,#2f3338 100%)}
+}
 .pod-name{font-size:14px;font-weight:600;margin-top:6px;line-height:1.3}
 .pod-meta{font-size:12px;color:var(--muted)}
 .empty{color:var(--muted);text-align:center;padding:32px 12px;font-size:14px;background:var(--card);border:1px dashed var(--line);border-radius:14px}
@@ -105,7 +117,7 @@ body.has-player .list-scroll{padding-bottom:170px}
 .item.sel{background:var(--accent-soft)}
 .selbar{position:absolute;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:6;display:flex;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:10px}
 .selbar[hidden]{display:none}
-.selbar .btn{flex:1}
+.selbar .btn{flex:1;min-width:0;padding:8px 4px;font-size:15px;white-space:nowrap}
 .selbar .btn:disabled{opacity:.4}
 body.selecting .mini{display:none}
 body.selecting .list-scroll{padding-bottom:90px}
@@ -216,6 +228,7 @@ input[type=file]{display:none}
 <header>
   <button class="icon-btn" id="bBack" aria-label="返回" hidden><svg viewBox="0 0 24 24"><path d="M15.4 5.4 14 4l-8 8 8 8 1.4-1.4L8.8 12z"/></svg></button>
   <h1 id="title" class="line1">播客节目</h1>
+  <button class="txt-btn" id="bTrJob" hidden></button>
   <button class="txt-btn" id="bSel" hidden>选择</button>
   <button class="txt-btn" id="bSelAll" hidden>全选</button>
   <button class="txt-btn" id="bSelDone" hidden>完成</button>
@@ -232,6 +245,7 @@ input[type=file]{display:none}
 <!-- 悬浮播放器 -->
 <div class="selbar" id="selBar" hidden>
   <button class="btn" id="bSelMove" disabled>移动到专辑</button>
+  <button class="btn" id="bSelTr" disabled>转文字</button>
   <button class="btn danger" id="bSelDel" disabled>删除</button>
 </div>
 
@@ -425,7 +439,7 @@ input[type=file]{display:none}
         <li>长按某一集（或点右上角「选择」）可以多选，选好后一起移动到专辑或删除</li>
         <li>底部悬浮播放器：上一集 / 下一集、后退 / 快进 15 秒、拖动进度条</li>
         <li>点「1x」选播放速度，点月亮设置定时关闭（按时间或播完本集）</li>
-        <li>每一集的「!」→「AI 文稿」可以识别成文字（需要自己的 API Key），点一句话就跳到那里播放</li>
+        <li>每一集的「!」→「AI 转文字」可以识别成文字（需要自己的 API Key），点一句话就跳到那里播放；多选后点「转文字」、或长按专辑 →「AI 转文字」可以整批识别</li>
         <li>点书签按钮收藏当前时间点，可以写上收藏原因；之后点一下就能跳回那里</li>
         <li>首页右上角的文件夹按钮可以新建专辑；选中集后点「移动到专辑」；长按专辑封面可以重命名或删除</li>
         <li>专辑页的「编辑」可以改专辑名称和创作者，创作者显示在锁屏和通知栏的播放信息里</li>
@@ -1061,6 +1075,9 @@ function showAlbumMenu(name){
   var items = [{label:'编辑专辑信息', note:'名称、创作者（名称和别的专辑相同会合并）', pick:function(){
     closeSheet('epSheet');
     editAlbum(name);
+  }}, {label:'AI 转文字', note:'把这个专辑里还没识别的集依次识别成文字', pick:function(){
+    closeSheet('epSheet');
+    trBatch(episodeKeys(name));
   }}, {label:'新建专辑', pick:function(){
     closeSheet('epSheet');
     ask('新建专辑', '', '专辑名称', function(v){ createAlbum(v); render(); toast('已新建「' + v + '」'); });
@@ -1668,7 +1685,7 @@ function showEpMenu(key){
   var n = renderMarkList($('epMarks'), key, function(){ closeSheet('epSheet'); });
   $('epMarksHead').hidden = !n;
   var items = [{label:'移动到专辑', note:'现在在「' + showOf(key) + '」', pick:function(){ closeSheet('epSheet'); showMoveMenu(key); }}];
-  if(ep || hasTr[key]) items.push({label:'AI 文稿', note: hasTr[key] ? '已识别，点开查看或点一句跳转播放' : '把这一集识别成文字', pick:function(){ trOpen(key); }});
+  if(ep || hasTr[key]) items.push({label:'AI 转文字', note: hasTr[key] ? '已有文稿，点开查看；也可以重新识别' : '把这一集识别成文字（要用自己的 API Key）', pick:function(){ trOpen(key); }});
   if(ep) items.push({label:'查看标签详情', note:'看看文件里到底存了哪些信息', pick:function(){
     $('tagText').textContent = describeTags(ep);
     closeSheet('epSheet'); openSheet('tagSheet');
@@ -1701,6 +1718,7 @@ $('bSelAll').onclick = function(){
   render();
 };
 $('bSelMove').onclick = function(){ var ks = Object.keys(selKeys); if(ks.length) showMoveMenu(ks, exitSel); };
+$('bSelTr').onclick = function(){ var ks = Object.keys(selKeys); if(!ks.length) return; exitSel(); trBatch(ks); };
 $('bSelDel').onclick = function(){ var ks = Object.keys(selKeys); if(ks.length) showSelDelete(ks); };
 function showSelDelete(keys){
   var withFile = keys.filter(findEp);
@@ -1778,7 +1796,8 @@ function render(){
   $('bAdd').hidden = selecting; $('bAbout').hidden = selecting;
   $('selBar').hidden = !selecting;
   document.body.classList.toggle('selecting', selecting);
-  $('bSelMove').disabled = $('bSelDel').disabled = !selCount();
+  showTrJob();
+  $('bSelMove').disabled = $('bSelDel').disabled = $('bSelTr').disabled = !selCount();
   $('bSelAll').textContent = selCount() >= nKeys ? '取消全选' : '全选';
   $('title').textContent = home ? '播客节目' : selecting ? '已选 ' + selCount() + ' 集' : view.show;
   box.innerHTML = '';
@@ -1803,7 +1822,9 @@ function renderHome(box){
   list.forEach(function(s){
     var card = el('button', 'pod');
     var img = el('img', 'pod-cover'); img.src = coverOf(s.name); img.alt = '';
-    card.appendChild(img);
+    var face = el('div', 'pod-face'); face.appendChild(img);
+    var wrap3 = el('div', 'pod-3d'); wrap3.appendChild(face);
+    card.appendChild(wrap3);
     card.appendChild(el('div', 'pod-name clamp2', s.name));
     var missing = s.keys.length - s.loaded;
     card.appendChild(el('div', 'pod-meta line1', s.keys.length + ' 集' + (missing ? ' · ' + missing + ' 集缺失' : '')));
@@ -2373,38 +2394,96 @@ function keepAwake(on){
     else if(!on && wakeLock){ wakeLock.release(); wakeLock = null; }
   }catch(e){}
 }
-function trStart(key, restart){
-  var ep = findEp(key);
-  if(!ep){ toast('文件缺失，没法识别'); return; }
-  if(trJob){ toast('正在识别另一集，请稍等'); return; }
-  if(!aiReady()){ toast('先设置 AI 服务商和 API Key'); openAiSettings(); return; }
-  var route = aiRoute();
-  trJob = {key:key, abort:new AbortController(), msg:'正在分析音频…', done:0, total:0};
-  keepAwake(true); trRender();
-  planChunks(ep, route).then(function(plan){
+// 识别一集；batch 不为空表示在批量识别里（不再逐集确认）。结果是 {res:'done'|'cancelled'|'failed', err}
+function trRun(key, restart, batch){
+  var ep = findEp(key), route = aiRoute();
+  trJob = {key:key, abort:new AbortController(), msg:'正在分析音频…', done:0, total:0, batch:batch || null};
+  trRender();
+  return planChunks(ep, route).then(function(plan){
     return trGet(key).then(function(old){
       var rec = !restart && old && old.status !== 'done' && old.total === plan.chunks.length && old.model === aiModel() ? old : null;
       var from = rec ? rec.done : 0;
-      var ok = confirm('「' + titleOf(key) + '」约 ' + fmt(plan.duration) + '，会分成 ' + plan.chunks.length + ' 段发给 ' + aiProv().name + '（' + aiModel() + '）识别' + (from ? '，从第 ' + (from + 1) + ' 段接着来' : '') +
-        '。\n\n这会用你自己的 API 额度，可能产生费用。识别期间请保持网页在前台、屏幕不要锁。\n\n继续吗？');
-      if(!ok) throw {cancelled:true};
+      if(!batch){
+        var ok = confirm('「' + titleOf(key) + '」约 ' + fmt(plan.duration) + '，会分成 ' + plan.chunks.length + ' 段发给 ' + aiProv().name + '（' + aiModel() + '）识别' + (from ? '，从第 ' + (from + 1) + ' 段接着来' : '') +
+          '。\n\n这会用你自己的 API 额度，可能产生费用。识别期间请保持网页在前台、屏幕不要锁。\n\n继续吗？');
+        if(!ok) throw {cancelled:true};
+      }
       var tr = rec || {key:key, provider:aiProv().name, model:aiModel(), lang:ai.lang, created:Date.now(), duration:plan.duration, total:plan.chunks.length, done:0, segments:[], status:'partial'};
       return trLoop(plan, route, tr);
     });
-  }).then(function(){
-    toast('文稿识别完成：' + titleOf(key), 3000);
-  }).catch(function(err){
-    toast(err && err.cancelled ? '已停止识别' : aiErrMsg(err), 4000);
-  }).then(function(){
-    keepAwake(false); trJob = null; trRender(); render();
+  }).then(function(){ return {res:'done'}; }, function(err){ return {res:err && err.cancelled ? 'cancelled' : 'failed', err:err}; });
+}
+function trFinish(){ keepAwake(false); trJob = null; trRender(); render(); }
+function trGuard(){
+  if(trJob){ toast('正在识别，请稍等'); return false; }
+  if(!aiReady()){ toast('先设置 AI 服务商和 API Key'); openAiSettings(); return false; }
+  return true;
+}
+function trStart(key, restart){
+  if(!findEp(key)){ toast('文件缺失，没法识别'); return; }
+  if(!trGuard()) return;
+  keepAwake(true);
+  trRun(key, restart, null).then(function(r){
+    toast(r.res === 'done' ? '文稿识别完成：' + titleOf(key) : r.res === 'cancelled' ? '已停止识别' : aiErrMsg(r.err), r.res === 'done' ? 3000 : 4000);
+    trFinish();
   });
 }
+function fmtLong(sec){
+  var h = Math.floor(sec / 3600), m = Math.round(sec % 3600 / 60);
+  return h ? h + ' 小时' + (m ? ' ' + m + ' 分钟' : '') : Math.max(1, m) + ' 分钟';
+}
+// 批量：依次识别；已经识别完的跳过，识别到一半的接着来
+function trBatch(keys){
+  var todo = keys.filter(findEp);
+  if(!todo.length){ toast('没有可识别的音频（文件缺失或没有内容）'); return; }
+  if(!trGuard()) return;
+  Promise.all(todo.map(function(k){ return trGet(k).then(function(r){ return {k:k, done:!!(r && r.status === 'done')}; }); })).then(function(rows){
+    var run = rows.filter(function(r){ return !r.done; }).map(function(r){ return r.k; }), skipped = rows.length - run.length;
+    if(!run.length){ toast('这些集都已经识别过了'); return; }
+    return Promise.all(run.map(function(k){ return records[k] && records[k].duration ? records[k].duration : blobDuration(findEp(k).blob); })).then(function(ds){
+      var dur = ds.reduce(function(n, d){ return n + (d || 0); }, 0);
+      var ok = confirm('将依次识别 ' + run.length + ' 集' + (dur ? '，共约 ' + fmtLong(dur) : '') + (skipped ? '（另有 ' + skipped + ' 集已识别过，跳过）' : '') + '，使用 ' + aiProv().name + '（' + aiModel() + '）。\n\n这会用你自己的 API 额度，可能产生较多费用。识别期间请保持网页在前台、屏幕不要锁；中途可以点右上角的「识别」查看进度或停止。\n\n继续吗？');
+      if(!ok) return;
+      var bs = {i:0, n:run.length, ok:0, fail:0, stop:false, error:null};
+      keepAwake(true);
+      toast('开始识别 ' + run.length + ' 集', 2500);
+      var chain = Promise.resolve();
+      run.forEach(function(k){
+        chain = chain.then(function(){
+          if(bs.stop) return;
+          bs.i++;
+          return trRun(k, false, bs).then(function(r){
+            if(r.res === 'done') bs.ok++;
+            else if(r.res === 'cancelled') bs.stop = true;
+            else{
+              bs.fail++;
+              if(r.err && (r.err.status || r.err.name === 'TypeError')){ bs.stop = true; bs.error = r.err; }   // Key 不对、断网这类问题，再试下去也一样
+            }
+          });
+        });
+      });
+      return chain.then(function(){
+        toast(bs.error ? aiErrMsg(bs.error) + '。已识别 ' + bs.ok + ' 集' : bs.stop ? '已停止，识别了 ' + bs.ok + ' 集' : '识别完成：成功 ' + bs.ok + ' 集' + (bs.fail ? '，失败 ' + bs.fail + ' 集' : ''), 5000);
+        trFinish();
+      });
+    });
+  });
+}
+function showTrJob(){
+  var b = $('bTrJob');
+  if(!trJob || document.body.classList.contains('selecting')){ b.hidden = true; return; }
+  b.hidden = false;
+  b.textContent = trJob.batch ? '识别 ' + trJob.batch.i + '/' + trJob.batch.n : trJob.total ? '识别 ' + Math.min(trJob.total, trJob.done + 1) + '/' + trJob.total + ' 段' : '识别中';
+}
+$('bTrJob').onclick = function(){ if(trJob) trOpen(trJob.key); };
 function trLoop(plan, route, tr){
   var n = plan.chunks.length, signal = trJob.abort.signal;
   function next(){
     if(tr.done >= n){ tr.status = 'done'; return trPut(tr); }
     if(signal.aborted) throw {cancelled:true};
-    trJob.done = tr.done; trJob.total = n; trJob.msg = '正在识别第 ' + (tr.done + 1) + ' / ' + n + ' 段…'; trRender();
+    trJob.done = tr.done; trJob.total = n;
+    trJob.msg = (trJob.batch ? '第 ' + trJob.batch.i + ' / ' + trJob.batch.n + ' 集 · ' : '') + '正在识别第 ' + (tr.done + 1) + ' / ' + n + ' 段…';
+    trRender();
     var ch = plan.chunks[tr.done];
     return withRetry(function(){ return sendChunk(ch, plan, route, signal); }, signal, 3).then(function(segs){
       Array.prototype.push.apply(tr.segments, segs);
@@ -2429,6 +2508,7 @@ function copyText(text){
 var trNodes = [], trSegs = [], trLastIdx = -1, trTouch = 0;
 function trOpen(key){ trViewKey = key; $('trTitle').textContent = titleOf(key); closeSheet('epSheet'); openSheet('trSheet'); trRender(); }
 function trRender(){
+  showTrJob();
   if($('trSheet').hidden || !trViewKey) return;
   var key = trViewKey;
   trGet(key).then(function(tr){ if(trViewKey === key && !$('trSheet').hidden) trDraw(key, tr); });
@@ -2440,12 +2520,12 @@ function trDraw(key, tr){
   prog.hidden = !running;
   if(running) $('trProgBar').style.width = (trJob.total ? (trJob.done / trJob.total * 100) : 0) + '%';
   st.textContent = running ? trJob.msg
-    : other ? '正在识别另一集，等它结束后再来。'
+    : other ? (trJob.batch ? '正在批量识别（第 ' + trJob.batch.i + ' / ' + trJob.batch.n + ' 集），结束后再来。' : '正在识别另一集，等它结束后再来。')
     : tr ? '已识别 ' + tr.done + ' / ' + tr.total + ' 段 · ' + tr.provider + ' · ' + tr.model + (tr.status === 'done' ? '' : '（还没识别完）')
     : aiReady() ? '还没有识别。将使用：' + aiProv().name + ' · ' + aiModel() : '还没有设置 AI 服务商。';
   acts.innerHTML = '';
   function btn(label, cls, fn){ var b = el('button', 'btn' + (cls ? ' ' + cls : ''), label); b.onclick = fn; acts.appendChild(b); }
-  if(running) btn('停止识别', '', function(){ trJob.abort.abort(); trJob.msg = '正在停止…'; trRender(); });
+  if(running) btn(trJob.batch ? '停止（整批都停）' : '停止识别', '', function(){ if(trJob.batch) trJob.batch.stop = true; trJob.abort.abort(); trJob.msg = '正在停止…'; trRender(); });
   else if(!other){
     var ep = findEp(key);
     if(!tr && ep) btn(aiReady() ? '开始识别' : '去设置 AI 服务商', 'primary', function(){ if(aiReady()) trStart(key, false); else { closeSheet('trSheet'); openAiSettings(); } });

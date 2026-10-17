@@ -13,3 +13,4 @@
 - 「未分类」(`OTHER`) 不显示、也不存任何封面（`coverInfo` 直接返回 null）。
 - AI 文稿：配置在 `lpp.ai.v1`（含 API Key，不进导出文件）。两种请求：`reqWhisper`（/audio/transcriptions，multipart）和 `reqChat`（/chat/completions + input_audio）。切段：`mp3Plan`（按帧）、`mp4Plan`/`buildM4a`（重新封装 m4a）、`toWav`（转 16k 单声道）。不要用正则后行断言（旧 Safari 不认）。`ai.maxSec` 是调试用的隐藏项（强制每段最长秒数）。
 - 测试：用本地模拟服务测过（OpenAI 转写 / 聊天两种格式，切出来的每段用 ffmpeg 检查过），没有对真实服务商测过，只有 Gemini 的跨域预检确认过可用。
+- 转文字入口：单集「!」菜单（`trOpen`）、多选 `bSelTr` 和长按专辑（都走 `trBatch`，逐集 `trRun`，`trJob` 同一时间只有一个）。首页封面是 `.pod-3d`（侧转 + 厚度 + 高光），图片和高光必须放在同一个 `.pod-face` 里，不然会和侧边厚度互相切割。
