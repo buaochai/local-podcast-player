@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.26.5">
+<meta name="app-version" content="0.26.6">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -2777,7 +2777,7 @@ function aiRoute(){
   var p = aiProv(), model = aiModel(), chat = p.style === 'chat';
   var timed = !chat && /whisper/i.test(model);
   var r = {chat:chat, timed:timed, formats:ai.wav ? ['wav'] : (p.formats || ['mp3']), maxBytes:chat ? 12e6 : 24e6, maxSec:chat ? 300 : timed ? 600 : 300, convSec:300};
-  if(p.style === 'ali'){ r.ali = true; r.timed = true; r.maxBytes = 80e6; r.maxSec = 3600; }   // 百炼是提交任务再取结果，一次可以送很长的音频
+  if(p.style === 'ali'){ r.ali = true; r.timed = true; r.maxBytes = 80e6; r.maxSec = 3600; r.noConv = true; r.formats = ['mp3', 'm4a', 'wav']; }   // 百炼是提交任务再取结果，一次可以送很长的音频
   if(p.maxSec) r.maxSec = Math.min(r.maxSec, p.maxSec);
   if(ai.maxSec) r.maxSec = r.convSec = ai.maxSec;   // 调试用，设置里没有这一项
   return r;
@@ -2787,7 +2787,7 @@ function planChunks(ep, route){
     var ext = (/\.([a-z0-9]+)$/i.exec(ep.name) || [0, 'mp3'])[1].toLowerCase();
     var fmt = kind === 'mp4' ? 'm4a' : kind === 'mp3' ? 'mp3' : ext;
     // 服务商不收这种格式：切成短段再转成 wav
-    var conv = kind === 'other' ? (route.chat || ai.wav) : route.formats.indexOf(fmt) < 0;
+    var conv = !route.noConv && (kind === 'other' ? (route.chat || ai.wav) : route.formats.indexOf(fmt) < 0);
     var maxSec = conv ? route.convSec : route.maxSec, maxBytes = conv ? 24e6 : route.maxBytes;
     var p = kind === 'mp3' ? mp3Plan(ep.blob, maxBytes, maxSec) : kind === 'mp4' ? mp4Plan(ep.blob, maxBytes, maxSec) : Promise.resolve(null);
     return p.then(function(plan){
@@ -2904,6 +2904,8 @@ function aliWait(ms, signal){
     if(signal) signal.addEventListener('abort', function(){ clearTimeout(tm); rej({cancelled:true}); });
   });
 }
+// 百炼说「这段没有可识别的人声」（纯音乐、静音）：当作这一段没有文字
+var ALI_EMPTY = /HAVE_NO_WORDS|NO_VALID_FRAGMENT|NO_VALID_AUDIO|SUCCESS_WITH_NO_VALID/i;
 function reqAli(blob, fmt, signal){
   var start = Date.now();
   function poll(id, n){
@@ -2921,11 +2923,15 @@ function reqAli(blob, fmt, signal){
           });
         });
         var bad = (out.results || []).filter(function(r){ return r.subtask_status && r.subtask_status !== 'SUCCEEDED'; })[0];
-        if(!sents.length && !text && bad) throw new Error('百炼识别失败：' + (bad.message || bad.code || bad.subtask_status));
+        if(!sents.length && !text && bad && !ALI_EMPTY.test((bad.code || '') + ' ' + (bad.message || ''))) throw new Error('百炼识别失败：' + (bad.message || bad.code || bad.subtask_status));
         sents.sort(function(a, b){ return (a.begin_time || 0) - (b.begin_time || 0); });
         return {aliSentences:sents, text:text};
       }
-      if(st === 'FAILED' || st === 'UNKNOWN' || st === 'CANCELED') throw new Error('百炼识别失败：' + (out.message || out.code || st));
+      if(st === 'FAILED' || st === 'UNKNOWN' || st === 'CANCELED'){
+        var why = [out.code, out.message].concat((out.results || []).map(function(r){ return (r.code || '') + ' ' + (r.message || ''); })).join(' ');
+        if(ALI_EMPTY.test(why)) return {aliSentences:[], text:''};   // 这一段全是音乐或静音：没有文字，不算失败
+        throw new Error('百炼识别失败：' + (out.message || out.code || st));
+      }
       return poll(id, n + 1);
     });
   }
