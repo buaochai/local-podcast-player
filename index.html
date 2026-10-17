@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.7.1">
+<meta name="app-version" content="0.7.2">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -143,7 +143,6 @@ body.has-player .list-scroll{padding-bottom:170px}
 .sec{font-size:13px;color:var(--muted);margin:16px 2px 6px}
 .opt .time{flex:none;font-variant-numeric:tabular-nums;font-weight:600;color:var(--accent);margin-right:12px}
 .opt .grow{flex:1;min-width:0}
-.pod-new{display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--muted);background:transparent;box-shadow:none;color:var(--muted);font-size:34px;font-weight:300;opacity:.7}
 .dump{font:12px/1.55 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0;max-height:48vh;overflow:auto;-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 .facts{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px 14px;margin-bottom:12px;font-size:13px}
 .facts div{display:flex;gap:10px;padding:3px 0}
@@ -171,6 +170,7 @@ input[type=file]{display:none}
 <header>
   <button class="icon-btn" id="bBack" aria-label="返回" hidden><svg viewBox="0 0 24 24"><path d="M15.4 5.4 14 4l-8 8 8 8 1.4-1.4L8.8 12z"/></svg></button>
   <h1 id="title" class="line1">播客节目</h1>
+  <button class="icon-btn" id="bNewAlbum" aria-label="新建专辑" hidden><svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"/></svg></button>
   <button class="icon-btn add" id="bAdd" aria-label="添加音频"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg></button>
   <button class="icon-btn" id="bAbout" aria-label="关于"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-11h2V7h-2zm0 8h2v-6h-2z"/></svg></button>
 </header>
@@ -296,7 +296,7 @@ input[type=file]{display:none}
         <li>底部悬浮播放器：上一集 / 下一集、后退 / 快进 15 秒、拖动进度条</li>
         <li>点「1x」选播放速度，点月亮设置定时关闭（按时间或播完本集）</li>
         <li>点书签按钮收藏当前时间点，可以写上收藏原因；之后点一下就能跳回那里</li>
-        <li>可以新建自己的专辑，长按某一集 →「移动到专辑」；长按专辑封面可以重命名或删除</li>
+        <li>首页右上角的文件夹按钮可以新建专辑；长按某一集 →「移动到专辑」；长按专辑封面可以重命名或删除</li>
         <li>每一集自动记住听到的位置</li>
         <li>锁屏和通知栏显示节目封面，可以用锁屏和耳机按钮控制播放</li>
       </ul>
@@ -1432,6 +1432,9 @@ window.addEventListener('popstate', function(e){
   render();
 });
 $('bBack').onclick = goHome;
+$('bNewAlbum').onclick = function(){
+  ask('新建专辑', '', '专辑名称', function(v){ createAlbum(v); render(); toast('已新建「' + v + '」，长按某一集可以移进来'); });
+};
 
 var renderedKey = '';
 function render(){
@@ -1443,6 +1446,7 @@ function render(){
   var top = pageKey !== renderedKey ? 0 : sc ? sc.scrollTop : box.scrollTop;
   renderedKey = pageKey;
   $('bBack').hidden = home;
+  $('bNewAlbum').hidden = !home;
   $('title').textContent = home ? '播客节目' : view.show;
   box.innerHTML = '';
   box.classList.remove('fixed');
@@ -1474,11 +1478,6 @@ function renderHome(box){
     onLongPress(card, function(){ showAlbumMenu(s.name); });
     grid.appendChild(card);
   });
-  var add = el('button', 'pod');
-  add.appendChild(el('div', 'pod-cover pod-new', '+'));
-  add.appendChild(el('div', 'pod-name clamp2', '新建专辑'));
-  add.onclick = function(){ ask('新建专辑', '', '专辑名称', function(v){ createAlbum(v); render(); toast('已新建「' + v + '」，长按某一集可以移进来'); }); };
-  grid.appendChild(add);
   box.appendChild(grid);
 }
 function renderShow(box){
