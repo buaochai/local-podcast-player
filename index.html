@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.24.0">
+<meta name="app-version" content="0.24.1">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -813,24 +813,20 @@ function rawTitleOf(key){
 }
 function titleOf(key){ return tidyTitle(rawTitleOf(key), dblAlbum(showOf(key))); }
 /* ---------- 集名优化（只改显示；列表顺序仍按文件名排）---------- */
+// 序号 = 名字最前面、后面紧跟「.」的数字（「12个故事」「12 个故事」里的 12 不算序号）
 // 名字前有两个序号（第一个是为了排序加的）→ 去掉第一个；「0.」开头 →「发刊词：」；带「番外」的 →「番外：」开头
-// 专辑里只要有一集是双序号，这个专辑里的单序号也只是排序用的，同样去掉（位置号显示在列表右下角）
+// 专辑里只要有一集是双序号，这个专辑里的单序号也只是排序用的，同样去掉
 var SEP = '[\\s._、:：\\-—–]';
-var RE_TWO = new RegExp('^\\d{1,3}\\s*[._、\\-—–\\s]\\s*(?=\\d{1,4}(' + SEP + '|[^\\d.]|$))');
-var RE_LEAD = new RegExp('^(\\d{1,4}' + SEP + '*)+');
-var RE_ONE = new RegExp('^\\d{1,4}' + SEP + '*(?=[^\\d])');
+var NUM = '\\d{1,4}\\s*[.．]\\s*';
+var RE_TWO = new RegExp('^\\d{1,3}\\s*[.．]\\s*(?=' + NUM + '(?!\\d))');   // 「2024.10.05」这种日期不算
+var RE_LEAD = new RegExp('^(' + NUM + ')+');
+var RE_ONE = new RegExp('^' + NUM + '(?=\\D)');
 var dblCache = {}, dblAt = 0;
 function dblAlbum(show){   // 这个专辑里有没有双序号的集（结果缓存 2 秒，列表重画时不用每集都重算）
   if(settings.tidyOff) return false;
   if(Date.now() - dblAt > 2000){ dblCache = {}; dblAt = Date.now(); }
   if(!(show in dblCache)) dblCache[show] = episodeKeys(show).some(function(k){ return RE_TWO.test(rawTitleOf(k).trim()); });
   return dblCache[show];
-}
-// 排序用的位置号（双序号专辑里每集名字最前面的那个数字）
-function seqOf(key){
-  if(!dblAlbum(showOf(key))) return '';
-  var m = /^\s*(\d{1,4})/.exec(rawTitleOf(key));
-  return m ? String(parseInt(m[1], 10)) : '';
 }
 function tidyTitle(t, dbl){
   if(!t || settings.tidyOff) return t;
@@ -841,7 +837,7 @@ function tidyTitle(t, dbl){
   }
   if(RE_TWO.test(s)) s = s.replace(RE_TWO, '');
   else if(dbl) return s.replace(RE_ONE, '') || s;   // 双序号专辑里的单序号：只是位置，去掉
-  var m = new RegExp('^0+' + SEP + '+(.+)$').exec(s);
+  var m = /^0+\s*[.．]\s*(.*)$/.exec(s);
   if(m){ var rest = m[1].replace(/^发刊词[：:\s]*/, '').trim(); return rest ? '发刊词：' + rest : '发刊词'; }
   return s;
 }
@@ -2290,7 +2286,7 @@ function renderShow(box){
   var scroll = el('div', 'list-scroll');
 
   var ul = el('ul', 'list');
-  keys.forEach(function(k){
+  keys.forEach(function(k, idx){
     var ep = findEp(k), r = records[k];
     var li = el('li', 'item' + (ep && ep === cur ? ' cur' : '') + (ep ? '' : ' missing') + (selMode && selKeys[k] ? ' sel' : ''));
     if(selMode) li.appendChild(el('span', 'chk' + (selKeys[k] ? ' on' : '')));
@@ -2301,8 +2297,7 @@ function renderShow(box){
     main.appendChild(progressBar(r));
     li.appendChild(main);
     if(!ep) li.appendChild(el('span', 'tag', '文件缺失'));
-    var sq = seqOf(k);
-    if(sq) li.appendChild(el('span', 'ep-seq', sq));
+    li.appendChild(el('span', 'ep-seq', String(idx + 1)));   // 右下角：这一集在列表里的位置
     if(!selMode){
       var ib = el('button', 'info-btn');
       ib.setAttribute('aria-label', '详情');

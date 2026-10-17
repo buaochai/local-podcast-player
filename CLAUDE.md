@@ -23,4 +23,4 @@
 - 分季专辑展开状态 `openSeries` 在离开首页或点首页非封面处时清空。界面上不要放操作说明类小字（如「点一下收起」）。「关于」里 `#bClearFiles` 清除全部本地音频（保留记录和文稿）。
 - 登录用 Cloudflare Access（在 Cloudflare 后台配置，代码里没有登录逻辑）。`sw.js` 对页面导航请求用 `fetch(e.request)`，让 Access 的登录跳转能生效；`syncFetch` 用 `redirect:'manual'` 识别登录过期。
 - 修改文稿：播放器上的笔 `#bTrEdit`（`body.can-edit` 时显示）切换 `trEdit`，编辑时点段落 → `trEditPara` 打开 `#trEditSheet`，保存后自动退出修改模式；保存时 `trSplitText` 拆句、按文字位置从原句换算时间，替换 `tr.segments` 里那一段。文稿同步：后端 `functions/api/tr.js`（表 `tr(id,k,data,updated)`，`k`=文件键，GET 按 `since/after` 翻页），前端 `trSyncAll`（`trPull` + `trPush`），`trPut` 写 `tr.mt` 并 `trDirty`，`trDelete` 也会上传删除标记；只上传 `status:'done'` 的文稿，`syncCfg.trInit` 标记是否已把本机旧文稿全部排队。
-- 集名优化：`tidyTitle(原名, 是否双序号专辑)`（在 `titleOf` 里调用，只改显示；`dblAlbum(专辑)` 判断专辑里有没有双序号的集，有的话单序号也去掉，列表右下角用 `.ep-seq` 显示 `seqOf` 位置号；`settings.tidyOff` 关闭，开关 `#tidyChk` 在「关于」）。显示集名一律用 `titleOf(key)`，不要直接用 `ep.title` / `cur.title`。列表排序仍按文件名（`episodeKeys`）。
+- 集名优化：`tidyTitle(原名, 是否双序号专辑)`（在 `titleOf` 里调用，只改显示；`dblAlbum(专辑)` 判断专辑里有没有双序号的集，有的话单序号也去掉，序号指后面紧跟「.」的数字；所有专辑列表右下角用 `.ep-seq` 显示列表位置号；`settings.tidyOff` 关闭，开关 `#tidyChk` 在「关于」）。显示集名一律用 `titleOf(key)`，不要直接用 `ep.title` / `cur.title`。列表排序仍按文件名（`episodeKeys`）。
