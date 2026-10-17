@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.26.0">
+<meta name="app-version" content="0.26.1">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -3280,7 +3280,7 @@ function trLoop(plan, route, tr){
     if(tr.done >= n){ tr.status = 'done'; return trPut(tr); }
     if(signal.aborted) throw {cancelled:true};
     trJob.done = tr.done; trJob.total = n;
-    trJob.msg = trJob.base = (trJob.batch ? '第 ' + trJob.batch.i + ' / ' + trJob.batch.n + ' 集 · ' : '') + '正在识别第 ' + (tr.done + 1) + ' / ' + n + ' 段…';
+    trJob.msg = trJob.base = (trJob.batch ? '第 ' + trJob.batch.i + ' / ' + trJob.batch.n + ' 集 · ' : '') + '正在用 ' + aiModel() + ' 识别' + (n > 1 ? '（第 ' + (tr.done + 1) + ' / ' + n + ' 段）' : '') + '…';
     trJob.sentAt = Date.now();
     trRender();
     var ch = plan.chunks[tr.done];
