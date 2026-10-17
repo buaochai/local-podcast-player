@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.20.0">
+<meta name="app-version" content="0.21.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -211,23 +211,23 @@ li.has-edit{position:relative}
 .chap-item.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
 .chap-title{flex:1;min-width:0}
 .ep-sub{font-size:13px;color:var(--muted);margin:0 2px 6px}
-header h1.ep-h{display:flex;flex-direction:column;justify-content:center;font-size:17px;line-height:1.3}
-header h1.ep-h .ep-h-s{font-size:12px;font-weight:normal;color:var(--muted)}
-.tr-doc{padding:2px 2px 0;-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
-.tr-p{margin:0 0 14px;font-size:17px;line-height:1.85;text-align:justify;word-break:break-word}
+/* 文稿页：标题、嵌在页面里的播放器、章节条，下面是文稿 */
+.ep-name{font-size:19px;font-weight:700;line-height:1.35;margin:0 2px}
+.ep-album{font-size:13px;color:var(--muted);margin:2px 2px 0}
+.mini.embed{position:static;margin:10px 0 10px;box-shadow:none;padding:8px 12px 4px}
+.mini.embed .mini-cover,.mini.embed .mini-title{display:none}
+.mini.embed .mini-sub{font-size:13px}
+body.ep-page .mini:not(.embed){display:none}
+body.ep-page .list-scroll{padding-bottom:28px}
+.ep-play{margin:10px 0}
+.tr-doc{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 16px 4px;-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+.tr-p{margin:0 0 16px;font-size:17px;line-height:1.9;letter-spacing:.02em;text-align:justify;text-indent:2em;word-break:break-word}
 .tr-s{border-radius:4px;-webkit-box-decoration-break:clone;box-decoration-break:clone;transition:background .2s,color .2s}
 .tr-s.now{background:var(--accent-soft);color:var(--accent)}
 .view.fixed{position:relative}
-.tr-loc{position:absolute;right:14px;bottom:calc(64px + env(safe-area-inset-bottom));z-index:4;width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--accent);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;padding:0}
+.tr-loc{position:absolute;right:14px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:4;width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--accent);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;padding:0}
 .tr-loc[hidden]{display:none}
 .tr-loc svg{width:24px;height:24px;fill:currentColor}
-body.has-player:not(.mini-fold) .tr-loc{bottom:calc(196px + env(safe-area-inset-bottom))}
-.mini-line{display:none;height:4px;border-radius:2px;background:var(--line);overflow:hidden}
-.mini-line i{display:block;height:100%;width:0;background:var(--accent)}
-.mini.fold{padding:12px 16px;cursor:pointer}
-.mini.fold .mini-top,.mini.fold .seek,.mini.fold .mini-ctl{display:none}
-.mini.fold .mini-line{display:block}
-body.mini-fold .list-scroll{padding-bottom:70px}
 .check{display:flex;gap:8px;align-items:flex-start;margin:12px 2px 0;font-size:14px;color:var(--muted)}
 .check input{margin-top:4px;flex:none}
 select.input{appearance:auto;-webkit-appearance:menulist}
@@ -324,7 +324,6 @@ input[type=file]{display:none}
     <button class="chip" id="bSpeed" aria-label="播放速度">1x</button>
     <button class="chip" id="bSleep" aria-label="定时关闭"><svg viewBox="0 0 24 24"><path d="M12.3 2a10 10 0 1 0 9.7 12.4A8 8 0 0 1 12.3 2z"/></svg><span id="sleepText"></span></button>
   </div>
-  <div class="mini-line" id="miniLine"><i id="miniLineBar"></i></div>
   <input type="range" class="seek" id="seek" min="0" max="0" step="1" value="0">
   <div class="mini-ctl">
     <button class="ctl" id="bPrev" aria-label="上一集"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
@@ -595,6 +594,7 @@ input[type=file]{display:none}
       <h3>存储空间</h3>
       <p id="storageInfo">正在计算…</p>
       <p>听完的集可以点「!」→「删除本地音频文件」释放空间，播放记录会保留。</p>
+      <button class="btn danger block" id="bClearFiles">清除全部本地音频文件</button>
 
       <h3>备份播放记录</h3>
       <p>音频和播放记录都存在浏览器里，清除 Safari 的网站数据会被删除。请时常导出播放记录，需要时再导入恢复。</p>
@@ -986,7 +986,6 @@ function playEp(ep){
 
 function updateTimes(){
   var d = isFinite(audio.duration) ? audio.duration : 0;
-  $('miniLineBar').style.width = (d ? Math.min(100, audio.currentTime / d * 100) : 0) + '%';
   if(!seeking){
     $('seek').max = Math.floor(d) || 0;
     $('seek').value = Math.floor(audio.currentTime);
@@ -1033,27 +1032,13 @@ $('bFwd').onclick = function(){ skip(SKIP); };
 $('bPrev').onclick = prev;
 $('bNext').onclick = next;
 $('miniInfo').onclick = function(){ if(cur && view.page !== 'ep') goEp(cur.key); };
-// 文稿页：播放器折叠成一条进度条，点一下展开；展开后在播放器上往下滑又折叠
-var miniFold = false;
-function setMiniFold(on){
-  miniFold = !!on;
-  $('mini').classList.toggle('fold', miniFold);
-  document.body.classList.toggle('mini-fold', miniFold);
+// 文稿页：播放器从底部悬浮移到页面里（标题下面、章节条上面）
+var miniHome = $('mini').parentNode, miniNext = $('mini').nextSibling;
+function miniBack(){
+  var m = $('mini');
+  m.classList.remove('embed');
+  if(m.parentNode !== miniHome) miniHome.insertBefore(m, miniNext);
 }
-$('mini').addEventListener('click', function(e){ if(miniFold){ e.stopPropagation(); setMiniFold(false); } }, true);
-(function(){
-  var y0 = 0, x0 = 0, on = false;
-  $('mini').addEventListener('touchstart', function(e){
-    on = !miniFold && view.page === 'ep' && e.touches.length === 1 && e.target !== $('seek');
-    if(on){ y0 = e.touches[0].clientY; x0 = e.touches[0].clientX; }
-  }, {passive:true});
-  $('mini').addEventListener('touchend', function(e){
-    if(!on) return;
-    on = false;
-    var t = e.changedTouches[0], dy = t.clientY - y0;
-    if(dy > 30 && dy > Math.abs(t.clientX - x0)) setMiniFold(true);
-  }, {passive:true});
-})();
 $('miniCover').onclick = function(){ if(cur) goEp(cur.key); };
 
 function renderMini(){
@@ -2023,16 +2008,10 @@ function render(){
   showTrJob();
   $('bSelMove').disabled = $('bSelDel').disabled = $('bSelTr').disabled = !selCount();
   $('bSelAll').textContent = selCount() >= nKeys ? '取消全选' : '全选';
-  var h1 = $('title');
-  h1.className = isEp ? 'ep-h' : 'line1';
-  h1.textContent = home ? '播客节目' : isEp ? '' : selecting ? '已选 ' + selCount() + ' 集' : '';
-  if(isEp){   // 文稿页：这一集的标题，下面小字是专辑名
-    var epAu = authorOf(showOf(view.key), findEp(view.key));
-    h1.appendChild(el('span', 'line1', titleOf(view.key)));
-    h1.appendChild(el('span', 'ep-h-s line1', showOf(view.key) + (epAu ? ' · ' + epAu : '')));
-  }
-  // 文稿页的播放器默认折叠成一条进度条
-  if(pageKey !== lastEpKey) setMiniFold(isEp);
+  $('title').textContent = home ? '播客节目' : isEp ? '' : selecting ? '已选 ' + selCount() + ' 集' : '';
+  document.body.classList.toggle('ep-page', isEp);
+  miniBack();
+  if(!home) openSeries = {};   // 离开首页，展开的分季专辑收起来
   // 专辑页：播放时每几秒会重画一次，顶部封面那块没变就原样留着，不拆掉重建（拆了会闪）
   var keepHead = !home && !isEp && samePage ? box.querySelector('.pod-head') : null;
   Array.prototype.slice.call(box.children).forEach(function(c){ if(c !== keepHead) box.removeChild(c); });
@@ -2121,6 +2100,12 @@ function renderSearch(box){
   box.appendChild(wrap);
 }
 var openSeries = {};   // 展开了的分季专辑（总名称 → true）
+// 点首页别的地方（不是专辑封面），展开的分季专辑收起来
+document.addEventListener('click', function(e){
+  if(view.page !== 'home' || !Object.keys(openSeries).length) return;
+  if(e.target.closest && e.target.closest('.pod')) return;
+  openSeries = {}; render();
+});
 var homeImgs = {};   // 首页封面图元素复用，重画时不重新加载（否则会闪）
 function renderHome(box){
   var list = allShows();
@@ -2182,7 +2167,7 @@ function renderHome(box){
     }
     st.appendChild(wrap);
     st.appendChild(el('div', 'pod-name clamp2', base));
-    st.appendChild(el('div', 'pod-meta line1', seasons.length + ' 季 · ' + keys + ' 集' + (open ? ' · 点一下收起' : '')));
+    st.appendChild(el('div', 'pod-meta line1', seasons.length + ' 季 · ' + keys + ' 集'));
     st.onclick = function(){ openSeries[base] = !openSeries[base]; render(); };
     grid.appendChild(st);
     if(open) seasons.forEach(function(x){
@@ -2282,7 +2267,6 @@ function renderShow(box){
     ul.appendChild(li);
   });
   scroll.appendChild(ul);
-  scroll.appendChild(el('p', 'hint', selMode ? '点一下选中或取消选中' : '点一集进入文稿页并播放；长按可以多选；右边的「!」是更多操作'));
   box.appendChild(scroll);
 }
 
@@ -3203,7 +3187,15 @@ function renderEp(box){
   if(!ep) healEp(key);
   var running = !!(trJob && trJob.key === key), other = !!(trJob && trJob.key !== key);
   box.classList.add('fixed');
-  var top = el('div', 'ep-top');
+  var top = el('div', 'ep-top'), au = authorOf(showOf(key), ep);
+  top.appendChild(el('div', 'ep-name clamp2', titleOf(key)));
+  top.appendChild(el('div', 'ep-album line1', showOf(key) + (au ? ' · ' + au : '')));
+  if(cur && cur.key === key){ $('mini').classList.add('embed'); top.appendChild($('mini')); }
+  else if(ep){
+    var pb = el('button', 'btn primary block ep-play', '▶ 播放这一集');
+    pb.onclick = function(){ open(ep, true); render(); };
+    top.appendChild(pb);
+  }
   var cw = el('div', 'chap-wrap'); cw.id = 'chapWrap'; top.appendChild(cw); fillChapterBar(cw, key);
   // 识别完了就不显示「已识别几段」这类文字
   var stText = !loaded ? '正在读取文稿…' : running ? trJob.msg
@@ -3231,16 +3223,16 @@ function renderEp(box){
   if(tr && tr.segments.length){
     // 文稿排成一段段文字，不显示时间；每一句是一个 span，时间藏在里面，用来跟随播放和点句跳转
     var doc = el('div', 'tr-doc'); doc.id = 'trList';
-    var chT = (tr.chapters || []).map(function(c){ return c.t; }), ci = 0, para = null, plen = 0;
-    tr.segments.forEach(function(s){
-      var newCh = false;
-      while(ci < chT.length && s.t >= chT[ci]){ ci++; newCh = true; }
-      if(!para || newCh || plen >= 160 || (plen >= 90 && /[。！？!?…]$/.test(para.lastChild.textContent))){
-        para = el('p', 'tr-p'); doc.appendChild(para); plen = 0;
-      }else if(/[A-Za-z0-9,.;:!?]$/.test(para.lastChild.textContent) && /^[A-Za-z0-9]/.test(s.text)){
-        para.appendChild(document.createTextNode(' '));
-      }
-      var sp = el('span', 'tr-s', s.text);
+    trParas(tr).forEach(function(items){
+      var para = el('p', 'tr-p');
+      items.forEach(function(it, n){
+        if(n && /[A-Za-z0-9,.;:!?]$/.test(items[n - 1].text) && /^[A-Za-z0-9]/.test(it.text)) para.appendChild(document.createTextNode(' '));
+        para.appendChild(trSpan(it));
+      });
+      doc.appendChild(para);
+    });
+    function trSpan(it){
+      var s = it.seg, sp = el('span', 'tr-s', it.text);
       sp.onclick = function(){
         if(window.getSelection && String(getSelection()).length) return;   // 正在选字复制时，不跳转
         var ep2 = findEp(key);
@@ -3248,9 +3240,9 @@ function renderEp(box){
         trTouch = 0; trFollow();
         open(ep2, true, s.t);
       };
-      para.appendChild(sp); plen += s.text.length;
       trNodes.push(sp);
-    });
+      return sp;
+    }
     trSegs = tr.segments;
     scroll.appendChild(doc);
   }else{
@@ -3265,6 +3257,39 @@ function renderEp(box){
   loc.hidden = !trUser;
   loc.onclick = function(){ trFollow(true); };
   box.appendChild(loc);
+}
+// 把一句句的识别结果排成段落，并补上标点（只影响显示，存的原文不变）
+var END_P = /[。！？!?…]$/, ANY_P = /[。！？!?，,；;：:…、」”"’）)》.]$/;
+function trParas(tr){
+  var segs = tr.segments, chT = (tr.chapters || []).map(function(c){ return c.t; }), ci = 0;
+  var paras = [], cur = null, len = 0;
+  segs.forEach(function(s, i){
+    var text = clean(s.text).replace(/([\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])/g, '$1，');   // 词之间的空格是停顿，改成逗号
+    var newCh = false;
+    while(ci < chT.length && s.t >= chT[ci]){ ci++; newCh = true; }
+    var prev = cur && cur[cur.length - 1];
+    var gap = prev ? s.t - prev.seg.t : 0;
+    var brk = !cur || newCh || text.length >= 60 || (prev && prev.text.length >= 60)   // 本来就是一段一段的（聊天模型给的）
+      || len >= 220 || (len >= 120 && END_P.test(prev.text)) || (len >= 40 && gap > 15);
+    if(brk){ cur = []; paras.push(cur); len = 0; }
+    cur.push({seg:s, text:text}); len += text.length;
+  });
+  // 没有标点的句子：一句话累计到二十多字就用句号，不然用逗号；段落最后一定是句号
+  paras.forEach(function(items){
+    var run = 0;
+    items.forEach(function(it, n){
+      var last = n === items.length - 1, zh = /[\u4e00-\u9fff]/.test(it.text);
+      if(!it.text) return;
+      if(last && /[，,、；;：:]$/.test(it.text)) it.text = it.text.slice(0, -1);
+      run += it.text.length;
+      if(!ANY_P.test(it.text)){
+        var stop = last || run >= 24;
+        it.text += zh ? (stop ? '。' : '，') : (stop ? '.' : ',');
+      }
+      if(END_P.test(it.text) || /[.]$/.test(it.text)) run = 0;
+    });
+  });
+  return paras;
 }
 // 手动滑动文稿：暂停跟随，显示定位球；过一会儿不管它，也自动回到播放的位置
 var TR_BACK = 8000, trUser = 0, trBackTimer = 0;
@@ -3509,9 +3534,11 @@ function syncMerge(R){
 
 /* ---- 和服务器来回 ---- */
 function syncFetch(method, body){
-  var opt = {method:method, headers:{'X-Sync-Id':syncCfg.id}, cache:'no-store'};
+  var opt = {method:method, headers:{'X-Sync-Id':syncCfg.id}, cache:'no-store', redirect:'manual'};
   if(body){ opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
   return fetch(syncUrl(), opt).then(function(res){
+    // Cloudflare Access 登录过期时会跳去登录页
+    if(res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400)) throw new Error('登录已过期，请刷新网页重新登录');
     return res.json().catch(function(){ return null; }).then(function(j){
       if(j && (res.ok || res.status === 409)) return j;
       if(j && j.error) throw new Error(j.error);
@@ -3631,6 +3658,17 @@ function updateStorage(){
   }
 }
 $('bAbout').onclick = function(){ updateStorage(); openSheet('about'); };
+// 删掉网页里保存的所有音频；播放记录、收藏、文稿都保留
+$('bClearFiles').onclick = function(){
+  if(!episodes.length){ toast('没有保存的音频文件'); return; }
+  var used = episodes.reduce(function(n, ep){ return n + ep.size; }, 0);
+  if(!confirm('删除网页里保存的全部 ' + episodes.length + ' 集音频（' + fmtSize(used) + '）？\n播放记录、收藏和文稿会保留，之后重新添加同一个文件可以接着听。')) return;
+  var keys = episodes.map(function(ep){ return ep.key; });
+  keys.reduce(function(p, k){ return p.then(function(){ return deleteFile(k); }); }, Promise.resolve()).then(function(){
+    renderMini(); render(); updateStorage();
+    toast('已删除 ' + keys.length + ' 集音频');
+  });
+};
 
 function newer(a, b){ // a 比 b 新？
   var x = a.split('.').map(Number), y = b.split('.').map(Number);

@@ -28,6 +28,13 @@
 4. 打开 `xxx.pages.dev`，「关于」→「云同步」→ 设同步密码 → 开启同步。其他设备打开同一个网址，填同一个密码。
    在 GitHub Pages 上打开的网页也能同步：「服务器地址」填 `https://xxx.pages.dev`。
 
+### 登录后才能打开（Cloudflare Access）
+1. Cloudflare 后台左侧 → Zero Trust（第一次要选团队名和套餐，选 Free）。
+2. Access → Applications → Add an application → Self-hosted：Application domain 填 `xxx.pages.dev`（再加一条 `*.xxx.pages.dev` 保护预览地址）；Session duration 可以选长一点（如 1 month），不用常常登录。
+3. Policy：Action 选 Allow，Include 选 Emails，填自己的邮箱（可以填多个）。
+4. 登录方式默认是 One-time PIN：打开网页时输入邮箱，收到验证码登录。
+保护后同步接口也在登录后面，所以只能在 `xxx.pages.dev` 上同步，GitHub Pages 上的网页不能再连这个同步接口。
+
 后端接口是 `functions/api/sync.js`（Cloudflare Pages Functions）：`GET/PUT /api/sync`，请求头 `X-Sync-Id` 是由密码算出的编号，D1 表 `sync(id, data, ver, updated)` 每个密码一行，`ver` 用来防止两台设备同时上传互相覆盖。
 
 ## 文件
