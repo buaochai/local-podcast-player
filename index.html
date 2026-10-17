@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="app-version" content="0.1.0">
+<meta name="theme-color" content="#1f6f5c">
+<title>本地播客</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="本地播客">
+<style>
+:root{
+  --bg:#f6f5f2; --card:#ffffff; --text:#1d1d1f; --muted:#6b6b70; --line:#e4e2dd;
+  --accent:#1f6f5c; --accent-soft:#e2f0eb; --danger:#b3372b;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#121413; --card:#1c1f1e; --text:#ecece9; --muted:#9a9c99; --line:#2c302e;
+    --accent:#5cc3a4; --accent-soft:#1d3a32; --danger:#ff7b6e;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--text);
+  font:16px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;
+  padding:0 16px calc(24px + env(safe-area-inset-bottom));
+  max-width:640px; margin:0 auto;
+  -webkit-tap-highlight-color:transparent;
+}
+header{display:flex;align-items:center;justify-content:space-between;padding:calc(12px + env(safe-area-inset-top)) 0 8px}
+h1{font-size:20px;margin:0}
+.ver{font-size:12px;color:var(--muted)}
+button{font:inherit;color:inherit;cursor:pointer}
+.btn{
+  border:1px solid var(--line); background:var(--card); border-radius:10px;
+  padding:8px 14px; min-height:40px;
+}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+@media (prefers-color-scheme: dark){.btn.primary{color:#0d1f1a}}
+
+/* 播放器 */
+.player{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin:8px 0 16px}
+.now-title{font-weight:600;font-size:17px;word-break:break-all;min-height:26px}
+.now-sub{color:var(--muted);font-size:13px;min-height:20px}
+.seek{width:100%;margin:12px 0 2px;accent-color:var(--accent)}
+.times{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.controls{display:flex;align-items:center;justify-content:center;gap:14px;margin:10px 0 6px}
+.ctl{
+  border:none;background:transparent;border-radius:50%;
+  width:52px;height:52px;display:flex;align-items:center;justify-content:center;flex-direction:column;
+  font-size:12px;color:var(--text);
+}
+.ctl svg{width:26px;height:26px;fill:currentColor}
+.ctl.play{width:68px;height:68px;background:var(--accent);color:#fff}
+@media (prefers-color-scheme: dark){.ctl.play{color:#0d1f1a}}
+.ctl.play svg{width:34px;height:34px}
+.ctl:disabled{opacity:.35}
+.speeds{display:flex;gap:5px;justify-content:center;flex-wrap:wrap}
+.speed{border:1px solid var(--line);background:transparent;border-radius:999px;padding:4px 9px;font-size:13px}
+.speed.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+
+/* 列表 */
+.bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:18px 0 8px}
+.bar h2{font-size:16px;margin:0}
+.list{list-style:none;margin:0;padding:0;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.list:empty{display:none}
+.item{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--line)}
+.item:first-child{border-top:none}
+.item.cur{background:var(--accent-soft)}
+.item-main{flex:1;min-width:0}
+.item-name{word-break:break-all}
+.item.cur .item-name{color:var(--accent);font-weight:600}
+.item-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.prog{height:3px;background:var(--line);border-radius:2px;margin-top:6px;overflow:hidden}
+.prog i{display:block;height:100%;background:var(--accent)}
+.item.missing{color:var(--muted)}
+.tag{font-size:12px;color:var(--accent);border:1px solid var(--accent);border-radius:6px;padding:0 6px;white-space:nowrap}
+.del{border:none;background:transparent;color:var(--muted);font-size:20px;width:36px;height:36px;border-radius:8px;flex:none}
+.empty{color:var(--muted);text-align:center;padding:24px 8px;font-size:14px;background:var(--card);border:1px dashed var(--line);border-radius:14px}
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.tools .btn{flex:1;min-width:120px}
+.note{font-size:12px;color:var(--muted);margin:8px 2px 0}
+.toast{
+  position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);
+  background:var(--text);color:var(--bg);padding:8px 16px;border-radius:999px;font-size:14px;
+  opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;text-align:center;
+}
+.toast.show{opacity:1}
+input[type=file]{display:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>本地播客</h1>
+  <span class="ver" id="ver"></span>
+</header>
+
+<section class="player">
+  <div class="now-title" id="nowTitle">还没有选择音频</div>
+  <div class="now-sub" id="nowSub">点下面「添加音频」，从手机里选文件</div>
+  <input type="range" class="seek" id="seek" min="0" max="0" step="1" value="0" disabled>
+  <div class="times"><span id="tCur">0:00</span><span id="tDur">0:00</span></div>
+  <div class="controls">
+    <button class="ctl" id="bPrev" aria-label="上一个" disabled><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
+    <button class="ctl" id="bBack" aria-label="后退15秒" disabled><svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></svg>15</button>
+    <button class="ctl play" id="bPlay" aria-label="播放" disabled><svg viewBox="0 0 24 24" id="playIcon"><path d="M8 5v14l11-7z"/></svg></button>
+    <button class="ctl" id="bFwd" aria-label="快进15秒" disabled><svg viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7a6 6 0 1 0 6 6h2a8 8 0 1 1-8-8z"/></svg>15</button>
+    <button class="ctl" id="bNext" aria-label="下一个" disabled><svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
+  </div>
+  <div class="speeds" id="speeds"></div>
+</section>
+
+<div class="bar">
+  <h2>播放列表</h2>
+  <button class="btn primary" id="bAdd">＋ 添加音频</button>
+</div>
+<input type="file" id="fileInput" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.opus,.flac" multiple>
+<ul class="list" id="queue"></ul>
+<div class="empty" id="queueEmpty">播放列表是空的。网页不能直接读手机文件夹，每次打开后需要重新选择音频；听到哪里会自动记住。</div>
+
+<div class="bar">
+  <h2>播放记录</h2>
+</div>
+<ul class="list" id="history"></ul>
+<div class="empty" id="historyEmpty">还没有播放记录</div>
+<div class="tools">
+  <button class="btn" id="bExport">导出记录</button>
+  <button class="btn" id="bImport">导入记录</button>
+</div>
+<input type="file" id="importInput" accept=".json,application/json">
+<p class="note">播放记录存在浏览器里，清除浏览器数据会被删掉。建议时常「导出记录」存成文件，需要时再「导入记录」恢复。</p>
+
+<audio id="audio" preload="metadata"></audio>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+
+var STORE_KEY = 'lpp.records.v1';
+var SETTINGS_KEY = 'lpp.settings.v1';
+var SPEEDS = [0.8, 1, 1.25, 1.5, 1.75, 2];
+var SKIP = 15;
+
+var $ = function(id){ return document.getElementById(id); };
+var audio = $('audio');
+
+/* ---------- 存储 ---------- */
+function load(key, fallback){
+  try{ var v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch(e){ return fallback; }
+}
+function save(key, val){
+  try{ localStorage.setItem(key, JSON.stringify(val)); }
+  catch(e){ toast('保存失败：浏览器存储不可用'); }
+}
+
+// records: { "<文件名>|<大小>": {name,size,duration,position,finished,updated} }
+var records = load(STORE_KEY, {});
+var settings = load(SETTINGS_KEY, {speed:1});
+function saveRecords(){ save(STORE_KEY, records); }
+function saveSettings(){ save(SETTINGS_KEY, settings); }
+
+function keyOf(file){ return file.name + '|' + file.size; }
+
+/* ---------- 状态 ---------- */
+var queue = [];          // [{file, key, url}]
+var cur = -1;
+var seeking = false;
+var lastSaved = 0;
+
+/* ---------- 工具 ---------- */
+function fmt(sec){
+  if(!isFinite(sec) || sec < 0) sec = 0;
+  sec = Math.floor(sec);
+  var h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), s = sec%60;
+  var mm = h ? String(m).padStart(2,'0') : String(m);
+  return (h ? h + ':' : '') + mm + ':' + String(s).padStart(2,'0');
+}
+function fmtDate(ts){
+  var d = new Date(ts), now = new Date();
+  var hm = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  if(d.toDateString() === now.toDateString()) return '今天 ' + hm;
+  return (d.getMonth()+1) + '月' + d.getDate() + '日 ' + hm;
+}
+function stripExt(name){ return name.replace(/\.[^.]+$/, ''); }
+function el(tag, cls, text){
+  var e = document.createElement(tag);
+  if(cls) e.className = cls;
+  if(text != null) e.textContent = text;
+  return e;
+}
+var toastTimer;
+function toast(msg){
+  var t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 2200);
+}
+function progressText(r){
+  if(!r) return '未播放';
+  if(r.finished) return '已听完';
+  if(!r.duration) return '已听 ' + fmt(r.position);
+  return '已听 ' + fmt(r.position) + ' / ' + fmt(r.duration) + '（' + Math.floor(r.position / r.duration * 100) + '%）';
+}
+
+/* ---------- 记录进度 ---------- */
+function recordNow(force){
+  if(cur < 0) return;
+  var q = queue[cur];
+  var now = Date.now();
+  if(!force && now - lastSaved < 5000) return;
+  lastSaved = now;
+  var dur = isFinite(audio.duration) ? audio.duration : 0;
+  var r = records[q.key] || {name:q.file.name, size:q.file.size};
+  r.duration = dur || r.duration || 0;
+  r.position = audio.currentTime;
+  if(dur && audio.currentTime < dur - 5) r.finished = false;
+  r.updated = now;
+  records[q.key] = r;
+  saveRecords();
+  renderHistory();
+  renderQueue();
+}
+
+/* ---------- 播放 ---------- */
+function open(i, autoplay){
+  if(i < 0 || i >= queue.length) return;
+  if(cur >= 0) recordNow(true);
+  cur = i;
+  var q = queue[i];
+  audio.src = q.url;
+  audio.playbackRate = settings.speed;
+  var r = records[q.key];
+  var startAt = (r && !r.finished) ? r.position : 0;
+  audio.addEventListener('loadedmetadata', function onMeta(){
+    audio.removeEventListener('loadedmetadata', onMeta);
+    if(startAt > 0 && startAt < audio.duration - 2) audio.currentTime = startAt;
+    audio.playbackRate = settings.speed;
+    updateTimes();
+    if(autoplay) play();
+  });
+  audio.load();
+  $('nowTitle').textContent = stripExt(q.file.name);
+  $('nowSub').textContent = startAt > 0 ? '从 ' + fmt(startAt) + ' 继续' : (r && r.finished ? '已听完，从头播放' : '');
+  setMediaSession(q);
+  enableControls(true);
+  renderQueue();
+}
+function play(){
+  var p = audio.play();
+  if(p && p.catch) p.catch(function(){ /* 需要用户点击才能播放 */ });
+}
+function togglePlay(){
+  if(cur < 0){ if(queue.length) open(0, true); return; }
+  if(audio.paused) play(); else audio.pause();
+}
+function skip(sec){
+  if(cur < 0) return;
+  var d = isFinite(audio.duration) ? audio.duration : Infinity;
+  audio.currentTime = Math.max(0, Math.min(d, audio.currentTime + sec));
+  recordNow(true);
+}
+function next(){ if(cur < queue.length - 1) open(cur + 1, !audio.paused || audio.ended); }
+function prev(){
+  if(audio.currentTime > 5){ audio.currentTime = 0; return; }
+  if(cur > 0) open(cur - 1, !audio.paused);
+}
+
+function enableControls(on){
+  ['bPrev','bBack','bPlay','bFwd','bNext'].forEach(function(id){ $(id).disabled = !on; });
+  $('seek').disabled = !on;
+  if(on) $('bNext').disabled = cur >= queue.length - 1;
+}
+function updateTimes(){
+  var d = isFinite(audio.duration) ? audio.duration : 0;
+  $('tDur').textContent = fmt(d);
+  if(!seeking){
+    $('seek').max = Math.floor(d) || 0;
+    $('seek').value = Math.floor(audio.currentTime);
+    $('tCur').textContent = fmt(audio.currentTime);
+  }
+  if('mediaSession' in navigator && navigator.mediaSession.setPositionState && d){
+    try{ navigator.mediaSession.setPositionState({duration:d, position:Math.min(audio.currentTime, d), playbackRate:audio.playbackRate}); }catch(e){}
+  }
+}
+function setPlayIcon(){
+  var playing = !audio.paused;
+  $('playIcon').innerHTML = playing ? '<path d="M6 5h4v14H6zm8 0h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
+  $('bPlay').setAttribute('aria-label', playing ? '暂停' : '播放');
+}
+
+audio.addEventListener('timeupdate', function(){ updateTimes(); recordNow(false); });
+audio.addEventListener('durationchange', updateTimes);
+audio.addEventListener('play', function(){ setPlayIcon(); $('nowSub').textContent = ''; });
+audio.addEventListener('pause', function(){ setPlayIcon(); recordNow(true); });
+audio.addEventListener('ended', function(){
+  var q = queue[cur];
+  var r = records[q.key] || {name:q.file.name, size:q.file.size};
+  r.duration = audio.duration; r.position = audio.duration; r.finished = true; r.updated = Date.now();
+  records[q.key] = r; saveRecords();
+  renderHistory(); renderQueue();
+  if(cur < queue.length - 1) open(cur + 1, true);
+});
+audio.addEventListener('error', function(){
+  if(cur >= 0) toast('这个文件播放不了，可能格式不支持');
+});
+
+var seekEl = $('seek');
+seekEl.addEventListener('input', function(){ seeking = true; $('tCur').textContent = fmt(+seekEl.value); });
+seekEl.addEventListener('change', function(){ audio.currentTime = +seekEl.value; seeking = false; recordNow(true); });
+
+$('bPlay').onclick = togglePlay;
+$('bBack').onclick = function(){ skip(-SKIP); };
+$('bFwd').onclick = function(){ skip(SKIP); };
+$('bPrev').onclick = prev;
+$('bNext').onclick = next;
+
+/* ---------- 倍速 ---------- */
+function renderSpeeds(){
+  var box = $('speeds'); box.innerHTML = '';
+  SPEEDS.forEach(function(s){
+    var b = el('button', 'speed' + (s === settings.speed ? ' on' : ''), s + 'x');
+    b.onclick = function(){
+      settings.speed = s; saveSettings();
+      audio.playbackRate = s; renderSpeeds();
+    };
+    box.appendChild(b);
+  });
+}
+
+/* ---------- 锁屏 / 耳机控制 ---------- */
+function setMediaSession(q){
+  if(!('mediaSession' in navigator)) return;
+  navigator.mediaSession.metadata = new MediaMetadata({title: stripExt(q.file.name), artist:'本地播客'});
+}
+if('mediaSession' in navigator){
+  var ms = navigator.mediaSession;
+  var h = function(a, fn){ try{ ms.setActionHandler(a, fn); }catch(e){} };
+  h('play', play);
+  h('pause', function(){ audio.pause(); });
+  h('seekbackward', function(){ skip(-SKIP); });
+  h('seekforward', function(){ skip(SKIP); });
+  h('previoustrack', prev);
+  h('nexttrack', next);
+  h('seekto', function(d){ if(d.seekTime != null){ audio.currentTime = d.seekTime; recordNow(true); } });
+}
+
+/* ---------- 添加文件 ---------- */
+$('bAdd').onclick = function(){ $('fileInput').click(); };
+$('fileInput').addEventListener('change', function(e){
+  var files = Array.prototype.slice.call(e.target.files || []);
+  e.target.value = '';
+  if(!files.length) return;
+  files.sort(function(a,b){ return a.name.localeCompare(b.name, 'zh-CN', {numeric:true}); });
+  var added = 0;
+  files.forEach(function(f){
+    var k = keyOf(f);
+    if(queue.some(function(q){ return q.key === k; })) return;
+    queue.push({file:f, key:k, url:URL.createObjectURL(f)});
+    added++;
+  });
+  if(added) toast('已添加 ' + added + ' 个文件');
+  else toast('这些文件已经在列表里了');
+  if(cur < 0 && queue.length){
+    // 优先打开最近听过且没听完的
+    var best = -1, bestTime = 0;
+    queue.forEach(function(q, i){
+      var r = records[q.key];
+      if(r && !r.finished && r.updated > bestTime){ best = i; bestTime = r.updated; }
+    });
+    open(best >= 0 ? best : 0, false);
+  }
+  enableControls(cur >= 0);
+  renderQueue(); renderHistory();
+});
+
+function removeFromQueue(i){
+  var wasCur = i === cur;
+  if(wasCur){ recordNow(true); audio.pause(); audio.removeAttribute('src'); audio.load(); }
+  URL.revokeObjectURL(queue[i].url);
+  queue.splice(i, 1);
+  if(wasCur){
+    cur = -1;
+    if(queue.length) open(Math.min(i, queue.length - 1), false);
+    else{
+      $('nowTitle').textContent = '还没有选择音频';
+      $('nowSub').textContent = '点下面「添加音频」，从手机里选文件';
+      $('tCur').textContent = '0:00'; $('tDur').textContent = '0:00';
+      seekEl.max = 0; seekEl.value = 0;
+      enableControls(false);
+    }
+  }else if(i < cur){ cur--; }
+  renderQueue(); renderHistory();
+}
+
+/* ---------- 渲染 ---------- */
+function progressBar(r){
+  var p = el('div', 'prog'), i = el('i');
+  var pct = !r ? 0 : r.finished ? 100 : (r.duration ? r.position / r.duration * 100 : 0);
+  i.style.width = Math.min(100, pct) + '%';
+  p.appendChild(i);
+  return p;
+}
+function renderQueue(){
+  var ul = $('queue'); ul.innerHTML = '';
+  $('queueEmpty').style.display = queue.length ? 'none' : '';
+  queue.forEach(function(q, i){
+    var r = records[q.key];
+    var li = el('li', 'item' + (i === cur ? ' cur' : ''));
+    var main = el('div', 'item-main');
+    main.appendChild(el('div', 'item-name', stripExt(q.file.name)));
+    main.appendChild(el('div', 'item-meta', progressText(r)));
+    main.appendChild(progressBar(r));
+    main.onclick = function(){ if(i === cur) togglePlay(); else open(i, true); };
+    var del = el('button', 'del', '×');
+    del.setAttribute('aria-label', '从列表移除');
+    del.onclick = function(){ removeFromQueue(i); };
+    li.appendChild(main); li.appendChild(del);
+    ul.appendChild(li);
+  });
+  if(cur >= 0){
+    $('bNext').disabled = cur >= queue.length - 1;
+  }
+}
+function renderHistory(){
+  var ul = $('history'); ul.innerHTML = '';
+  var keys = Object.keys(records).sort(function(a,b){ return (records[b].updated||0) - (records[a].updated||0); });
+  $('historyEmpty').style.display = keys.length ? 'none' : '';
+  keys.forEach(function(k){
+    var r = records[k];
+    var inQueue = queue.some(function(q){ return q.key === k; });
+    var li = el('li', 'item' + (inQueue ? '' : ' missing'));
+    var main = el('div', 'item-main');
+    main.appendChild(el('div', 'item-name', stripExt(r.name)));
+    main.appendChild(el('div', 'item-meta', progressText(r) + ' · ' + fmtDate(r.updated)));
+    main.appendChild(progressBar(r));
+    li.appendChild(main);
+    if(!inQueue){
+      var tag = el('span', 'tag', '需重新选择');
+      li.appendChild(tag);
+      main.onclick = function(){ toast('请点「添加音频」重新选这个文件，会接着上次的位置播放'); };
+    }else{
+      main.onclick = function(){
+        var i = queue.findIndex(function(q){ return q.key === k; });
+        if(i === cur) togglePlay(); else open(i, true);
+      };
+    }
+    var del = el('button', 'del', '×');
+    del.setAttribute('aria-label', '删除这条记录');
+    del.onclick = function(){
+      if(!confirm('删除「' + stripExt(r.name) + '」的播放记录？')) return;
+      delete records[k]; saveRecords(); renderHistory(); renderQueue();
+    };
+    li.appendChild(del);
+    ul.appendChild(li);
+  });
+}
+
+/* ---------- 导出 / 导入 ---------- */
+$('bExport').onclick = function(){
+  recordNow(true);
+  var n = Object.keys(records).length;
+  if(!n){ toast('还没有记录可以导出'); return; }
+  var data = {app:'local-podcast-player', version:1, exported:new Date().toISOString(), records:records, settings:settings};
+  var blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  var d = new Date();
+  var name = 'podcast-records-' + d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0') + '.json';
+  var a = el('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+  toast('已导出 ' + n + ' 条记录');
+};
+$('bImport').onclick = function(){ $('importInput').click(); };
+$('importInput').addEventListener('change', function(e){
+  var f = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if(!f) return;
+  var reader = new FileReader();
+  reader.onload = function(){
+    var data;
+    try{ data = JSON.parse(reader.result); }catch(err){ toast('文件格式不对，导入失败'); return; }
+    if(!data || data.app !== 'local-podcast-player' || typeof data.records !== 'object'){ toast('这不是播客记录文件'); return; }
+    var added = 0, updated = 0;
+    Object.keys(data.records).forEach(function(k){
+      var r = data.records[k];
+      if(!r || typeof r.name !== 'string') return;
+      var mine = records[k];
+      if(!mine){ records[k] = r; added++; }
+      else if((r.updated||0) > (mine.updated||0)){ records[k] = r; updated++; }
+    });
+    saveRecords(); renderHistory(); renderQueue();
+    toast('导入完成：新增 ' + added + ' 条，更新 ' + updated + ' 条');
+  };
+  reader.readAsText(f);
+});
+
+/* ---------- 离开页面时保存 ---------- */
+document.addEventListener('visibilitychange', function(){ if(document.hidden) recordNow(true); });
+window.addEventListener('pagehide', function(){ recordNow(true); });
+
+/* ---------- 启动 ---------- */
+$('ver').textContent = 'v' + document.querySelector('meta[name="app-version"]').content;
+renderSpeeds(); renderQueue(); renderHistory();
+
+if('serviceWorker' in navigator && location.protocol !== 'file:'){
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('sw.js').catch(function(){}); });
+}
+})();
+</script>
+</body>
+</html>
