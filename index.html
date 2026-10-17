@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.31.3">
+<meta name="app-version" content="0.32.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -140,7 +140,7 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .item.sel{background:var(--accent-soft)}
 .selbar{position:absolute;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:6;display:flex;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:10px}
 .selbar[hidden]{display:none}
-.selbar .btn{flex:1;min-width:0;padding:8px 4px;font-size:15px;white-space:nowrap}
+.selbar .btn{flex:1;min-width:0;padding:8px 2px;font-size:15px;white-space:nowrap}
 .selbar .btn:disabled{opacity:.4}
 body.selecting .mini{display:none}
 body.selecting .list-scroll{padding-bottom:90px}
@@ -354,8 +354,9 @@ input[type=file]{display:none}
 
 <!-- 悬浮播放器 -->
 <div class="selbar" id="selBar" hidden>
-  <button class="btn" id="bSelMove" disabled>移动到专辑</button>
+  <button class="btn" id="bSelMove" disabled>移动</button>
   <button class="btn" id="bSelTr" disabled>转文字</button>
+  <button class="btn" id="bSelUp" disabled>传云端</button>
   <button class="btn danger" id="bSelDel" disabled>删除</button>
 </div>
 
@@ -639,6 +640,7 @@ input[type=file]{display:none}
       <h3>功能</h3>
       <ul>
         <li>点右上角「＋」选音频文件（mp3、m4a 等），可以一次选多个；音频会保存在网页里，下次打开直接播放</li>
+        <li>音频可以传到云端（你自己的 Cloudflare R2）：单集「!」→「上传到云端」，其他设备登录后就能在线听；「关于」里可以设置添加时自动上传</li>
         <li>首页右上角的 RSS 图标可以订阅播客：填 RSS 地址，节目列表自动抓取，在线播放；单集「!」里可以下载到本机离线听</li>
         <li>按音频文件里的「专辑」信息自动分成不同的播客节目，并显示节目封面</li>
         <li>点节目封面进入节目，看到每一集的进度；点每一集右边的「!」查看文件信息和更多操作</li>
@@ -665,6 +667,17 @@ input[type=file]{display:none}
 
       <h3>节目列表</h3>
       <label class="check"><input type="checkbox" id="tidyChk"><span>集名优化：「0.」开头的显示为「发刊词：」；名字前有两个序号时去掉第一个；番外以「番外：」开头。列表顺序不变。</span></label>
+
+      <h3>云端音频</h3>
+      <p>把音频传到你自己的 Cloudflare R2：在线播放，多个设备都能听。音频由手机直接传给 R2，不经过 Cloudflare 后台。单集「!」→「上传到云端」，或打开下面的开关。</p>
+      <label class="check"><input type="checkbox" id="cloudAutoChk"><span>添加音频时自动上传到云端</span></label>
+      <div class="ver-row">
+        <div class="ver-text">
+          <div class="ver-num">云端存储</div>
+          <div class="ver-status" id="cloudStatus">点右边按钮检查连接</div>
+        </div>
+        <button class="btn" id="bCloudTest">检查</button>
+      </div>
 
       <h3>存储空间</h3>
       <p id="storageInfo">正在计算…</p>
@@ -952,6 +965,7 @@ function coverInfo(show){
   }
   if(shows[show] && shows[show].cover) return {src:shows[show].cover, type:'image/jpeg'};
   if(shows[show] && shows[show].coverUrl) return {src:shows[show].coverUrl, type:'image/jpeg'};   // 订阅的播客：RSS 里的封面
+  if(coverCloud[show]) return {src:coverCloud[show], type:'image/jpeg'};   // 云端的封面小图（别的设备传上去的）
   for(var k in records){
     var r = records[k];
     if(r.show === show && r.tagShow && r.tagShow !== OTHER && shows[r.tagShow] && shows[r.tagShow].cover) return {src:shows[r.tagShow].cover, type:'image/jpeg'};
@@ -1044,6 +1058,12 @@ function recordNow(force){
 /* ---------- 播放 ---------- */
 function open(ep, autoplay, at){
   if(!ep) return;
+  // 只在云端的集：先拿（或刷新）临时播放地址再播
+  if(ep.cloud && ep.remote && (!ep.url || Date.now() - (ep.urlAt || 0) > CLOUD_URL_AGE)){
+    if(autoplay) toast('正在连接云端…', 8000);
+    cloudResolve(ep).then(function(){ open(ep, autoplay, at); }, function(err){ if(autoplay) toast('云端连不上：' + err.message, 5000); });
+    return;
+  }
   if(ep === cur && at != null){ audio.currentTime = at; if(autoplay) play(); recordNow(true); return; }
   if(cur && cur !== ep) recordNow(true);
   cur = ep;
@@ -1394,6 +1414,7 @@ function showAlbumMenu(name){
     ask('新建专辑', '', '专辑名称', function(v){ createAlbum(v); render(); toast('已新建「' + v + '」'); });
   }}];
   var fd = feedOfShow(name);
+  if(!fd) items.push({label:'上传整个专辑到云端', note:'把这个专辑里还没上传的集传到你的 R2', pick:function(){ closeSheet('epSheet'); cloudUploadAll(episodeKeys(name)); }});
   if(fd){
     items.unshift({label:'刷新订阅', note:fd.fetched ? '上次更新：' + fmtDate(fd.fetched) : '', pick:function(){
       closeSheet('epSheet'); toast('正在刷新…', 20000);
@@ -1985,7 +2006,7 @@ function rssLocalEp(row){
 function syncFeedEps(){
   feedEpMap = {};
   Object.keys(feeds).forEach(function(u){ var f = feeds[u]; (f.eps || []).forEach(function(e, i){ var k = rssKey(e); if(!feedEpMap[k]) feedEpMap[k] = {f:f, e:e, i:i}; }); });
-  episodes = episodes.filter(function(ep){ return !ep.remote || feedEpMap[ep.key]; });
+  episodes = episodes.filter(function(ep){ return !ep.remote || ep.cloud || feedEpMap[ep.key]; });
   var have = {};
   episodes.forEach(function(ep){ have[ep.key] = ep; });
   Object.keys(feedEpMap).forEach(function(k){
@@ -2118,13 +2139,10 @@ $('bRssRefresh').onclick = function(){
   });
 };
 // 下载到本机（离线听）：网页直接从播客平台下载，有的平台不允许网页下载，那就只能在线听
-function downloadEp(key){
-  var ep = findEp(key);
-  if(!ep || !ep.remote) return;
-  toast('正在下载…', 60000);
-  fetch(ep.url).then(function(r){
+function fetchBlobProgress(url, size){
+  return fetch(url).then(function(r){
     if(!r.ok) throw new Error('下载失败（' + r.status + '）');
-    var total = +(r.headers.get('Content-Length') || 0) || ep.size, got = 0, type = r.headers.get('Content-Type') || 'audio/mpeg', reader = r.body && r.body.getReader();
+    var total = +(r.headers.get('Content-Length') || 0) || size, got = 0, type = r.headers.get('Content-Type') || 'audio/mpeg', reader = r.body && r.body.getReader();
     if(!reader) return r.blob();
     var parts = [], last = 0;
     function pump(){
@@ -2136,7 +2154,14 @@ function downloadEp(key){
       });
     }
     return pump();
-  }).then(function(blob){
+  });
+}
+function downloadEp(key){
+  var ep = findEp(key);
+  if(!ep || !ep.remote) return;
+  if(ep.cloud) return cloudDownload(key);
+  toast('正在下载…', 60000);
+  fetchBlobProgress(ep.url, ep.size).then(function(blob){
     var row = {key:key, name:ep.name, size:blob.size, type:blob.type, blob:blob, added:Date.now(), rss:true, title:ep.title, show:feedEpMap[key] ? feedEpMap[key].f.title : ep.show, feed:ep.feed};
     return store('readwrite', function(st){ return st.put(row); }).then(function(){ return row; });
   }).then(function(row){
@@ -2147,6 +2172,165 @@ function downloadEp(key){
     toast(err && err.name === 'TypeError' ? '这个播客的平台不允许网页下载，只能在线听' : err && err.name === 'QuotaExceededError' ? '空间不够，下载失败' : (err && err.message) || '下载失败', 5000);
   });
 }
+
+/* ======================== 云端音频（Cloudflare R2） ======================== */
+// 音频由手机直接传给 R2，不经过 Cloudflare 后台；后台（functions/api/r2.js）只发很小的「临时地址」。
+// records[键].cloud = {k:R2 里的路径, size, type}，records[键].cat = 改动时间，随云同步到别的设备；
+// 本机没有文件、只在云端的集放进 episodes（remote:true, cloud:true），播放时现要临时播放地址（12 小时有效）。
+function cloudApi(body){
+  return fetch('api/r2', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body), cache:'no-store', redirect:'manual', credentials:'same-origin'}).then(function(r){
+    if(r.type === 'opaqueredirect' || (r.status >= 300 && r.status < 400)) throw new Error('登录已过期，请刷新网页重新登录');
+    return r.text().then(function(t){
+      var j = null; try{ j = JSON.parse(t); }catch(e){}
+      if(r.ok && j) return j;
+      var e = new Error((j && j.error) || (r.status === 404 ? '这个网址没有云端存储接口：要在 Cloudflare 上的网址使用' : '云端接口出错（' + r.status + '）'));
+      e.status = r.status; e.missing = j && j.missing; throw e;
+    });
+  }, function(){ throw new Error('连不上网络'); });
+}
+var CLOUD_URL_AGE = 10 * 3600000;
+function cloudResolve(ep){   // 云端的集：拿到（或刷新）临时播放地址
+  if(ep.url && Date.now() - (ep.urlAt || 0) < CLOUD_URL_AGE) return Promise.resolve(ep.url);
+  return cloudApi({op:'get', keys:[ep.ckey]}).then(function(j){
+    var u = j.urls && j.urls[ep.ckey];
+    if(!u) throw new Error('云端找不到这个文件');
+    ep.url = u; ep.urlAt = Date.now();
+    return u;
+  });
+}
+function cloudEpObj(key, r){
+  return {key:key, name:r.name, size:(r.cloud && r.cloud.size) || r.size || 0, blob:null, url:'', urlAt:0, title:r.title || stripExt(r.name),
+    show:r.customShow || r.tagShow || r.show || OTHER, art:null, tags:null, remote:true, cloud:true, ckey:r.cloud.k, dur:r.duration || 0};
+}
+// 让 episodes 里「只在云端」的集和记录一致：记录里有 cloud、本机没有文件的放进去，不再有的拿掉
+function syncCloudEps(){
+  var want = {}, added = false;
+  Object.keys(records).forEach(function(k){
+    var r = records[k];
+    if(!r || !r.cloud || !r.cloud.k) return;
+    var ep = findEp(k);
+    if(ep && !ep.cloud) return;   // 本机有这一集的文件（或是订阅的集）
+    want[k] = 1;
+    if(!ep){ episodes.push(cloudEpObj(k, r)); added = true; }
+    else{ ep.title = r.title || ep.title; ep.show = r.customShow || r.tagShow || r.show || ep.show; ep.ckey = r.cloud.k; ep.size = r.cloud.size || ep.size; }
+  });
+  var n = episodes.length;
+  episodes = episodes.filter(function(ep){ return !ep.cloud || want[ep.key]; });
+  if(added || n !== episodes.length) epDirty();
+}
+var MIME_BY_EXT = {mp3:'audio/mpeg', m4a:'audio/mp4', m4b:'audio/mp4', mp4:'audio/mp4', aac:'audio/aac', wav:'audio/wav', ogg:'audio/ogg', oga:'audio/ogg', opus:'audio/ogg', flac:'audio/flac'};
+function mimeOf(name, type){
+  if(type && /^audio\//.test(type)) return type;
+  return MIME_BY_EXT[((/\.([a-z0-9]+)$/i.exec(name) || [0, ''])[1]).toLowerCase()] || 'audio/mpeg';
+}
+function putBlob(url, blob, type, onProgress){
+  return new Promise(function(res, rej){
+    var x = new XMLHttpRequest();
+    x.open('PUT', url);
+    x.setRequestHeader('Content-Type', type);
+    x.upload.onprogress = function(e){ if(e.lengthComputable && onProgress) onProgress(e.loaded / e.total); };
+    x.onload = function(){ if(x.status >= 200 && x.status < 300) res(); else rej(new Error('云端存储拒绝了上传（' + x.status + '）' + (x.status === 403 ? '：访问密钥不对，或临时地址已过期' : ''))); };
+    x.onerror = function(){ rej(new Error('传不上去：多半是存储桶的 CORS 没设置好，或者网络断了')); };
+    x.send(blob);
+  });
+}
+function sha1hex(text){
+  return crypto.subtle.digest('SHA-1', new TextEncoder().encode(text)).then(function(b){
+    return Array.prototype.map.call(new Uint8Array(b), function(x){ return (x + 256).toString(16).slice(1); }).join('');
+  });
+}
+// 专辑封面小图也传上去（几十 KB），别的设备上才有封面
+function cloudCover(show){
+  var sh = shows[show];
+  if(!sh || !sh.cover || sh.coverKey || show === OTHER) return Promise.resolve();
+  return sha1hex(show).then(function(id){ return cloudApi({op:'cover', id:id}); }).then(function(j){
+    return fetch(sh.cover).then(function(r){ return r.blob(); }).then(function(blob){ return putBlob(j.url, blob, 'image/jpeg'); }).then(function(){
+      sh.coverKey = j.key; saveShows();
+    });
+  });
+}
+var coverCloud = {};   // 专辑名 → 临时封面地址（只在这次打开期间有用）
+function loadCloudCovers(){
+  var by = {}, keys = [];
+  Object.keys(shows).forEach(function(n){ var sh = shows[n]; if(sh && sh.coverKey && !sh.cover && !coverCloud[n]){ by[sh.coverKey] = n; keys.push(sh.coverKey); } });
+  if(!keys.length) return Promise.resolve();
+  return cloudApi({op:'get', keys:keys}).then(function(j){
+    Object.keys(j.urls || {}).forEach(function(k){ coverCloud[by[k]] = j.urls[k]; });
+    if(ready) render();
+  }, function(){});
+}
+function cloudUploadOne(key, onProgress){
+  var ep = findEp(key), r = records[key];
+  if(!ep || ep.remote) return Promise.reject(new Error('这一集没有本地文件'));
+  var type = mimeOf(ep.name, ep.blob.type);
+  return cloudApi({op:'put', name:ep.name, type:type}).then(function(j){
+    return putBlob(j.url, ep.blob, type, onProgress).then(function(){ return j.key; });
+  }).then(function(ck){
+    r = records[key] || (records[key] = {name:ep.name, size:ep.size, duration:0, position:0, updated:0, added:Date.now()});
+    r.cloud = {k:ck, size:ep.size, type:type}; r.cat = Date.now();
+    saveRecords();
+    return cloudCover(ep.show).catch(function(){});
+  });
+}
+var cloudBusy = false;
+// 一集一集上传；配置不对这类问题会停下，网络出错的跳过继续
+function cloudUploadAll(keys){
+  keys = keys.filter(function(k){ return hasFile(k) && !(records[k] && records[k].cloud); });
+  if(!keys.length){ toast('没有要上传的：这些集已经在云端了，或者没有本地文件'); return Promise.resolve(); }
+  if(cloudBusy){ toast('正在上传，请稍等'); return Promise.resolve(); }
+  cloudBusy = true;
+  var ok = 0, bad = 0, err1 = null, stop = false, i = 0, lastPct = -1;
+  if(!trJob) keepAwake(true);
+  function show(p){
+    var pct = Math.floor((p || 0) * 100);
+    if(pct === lastPct) return;
+    lastPct = pct;
+    toast('正在上传 ' + (i + 1) + ' / ' + keys.length + '（' + pct + '%）', 60000);
+  }
+  return keys.reduce(function(chain, k){
+    return chain.then(function(){
+      if(stop) return;
+      lastPct = -1; show(0);
+      return cloudUploadOne(k, show).then(function(){ ok++; }, function(err){
+        bad++; err1 = err1 || err;
+        if(err && (err.status === 501 || err.status === 401 || err.status === 403 || err.status === 413)) stop = true;
+      }).then(function(){ i++; });
+    });
+  }, Promise.resolve()).then(function(){
+    cloudBusy = false; if(!trJob) keepAwake(false);
+    toast(bad ? '已上传 ' + ok + ' 集，' + bad + ' 集失败：' + (err1 && err1.message) : '已上传 ' + ok + ' 集到云端', bad ? 7000 : 3500);
+    render(); cloudInfoRefresh();
+  });
+}
+// 下载到本机：和本机添加的文件一样（key 不变，记录还在）
+function cloudDownload(key){
+  var ep = findEp(key), r = records[key];
+  if(!ep || !ep.cloud || !r) return;
+  toast('正在连接云端…', 60000);
+  cloudResolve(ep).then(function(url){ return fetchBlobProgress(url, ep.size); }).then(function(blob){
+    var row = {key:key, name:r.name, size:blob.size, type:blob.type, blob:blob, added:Date.now()};
+    return store('readwrite', function(st){ return st.put(row); }).then(function(){ return row; });
+  }).then(function(row){
+    var now = findEp(key), i = episodes.indexOf(now), le = makeEp(row.name, row.size, row.blob);
+    le.key = key;
+    if(i >= 0) episodes[i] = le; else episodes.push(le);
+    epDirty();
+    return readInfo(le).then(function(){ saveRecords(); saveShows(); toast('已下载到本机'); render(); updateStorage(); });
+  }).catch(function(err){
+    toast(err && err.name === 'QuotaExceededError' ? '空间不够，下载失败' : (err && err.message) || '下载失败', 5000);
+  });
+}
+// 从云端删除这一集的音频（本机的文件和播放记录都还在）
+function cloudRemove(key){
+  var r = records[key];
+  if(!r || !r.cloud) return Promise.resolve();
+  return cloudApi({op:'delete', keys:[r.cloud.k]}).then(function(j){
+    if(!j.deleted) throw new Error('云端没有删掉这个文件');
+    delete r.cloud; r.cat = Date.now();
+    saveRecords(); syncCloudEps();
+  });
+}
+function cloudInfoRefresh(){ if(!$('about').hidden) $('bCloudTest').onclick(); }
 
 /* ---------- 添加文件（保存进网页） ---------- */
 $('bAdd').onclick = function(){ $('fileInput').click(); };
@@ -2192,6 +2376,7 @@ $('fileInput').addEventListener('change', function(e){
     }
     if(!cur) openRecent();
     if(cur) setMediaSession();
+    if(settings.cloudAuto && ok.length) setTimeout(function(){ cloudUploadAll(ok.map(function(ep){ return ep.key; })); }, 600);
     var shown = {};
     ok.forEach(function(ep){ shown[ep.show] = 1; });
     var showNames = Object.keys(shown);
@@ -2218,13 +2403,14 @@ function deleteFile(key){
   URL.revokeObjectURL(ep.url);
   if(ep.art) URL.revokeObjectURL(ep.art.url);
   episodes.splice(episodes.indexOf(ep), 1);
-  return fileDelete(key).catch(function(){}).then(function(){ if(ep.rss) syncFeedEps(); });   // 订阅的集删了下载，改回在线
+  return fileDelete(key).catch(function(){}).then(function(){ if(ep.rss) syncFeedEps(); syncCloudEps(); });   // 订阅的集删了下载改回在线；传过云端的变成「只在云端」
 }
 // 整集删除：音频文件、播放记录、信息都删掉
 function deleteEpisode(key){
   var show = showOf(key);
-  return deleteFile(key).then(function(){ return trDelete(key); }).then(function(){
-    delete records[key]; syncDel(key);
+  // 传过云端的，云端那份也一起删（删不掉就整个取消，免得云端留下看不见又占空间的文件）
+  return cloudRemove(key).then(function(){ return deleteFile(key); }).then(function(){ return trDelete(key); }).then(function(){
+    delete records[key]; syncDel(key); syncCloudEps();
     saveRecords();
     if(!episodeKeys(show).length && shows[show] && !shows[show].custom){ delete shows[show]; saveShows(); }
   });
@@ -2243,7 +2429,8 @@ function showEpMenu(key){
    ['文件名', fileNameOf(key)],
    ['大小', fmtSize(ep ? ep.size : r.size || 0)],
    ['信息来源', ep ? (ep.tags && ep.tags.format ? ep.tags.format + (ep.tags.album ? '' : '（没有专辑）') : '没有读到标签') : '—'],
-   ['状态', ep ? '已保存在网页里' : '文件缺失']]).forEach(function(f){
+   ['状态', ep && ep.cloud ? '只在云端，播放时在线取' : ep ? '已保存在网页里' : '文件缺失'],
+   ['云端', r.cloud ? '已上传（' + fmtSize(r.cloud.size || 0) + '）' : '没有上传']]).forEach(function(f){
     var d = el('div'); d.appendChild(el('b', null, f[0])); d.appendChild(el('span', null, f[1]));
     facts.appendChild(d);
   });
@@ -2251,19 +2438,25 @@ function showEpMenu(key){
   $('epMarksHead').hidden = !n;
   var items = [{label:'移动到专辑', note:'现在在「' + showOf(key) + '」', pick:function(){ closeSheet('epSheet'); showMoveMenu(key); }}];
   if(ep || hasTr[key]) items.push({label:'AI 转文字', note: hasTr[key] ? '已有文稿，点开查看；也可以重新识别' : '把这一集识别成文字（要用自己的 API Key）', pick:function(){ closeSheet('epSheet'); goEp(key); }});
-  if(ep && ep.remote) items.push({label:'下载到本机', note:'离线也能听；有的播客平台不允许网页下载', pick:function(){ closeSheet('epSheet'); downloadEp(key); }});
+  if(ep && ep.remote) items.push({label:'下载到本机', note:ep.cloud ? '从云端下载，离线也能听' : '离线也能听；有的播客平台不允许网页下载', pick:function(){ closeSheet('epSheet'); downloadEp(key); }});
+  if(!fe && ep && !ep.remote && !r.cloud) items.push({label:'上传到云端', note:'传到你的 R2，其他设备也能在线听', pick:function(){ closeSheet('epSheet'); cloudUploadAll([key]); }});
+  if(!fe && r.cloud) items.push({label:'从云端删除', note:'只删云端的音频' + (ep && !ep.remote ? '，本机的文件还在' : '，本机没有文件的话这一集会变成「文件缺失」'), danger:true, pick:function(){
+    if(!confirm('从云端删除「' + titleOf(key) + '」的音频？' + (ep && !ep.remote ? '本机的文件和播放记录都还在。' : '本机没有这一集的文件，删了就听不到了。'))) return;
+    closeSheet('epSheet');
+    cloudRemove(key).then(function(){ toast('已从云端删除'); render(); cloudInfoRefresh(); }, function(err){ toast('云端删除失败：' + err.message, 5000); });
+  }});
   if(ep && ep.tags) items.push({label:'查看标签详情', note:'看看文件里到底存了哪些信息', pick:function(){
     $('tagText').textContent = describeTags(ep);
     closeSheet('epSheet'); openSheet('tagSheet');
   }});
-  if(ep && !ep.remote) items.push({label:ep.rss ? '删除下载' : '删除本地音频文件', note:ep.rss ? '释放空间，改回在线播放' : '释放空间，保留播放记录和信息', danger:true, pick:function(){
+  if(ep && !ep.remote) items.push({label:ep.rss ? '删除下载' : '删除本地音频文件', note:ep.rss ? '释放空间，改回在线播放' : r.cloud ? '释放空间，云端还有一份，可以再下载' : '释放空间，保留播放记录和信息', danger:true, pick:function(){
     closeSheet('epSheet');
     deleteFile(key).then(function(){ toast('已删除音频文件，播放记录还在'); render(); updateStorage(); });
   }});
-  if(!fe) items.push({label:'删除这一集', note:'音频、播放记录和信息全部删除', danger:true, pick:function(){
-    if(!confirm('确定删除「' + titleOf(key) + '」的全部内容？')) return;
+  if(!fe) items.push({label:'删除这一集', note:'音频、播放记录和信息全部删除' + (r.cloud ? '（云端的也删）' : ''), danger:true, pick:function(){
+    if(!confirm('确定删除「' + titleOf(key) + '」的全部内容？' + (r.cloud ? '云端的音频也会一起删除。' : ''))) return;
     closeSheet('epSheet');
-    deleteEpisode(key).then(function(){ toast('已删除这一集'); render(); updateStorage(); });
+    deleteEpisode(key).then(function(){ toast('已删除这一集'); render(); updateStorage(); cloudInfoRefresh(); }, function(err){ toast('没删成：云端的文件删不掉（' + err.message + '）', 5000); });
   }});
   renderOpts($('epOpts'), items);
   openSheet('epSheet');
@@ -2285,6 +2478,7 @@ $('bSelAll').onclick = function(){
 };
 $('bSelMove').onclick = function(){ var ks = Object.keys(selKeys); if(ks.length) showMoveMenu(ks, exitSel); };
 $('bSelTr').onclick = function(){ var ks = Object.keys(selKeys); if(!ks.length) return; exitSel(); trBatch(ks); };
+$('bSelUp').onclick = function(){ var ks = Object.keys(selKeys); if(!ks.length) return; exitSel(); cloudUploadAll(ks); };
 $('bSelDel').onclick = function(){ var ks = Object.keys(selKeys); if(ks.length) showSelDelete(ks); };
 function showSelDelete(keys){
   var withFile = keys.filter(hasFile);
@@ -2303,7 +2497,7 @@ function showSelDelete(keys){
   items.push({label:'删除所选的 ' + keys.length + ' 集', note:'音频、播放记录和信息全部删除', danger:true, pick:function(){
     if(!confirm('确定删除所选 ' + keys.length + ' 集的全部内容？')) return;
     closeSheet('epSheet');
-    chain(keys, deleteEpisode).then(function(){ toast('已删除 ' + keys.length + ' 集'); exitSel(); updateStorage(); });
+    chain(keys, deleteEpisode).then(function(){ toast('已删除 ' + keys.length + ' 集'); exitSel(); updateStorage(); cloudInfoRefresh(); }, function(err){ toast('没删完：云端的文件删不掉（' + err.message + '）', 5000); render(); });
   }});
   renderOpts($('epOpts'), items);
   openSheet('epSheet');
@@ -2393,7 +2587,7 @@ function render(){
   $('selBar').hidden = !selecting;
   document.body.classList.toggle('selecting', selecting);
   showTrJob();
-  $('bSelMove').disabled = $('bSelDel').disabled = $('bSelTr').disabled = !selCount();
+  $('bSelMove').disabled = $('bSelDel').disabled = $('bSelTr').disabled = $('bSelUp').disabled = !selCount();
   $('bSelAll').textContent = selCount() >= nKeys ? '取消全选' : '全选';
   $('title').textContent = selecting ? '已选 ' + selCount() + ' 集' : '';   // 顶部栏不放大标题
   document.body.classList.toggle('ep-page', isEp);
@@ -2759,7 +2953,9 @@ function renderShow(box){
     main.appendChild(progressBar(r));
     li.appendChild(main);
     if(!ep) li.appendChild(el('span', 'tag', '文件缺失'));
+    else if(ep.cloud) li.appendChild(el('span', 'tag', '云端'));
     else if(ep.rss && !ep.remote) li.appendChild(el('span', 'tag', '已下载'));
+    else if(r && r.cloud) li.appendChild(el('span', 'tag', '已上传'));
     if(!isFeed) li.appendChild(el('span', 'ep-seq', String(idx + 1)));   // 右下角：这一集在列表里的位置（订阅的播客不显示）
     if(!selMode){
       var ib = el('button', 'info-btn');
@@ -3814,6 +4010,10 @@ function keepAwake(on){
 // 在线的集（订阅的播客）：百炼直接用节目的音频地址识别，手机不用上传；别家服务商要先把音频下载到手机内存
 function planFor(ep, route){
   if(!ep.remote) return planChunks(ep, route);
+  if(ep.cloud) return cloudResolve(ep).then(function(){ var e2 = {remote:true, url:ep.url, dur:ep.dur, name:ep.name}; return planRemote(e2, route); });
+  return planRemote(ep, route);
+}
+function planRemote(ep, route){
   if(route.ali) return Promise.resolve({duration:ep.dur || 0, chunks:[{t0:0, dur:ep.dur || 0, url:ep.url, fmt:'mp3'}], conv:false});
   return fetch(ep.url).then(function(r){
     if(!r.ok) throw new Error('下载音频失败（' + r.status + '）');
@@ -4361,7 +4561,7 @@ function syncPayload(){
   var sh = {};
   Object.keys(shows).forEach(function(n){
     var s = shows[n];
-    if(s && (s.custom || s.author)) sh[n] = {custom:!!s.custom, author:s.author || '', at:s.at || 0};
+    if(s && (s.custom || s.author || s.coverKey)) sh[n] = {custom:!!s.custom, author:s.author || '', at:s.at || 0, coverKey:s.coverKey || ''};
   });
   var fs = {};
   Object.keys(feeds).forEach(function(u){ fs[u] = {title:feeds[u].title, at:feeds[u].at || 0}; });
@@ -4382,6 +4582,7 @@ function syncMerge(R){
       changed = true;
     }
     if((b.mt || 0) > (a.mt || 0)){ a.marks = b.marks || []; a.mt = b.mt; changed = true; }
+    if((b.cat || 0) > (a.cat || 0)){ if(b.cloud) a.cloud = b.cloud; else delete a.cloud; a.cat = b.cat; changed = true; }   // 云端音频的上传 / 删除
     if((b.ct || 0) > (a.ct || 0)){
       if(b.customShow) a.customShow = b.customShow; else delete a.customShow;
       a.ct = b.ct;
@@ -4395,6 +4596,7 @@ function syncMerge(R){
   Object.keys(rs).forEach(function(n){
     var b = rs[n], a = shows[n];
     if(!b || n === OTHER || (del['s|' + n] || 0) > (b.at || 0)) return;
+    if(b.coverKey && !(a && a.coverKey)){ shows[n] = a = a || {}; a.coverKey = b.coverKey; changed = true; }   // 别的设备传到云端的封面
     if(a && (a.at || 0) >= (b.at || 0)) return;
     a = shows[n] = a || {};
     if(b.custom) a.custom = true; else delete a.custom;
@@ -4419,7 +4621,7 @@ function syncMerge(R){
       return;
     }
     var r = records[k];
-    if(r && Math.max(r.updated || 0, r.mt || 0, r.ct || 0, r.added || 0) < del[k] && !findEp(k)){ delete records[k]; changed = true; }
+    if(r && Math.max(r.updated || 0, r.mt || 0, r.ct || 0, r.added || 0) < del[k] && !hasFile(k)){ delete records[k]; changed = true; }
   });
   if(R.ai && (R.ai.mt || 0) > (ai.mt || 0)){ ai = R.ai; save(AI_KEY, ai); showAiStatus(); }
   return changed;
@@ -4449,6 +4651,7 @@ function syncApply(j){
     try{ R = JSON.parse(plain); }catch(e){ throw new Error('云端数据损坏'); }
     if(syncMerge(R)){
       save(STORE_KEY, records); save(SHOWS_KEY, shows);
+      syncCloudEps(); loadCloudCovers();
       if(ready){ render(); renderMini(); }
     }
     saveSyncCfg();
@@ -4601,7 +4804,19 @@ function updateStorage(){
     }).catch(function(){});
   }
 }
-$('bAbout').onclick = function(){ updateStorage(); $('tidyChk').checked = !settings.tidyOff; openSheet('about'); };
+$('bAbout').onclick = function(){ updateStorage(); $('tidyChk').checked = !settings.tidyOff; $('cloudAutoChk').checked = !!settings.cloudAuto; openSheet('about'); };
+$('cloudAutoChk').addEventListener('change', function(){ if(this.checked) settings.cloudAuto = true; else delete settings.cloudAuto; saveSettings(); });
+// 检查云端：连得上不，存了多少，大概每月多少钱（R2：前 10GB 免费，之后每 GB 每月 0.015 美元）
+$('bCloudTest').onclick = function(){
+  var st = $('cloudStatus'), btn = $('bCloudTest');
+  st.textContent = '正在检查…'; btn.disabled = true;
+  cloudApi({op:'usage'}).then(function(j){
+    var gb = j.bytes / 1073741824, cost = Math.max(0, gb - 10) * 0.015;
+    st.textContent = '已连接：云端有 ' + j.count + ' 个文件，共 ' + fmtSize(j.bytes) + '，每月约 ' + (cost < 0.005 ? '0 美元（在 10GB 免费额度内）' : cost.toFixed(2) + ' 美元');
+  }, function(err){
+    st.textContent = (err.missing ? '还没配置：缺少 ' + err.missing.join('、') + '（见 README 的「云端音频」）' : err.message);
+  }).then(function(){ btn.disabled = false; });
+};
 $('tidyChk').addEventListener('change', function(){
   if(this.checked) delete settings.tidyOff; else settings.tidyOff = true;
   saveSettings(); render(); renderMini();
@@ -4728,10 +4943,11 @@ trKeys().catch(function(){ return []; }).then(function(ks){
   // 每次打开都重新读一遍标签，读法改进后旧文件也能分对节目（订阅下载的集按 RSS 的信息，不读标签）
   return Promise.all(episodes.filter(function(ep){ return !ep.rss; }).map(readInfo));
 }).then(function(){
-  syncFeedEps();
+  syncFeedEps(); syncCloudEps();
   saveRecords(); saveShows();
   ready = true;
   render();
+  setTimeout(loadCloudCovers, 1500);   // 别的设备传到云端的封面
   setTimeout(refreshStale, 3000);   // 订阅的播客隔一阵自动刷新
   // 先等云同步一会儿（最多 2.5 秒），继续播放的位置用最新的
   if(!syncOn()){ openRecent(); return; }
