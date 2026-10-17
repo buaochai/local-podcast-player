@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.21.0">
+<meta name="app-version" content="0.22.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -214,14 +214,24 @@ li.has-edit{position:relative}
 /* 文稿页：标题、嵌在页面里的播放器、章节条，下面是文稿 */
 .ep-name{font-size:19px;font-weight:700;line-height:1.35;margin:0 2px}
 .ep-album{font-size:13px;color:var(--muted);margin:2px 2px 0}
-.mini.embed{position:static;margin:10px 0 10px;box-shadow:none;padding:8px 12px 4px}
-.mini.embed .mini-cover,.mini.embed .mini-title{display:none}
-.mini.embed .mini-sub{font-size:13px}
-body.ep-page .mini:not(.embed){display:none}
-body.ep-page .list-scroll{padding-bottom:28px}
+/* 文稿页的播放器：还在底部，但矮一点、没有封面 */
+body.ep-page .mini{padding:6px 10px 2px;border-radius:16px}
+body.ep-page .mini-cover{display:none}
+body.ep-page .mini-top{gap:6px}
+body.ep-page .mini-title{font-size:14px}
+body.ep-page .seek{margin:2px 0 0;height:16px}
+body.ep-page .ctl{width:40px;height:38px}
+body.ep-page .ctl.play{width:42px;height:42px}
+body.ep-page .ctl.play svg{width:26px;height:26px}
+body.ep-page.has-player .list-scroll{padding-bottom:140px}
+body.ep-page.has-player .tr-loc{bottom:calc(140px + env(safe-area-inset-bottom))}
+#bTrEdit{display:none}
+body.ep-page.can-edit #bTrEdit{display:flex}
+.tr-doc.editing .tr-p{outline:1px dashed var(--muted);outline-offset:4px;border-radius:4px;cursor:text}
+textarea.input{resize:vertical;line-height:1.7;min-height:200px}
 .ep-play{margin:10px 0}
 .tr-doc{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 16px 4px;-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
-.tr-p{margin:0 0 16px;font-size:17px;line-height:1.9;letter-spacing:.02em;text-align:justify;text-indent:2em;word-break:break-word}
+.tr-p{margin:0 0 14px;font-size:16px;line-height:1.75;letter-spacing:0;text-align:justify;text-indent:2em;word-break:break-word}
 .tr-s{border-radius:4px;-webkit-box-decoration-break:clone;box-decoration-break:clone;transition:background .2s,color .2s}
 .tr-s.now{background:var(--accent-soft);color:var(--accent)}
 .view.fixed{position:relative}
@@ -320,6 +330,7 @@ input[type=file]{display:none}
       <div class="mini-title line1" id="miniTitle"></div>
       <div class="mini-sub line1" id="miniSub">0:00 / 0:00</div>
     </button>
+    <button class="chip" id="bTrEdit" aria-label="修改文稿"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
     <button class="chip" id="bMark" aria-label="收藏时间点"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.2L6 21z"/></svg><span id="markCount"></span></button>
     <button class="chip" id="bSpeed" aria-label="播放速度">1x</button>
     <button class="chip" id="bSleep" aria-label="定时关闭"><svg viewBox="0 0 24 24"><path d="M12.3 2a10 10 0 1 0 9.7 12.4A8 8 0 0 1 12.3 2z"/></svg><span id="sleepText"></span></button>
@@ -526,6 +537,17 @@ input[type=file]{display:none}
   </div>
 </div>
 
+<!-- 修改文稿 -->
+<div class="sheet" id="trEditSheet" hidden>
+  <div class="sheet-box" role="dialog" aria-label="修改文稿">
+    <div class="sheet-head"><h2 id="trEditHead">修改这一段</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
+    <div class="sheet-body">
+      <textarea class="input" id="trEditText" rows="8" spellcheck="false"></textarea>
+      <button class="btn primary block" id="bTrEditSave">保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- 云同步 -->
 <div class="sheet" id="syncSheet" hidden>
   <div class="sheet-box" role="dialog" aria-label="云同步">
@@ -604,7 +626,7 @@ input[type=file]{display:none}
       </div>
 
       <h3>云同步</h3>
-      <p>播放记录、收藏的时间点、AI 设置（含 API Key）先用你的同步密码在本机加密，再存到 Cloudflare D1；服务器只存密文。其他设备填同一个密码就会自动同步。音频文件和文稿不同步。</p>
+      <p>播放记录、收藏的时间点、AI 设置（含 API Key）先用你的同步密码在本机加密，再存到 Cloudflare D1；服务器只存密文。其他设备填同一个密码就会自动同步。文稿（包括你改过的）也会同步，音频文件不同步。</p>
       <div class="ver-row">
         <div class="ver-text">
           <div class="ver-num">云同步</div>
@@ -1032,13 +1054,6 @@ $('bFwd').onclick = function(){ skip(SKIP); };
 $('bPrev').onclick = prev;
 $('bNext').onclick = next;
 $('miniInfo').onclick = function(){ if(cur && view.page !== 'ep') goEp(cur.key); };
-// 文稿页：播放器从底部悬浮移到页面里（标题下面、章节条上面）
-var miniHome = $('mini').parentNode, miniNext = $('mini').nextSibling;
-function miniBack(){
-  var m = $('mini');
-  m.classList.remove('embed');
-  if(m.parentNode !== miniHome) miniHome.insertBefore(m, miniNext);
-}
 $('miniCover').onclick = function(){ if(cur) goEp(cur.key); };
 
 function renderMini(){
@@ -2010,7 +2025,7 @@ function render(){
   $('bSelAll').textContent = selCount() >= nKeys ? '取消全选' : '全选';
   $('title').textContent = home ? '播客节目' : isEp ? '' : selecting ? '已选 ' + selCount() + ' 集' : '';
   document.body.classList.toggle('ep-page', isEp);
-  miniBack();
+  if(!isEp) trEdit = false;
   if(!home) openSeries = {};   // 离开首页，展开的分季专辑收起来
   // 专辑页：播放时每几秒会重画一次，顶部封面那块没变就原样留着，不拆掉重建（拆了会闪）
   var keepHead = !home && !isEp && samePage ? box.querySelector('.pod-head') : null;
@@ -2887,8 +2902,15 @@ function trGet(key){
   if(trCache[key]) return Promise.resolve(trCache[key]);
   return store('readonly', function(s){ return s.get(key); }, 'transcripts').then(function(r){ if(r) trCache[key] = trSimp(r); return r || null; });
 }
-function trPut(tr){ trCache[tr.key] = tr; hasTr[tr.key] = true; return store('readwrite', function(s){ return s.put(tr); }, 'transcripts'); }
-function trDelete(key){ delete trCache[key]; delete hasTr[key]; return store('readwrite', function(s){ return s.delete(key); }, 'transcripts').catch(function(){}); }
+function trPut(tr){
+  tr.mt = Date.now(); trCache[tr.key] = tr; hasTr[tr.key] = true;
+  return store('readwrite', function(s){ return s.put(tr); }, 'transcripts').then(function(r){ trDirty(tr.key); return r; });
+}
+function trDelete(key){
+  var had = hasTr[key];
+  delete trCache[key]; delete hasTr[key];
+  return store('readwrite', function(s){ return s.delete(key); }, 'transcripts').then(function(){ if(had) trDirty(key); }).catch(function(){});
+}
 function trKeys(){ return store('readonly', function(s){ return s.getAllKeys(); }, 'transcripts'); }
 
 /* ---- 用文本模型分章节 ---- */
@@ -3187,11 +3209,13 @@ function renderEp(box){
   if(!ep) healEp(key);
   var running = !!(trJob && trJob.key === key), other = !!(trJob && trJob.key !== key);
   box.classList.add('fixed');
+  document.body.classList.toggle('can-edit', !!(tr && tr.segments.length && tr.status === 'done' && !running));
+  if(!document.body.classList.contains('can-edit')) trEdit = false;
+  $('bTrEdit').classList.toggle('on', trEdit);
   var top = el('div', 'ep-top'), au = authorOf(showOf(key), ep);
   top.appendChild(el('div', 'ep-name clamp2', titleOf(key)));
   top.appendChild(el('div', 'ep-album line1', showOf(key) + (au ? ' · ' + au : '')));
-  if(cur && cur.key === key){ $('mini').classList.add('embed'); top.appendChild($('mini')); }
-  else if(ep){
+  if(ep && !(cur && cur.key === key)){
     var pb = el('button', 'btn primary block ep-play', '▶ 播放这一集');
     pb.onclick = function(){ open(ep, true); render(); };
     top.appendChild(pb);
@@ -3222,9 +3246,10 @@ function renderEp(box){
   trNodes = []; trSegs = []; trLastIdx = -1;
   if(tr && tr.segments.length){
     // 文稿排成一段段文字，不显示时间；每一句是一个 span，时间藏在里面，用来跟随播放和点句跳转
-    var doc = el('div', 'tr-doc'); doc.id = 'trList';
+    var doc = el('div', 'tr-doc' + (trEdit ? ' editing' : '')); doc.id = 'trList';
     trParas(tr).forEach(function(items){
       var para = el('p', 'tr-p');
+      para.onclick = function(e){ if(trEdit){ e.stopPropagation(); trEditPara(key, items); } };
       items.forEach(function(it, n){
         if(n && /[A-Za-z0-9,.;:!?]$/.test(items[n - 1].text) && /^[A-Za-z0-9]/.test(it.text)) para.appendChild(document.createTextNode(' '));
         para.appendChild(trSpan(it));
@@ -3234,6 +3259,7 @@ function renderEp(box){
     function trSpan(it){
       var s = it.seg, sp = el('span', 'tr-s', it.text);
       sp.onclick = function(){
+        if(trEdit) return;   // 编辑时点的是整段
         if(window.getSelection && String(getSelection()).length) return;   // 正在选字复制时，不跳转
         var ep2 = findEp(key);
         if(!ep2){ toast('文件缺失，没法播放'); return; }
@@ -3258,6 +3284,62 @@ function renderEp(box){
   loc.onclick = function(){ trFollow(true); };
   box.appendChild(loc);
 }
+/* ---- 修改文稿：点播放器上的笔进入编辑，点一段修改 ---- */
+var trEdit = false, trEditing = null;
+$('bTrEdit').onclick = function(){
+  trEdit = !trEdit;
+  $('bTrEdit').classList.toggle('on', trEdit);
+  toast(trEdit ? '点一段文字修改，改完再点笔退出' : '已退出修改');
+  if(!trEdit) trFollow(true);
+  render();
+};
+function trEditPara(key, items){
+  trEditing = {key:key, items:items};
+  $('trEditText').value = items.map(function(it){ return it.text; }).join('');
+  openSheet('trEditSheet');
+}
+// 把改好的一段拆回一句一句，时间按文字位置从原来的句子里换算
+function trSplitText(text){
+  var parts = text.match(/[^。！？!?…\n]+[。！？!?…]*[」”"’）)]*/g) || [], out = [];
+  parts.forEach(function(p){
+    p = p.trim();
+    while(p.length > 50){   // 太长的句子在逗号处再切开，跟随播放更准
+      var cut = -1, re = /[，,；;]/g, m;
+      while((m = re.exec(p)) && m.index < 40) cut = m.index;
+      if(cut < 10) break;
+      out.push(p.slice(0, cut + 1)); p = p.slice(cut + 1).trim();
+    }
+    if(p) out.push(p);
+  });
+  return out;
+}
+$('bTrEditSave').onclick = function(){
+  var ed = trEditing, tr = ed && trCache[ed.key];
+  if(!tr) return;
+  var items = ed.items, i0 = tr.segments.indexOf(items[0].seg), n = items.length;
+  if(i0 < 0){ toast('文稿已经变了，请重新打开'); closeSheet('trEditSheet'); return; }
+  var pieces = trSplitText($('trEditText').value), offs = [], L = 0;
+  items.forEach(function(it){ offs.push(L); L += it.text.length || 1; });
+  var nextT = tr.segments[i0 + n] ? tr.segments[i0 + n].t : items[n - 1].seg.t + (items[n - 1].text.length || 1) * 0.25;
+  function timeAt(x){
+    for(var j = n - 1; j >= 0; j--) if(x >= offs[j] || !j){
+      var t0 = items[j].seg.t, t1 = j < n - 1 ? items[j + 1].seg.t : nextT, len = items[j].text.length || 1;
+      return t0 + Math.min(1, (x - offs[j]) / len) * Math.max(0, t1 - t0);
+    }
+  }
+  var L2 = pieces.reduce(function(a, p){ return a + p.length; }, 0) || 1, c = 0, last = -1;
+  var segs = pieces.map(function(p){
+    var t = Math.max(Math.round(timeAt(c / L2 * L) * 10) / 10, last);
+    last = t; c += p.length;
+    return {t:t, text:p};
+  });
+  if(!segs.length) segs = [];   // 清空等于删掉这一段
+  Array.prototype.splice.apply(tr.segments, [i0, n].concat(segs));
+  tr.edited = Date.now();
+  closeSheet('trEditSheet');
+  trPut(tr).then(function(){ render(); toast('已保存修改'); }, function(){ toast('保存失败'); });
+};
+
 // 把一句句的识别结果排成段落，并补上标点（只影响显示，存的原文不变）
 var END_P = /[。！？!?…]$/, ANY_P = /[。！？!?，,；;：:…、」”"’）)》.]$/;
 function trParas(tr){
@@ -3375,7 +3457,7 @@ function trTick(force, jump){
   trLastIdx = idx;
   if(idx >= 0 && trNodes[idx]){
     trNodes[idx].classList.add('now');
-    var following = cur && cur.key === key && !trUser;
+    var following = cur && cur.key === key && !trUser && !trEdit;
     if(jump) trScrollTo(trNodes[idx], false);          // 刚进入页面：直接跳到播放的位置
     else if(following) trScrollTo(trNodes[idx], true);
   }
@@ -3533,10 +3615,10 @@ function syncMerge(R){
 }
 
 /* ---- 和服务器来回 ---- */
-function syncFetch(method, body){
+function syncFetch(method, body, path){
   var opt = {method:method, headers:{'X-Sync-Id':syncCfg.id}, cache:'no-store', redirect:'manual'};
   if(body){ opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
-  return fetch(syncUrl(), opt).then(function(res){
+  return fetch(path ? (syncCfg.server || '').replace(/\/+$/, '') + path : syncUrl(), opt).then(function(res){
     // Cloudflare Access 登录过期时会跳去登录页
     if(res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400)) throw new Error('登录已过期，请刷新网页重新登录');
     return res.json().catch(function(){ return null; }).then(function(j){
@@ -3574,11 +3656,79 @@ function syncPush(st, n){
     return syncApply(j).then(function(st2){ return syncPush(st2, n + 1); });
   });
 }
+/* ---- 文稿同步：每篇单独加密成一行（文稿可能很大，不放进上面那一整份里）---- */
+// syncCfg.trDirty：{文件键: 标记时间} 等着上传；trSince / trAfter：已经拉到哪里
+function trDirty(key){
+  if(!syncOn()) return;
+  (syncCfg.trDirty = syncCfg.trDirty || {})[key] = Date.now();
+  saveSyncCfg(); syncSoon();
+}
+function trSyncKey(key){   // 行编号：SHA-256(密钥 + 文件键)，服务器看不到文件名
+  var a = unb64(syncCfg.key), b = new TextEncoder().encode('|' + key), c = new Uint8Array(a.length + b.length);
+  c.set(a); c.set(b, a.length);
+  return crypto.subtle.digest('SHA-256', c).then(hex);
+}
+function trLocal(key){ return store('readonly', function(s){ return s.get(key); }, 'transcripts'); }
+function trApply(row, got){
+  return syncDecrypt(row.data).then(function(plain){
+    var R = JSON.parse(plain), key = R && R.key;
+    if(!key || (trJob && trJob.key === key)) return;   // 正在识别的这一集不覆盖
+    return trLocal(key).then(function(mine){
+      if(mine && (mine.mt || 0) >= (R.mt || 0)) return;
+      if(R.deleted){
+        if(!mine) return;
+        delete trCache[key]; delete hasTr[key]; got[key] = true;
+        return store('readwrite', function(s){ return s.delete(key); }, 'transcripts');
+      }
+      delete R.simp;
+      return store('readwrite', function(s){ return s.put(R); }, 'transcripts').then(function(){
+        trCache[key] = trSimp(R); hasTr[key] = true; trLoaded[key] = true; got[key] = true;
+      });
+    });
+  }).catch(function(){});   // 解不开的跳过
+}
+function trPull(got){
+  return syncFetch('GET', null, '/api/tr?since=' + (syncCfg.trSince || 0) + '&after=' + encodeURIComponent(syncCfg.trAfter || '')).then(function(j){
+    var rows = j.rows || [];
+    return rows.reduce(function(p, row){ return p.then(function(){ return trApply(row, got); }); }, Promise.resolve()).then(function(){
+      if(rows.length){ syncCfg.trSince = rows[rows.length - 1].updated; syncCfg.trAfter = rows[rows.length - 1].k; saveSyncCfg(); }
+      if(j.more) return trPull(got);
+    });
+  });
+}
+function trPush(){
+  var d = syncCfg.trDirty || {};
+  return Object.keys(d).reduce(function(p, key){
+    return p.then(function(){
+      var stamp = d[key];
+      return trLocal(key).then(function(tr){
+        if(tr && tr.status !== 'done') return;   // 识别完再传
+        var obj = tr || {key:key, deleted:true, mt:stamp};
+        return Promise.all([trSyncKey(key), syncEncrypt(JSON.stringify(obj))]).then(function(a){
+          if(a[1].length > 1800000) return;   // 太大传不了，跳过
+          return syncFetch('PUT', {k:a[0], data:a[1]}, '/api/tr');
+        }).then(function(){ if(d[key] === stamp){ delete d[key]; saveSyncCfg(); } });
+      });
+    });
+  }, Promise.resolve());
+}
+function trSyncAll(){
+  // 第一次：把本机已有的文稿都标记成要上传
+  var init = syncCfg.trInit ? Promise.resolve() : trKeys().then(function(ks){
+    var d = syncCfg.trDirty = syncCfg.trDirty || {}, now = Date.now();
+    (ks || []).forEach(function(k){ if(!d[k]) d[k] = now; });
+    syncCfg.trInit = true; saveSyncCfg();
+  });
+  var got = {};
+  return init.then(function(){ return trPull(got); }).then(trPush).then(function(){
+    if(view.page === 'ep' && got[view.key]) render();
+  });
+}
 function syncNow(manual){
   if(!syncOn()) return Promise.resolve(false);
   if(syncBusy){ syncAgain = true; return syncBusy; }
   clearTimeout(syncTimer); syncTimer = 0;
-  syncBusy = syncFetch('GET').then(syncApply).then(function(st){ return syncPush(st, 0); }).then(function(){
+  syncBusy = syncFetch('GET').then(syncApply).then(function(st){ return syncPush(st, 0); }).then(trSyncAll).then(function(){
     syncErr = ''; syncCfg.last = Date.now(); saveSyncCfg(); return true;
   }, function(e){ syncErr = (e && e.message) || '同步失败'; return false; }).then(function(ok){
     syncBusy = null; showSyncStatus();

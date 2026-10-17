@@ -14,7 +14,7 @@
 - 锁屏和通知栏显示封面（这一集没有就用专辑封面）、标题、创作者，可以用锁屏和耳机按钮控制；可以在「关于」里把「下一首」键改成收藏当前时间点
 - AI 识别文稿：用自己的 API Key（OpenAI / Groq / 硅基流动 / Gemini / OpenRouter / 自定义）把音频识别成带时间的文字（单集、多选、整个专辑都可以），在独立的文稿页里点一句就跳到那里播放，文稿跟着播放滚动；顶部有 AI 自动分的章节条，收起时显示当前章节，展开选章节跳转；首页放大镜可搜节目、单集和文稿内容；识别默认在后台进行，顶部小图标点开看进度，弹窗都可以下滑关闭
 - 「关于」里有功能介绍、版本号、「刷新」更新按钮和导出 / 导入记录
-- 云同步（Cloudflare D1）：播放记录、收藏时间点、自建专辑、AI 设置（含 API Key）用同步密码在本机加密（AES-GCM，密钥由 PBKDF2 从密码算出）后存到 D1，服务器只存密文；多台设备填同一个密码自动同步。音频和文稿不同步
+- 云同步（Cloudflare D1）：播放记录、收藏时间点、自建专辑、AI 设置（含 API Key）和文稿用同步密码在本机加密（AES-GCM，密钥由 PBKDF2 从密码算出）后存到 D1，服务器只存密文；多台设备填同一个密码自动同步。音频不同步
 - 首页固定一屏，不能缩放；断网也能打开
 
 ## 注意
@@ -35,7 +35,7 @@
 4. 登录方式默认是 One-time PIN：打开网页时输入邮箱，收到验证码登录。
 保护后同步接口也在登录后面，所以只能在 `xxx.pages.dev` 上同步，GitHub Pages 上的网页不能再连这个同步接口。
 
-后端接口是 `functions/api/sync.js`（Cloudflare Pages Functions）：`GET/PUT /api/sync`，请求头 `X-Sync-Id` 是由密码算出的编号，D1 表 `sync(id, data, ver, updated)` 每个密码一行，`ver` 用来防止两台设备同时上传互相覆盖。
+后端接口是 `functions/api/sync.js`（Cloudflare Pages Functions）：`GET/PUT /api/sync`，请求头 `X-Sync-Id` 是由密码算出的编号，D1 表 `sync(id, data, ver, updated)` 每个密码一行，`ver` 用来防止两台设备同时上传互相覆盖。文稿走 `functions/api/tr.js`，表 `tr(id, k, data, updated)` 每篇文稿一行（同样是加密后的）。
 
 ## 文件
 - `index.html`：整个网页
