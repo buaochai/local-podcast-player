@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.31.2">
+<meta name="app-version" content="0.31.3">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -4011,7 +4011,10 @@ function trScrollTo(node, smooth){
   var sb = $('view').querySelector('.list-scroll');
   if(!sb) return;
   var top = node.getBoundingClientRect().top - sb.getBoundingClientRect().top + sb.scrollTop - sb.clientHeight / 3;
-  sb.scrollTo({top:Math.max(0, top), behavior:smooth ? 'smooth' : 'auto'});
+  top = Math.max(0, top);
+  // 离得远（超过一屏半）就直接跳，不做滚动动画，不然要滚很久
+  if(Math.abs(top - sb.scrollTop) > sb.clientHeight * 1.5) smooth = false;
+  sb.scrollTo({top:top, behavior:smooth ? 'smooth' : 'auto'});
 }
 function renderEp(box){
   var key = view.key;
@@ -4272,11 +4275,22 @@ function trTick(force, jump){
   trLastIdx = idx;
   if(idx >= 0 && trNodes[idx]){
     trNodes[idx].classList.add('now');
+    if(trUser && Date.now() - trUser > TR_BACK) trFollow();   // 回去的计时器可能被系统暂停了（切到别的软件时），这里按时间再兜底
     var following = cur && cur.key === key && !trUser && !trEdit;
     if(jump) trScrollTo(trNodes[idx], false);          // 刚进入页面：直接跳到播放的位置
     else if(following) trScrollTo(trNodes[idx], true);
   }
 }
+// 从别的软件切回来：马上跳到正在播放的那句（切走的时候计时器和滚动动画都会被系统暂停，不能等它们）
+function trResume(){
+  if(document.hidden || view.page !== 'ep') return;
+  if(searchOpen && searchQ.trim()) return;   // 正在看搜索结果就不打断
+  trTouch = 0; trFollow();
+  trTick(true, true);
+}
+document.addEventListener('visibilitychange', trResume);
+window.addEventListener('pageshow', trResume);
+window.addEventListener('focus', trResume);
 ['touchstart', 'touchmove', 'touchend'].forEach(function(ev){ $('view').addEventListener(ev, function(){ trTouch = Date.now(); }, {passive:true}); });
 $('view').addEventListener('wheel', function(){ trTouch = Date.now(); }, {passive:true});
 audio.addEventListener('timeupdate', function(){ trTick(false); });
