@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.26.6">
+<meta name="app-version" content="0.27.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -450,6 +450,7 @@ input[type=file]{display:none}
         <datalist id="llmModels"></datalist>
         <div class="sec">接口地址</div>
         <input class="input" id="llmBase" autocapitalize="off" spellcheck="false" placeholder="https://…/v1">
+        <label class="check"><input type="checkbox" id="aiTerms"><span>外文人名、作品名、专有名词写成原文，第一次出现时后面括号注中文（识别完自动处理）</span></label>
         <button class="btn block" id="bLlmTest">测试文本模型连接</button>
         <p id="llmTestResult"></p>
       </div>
@@ -2451,6 +2452,7 @@ function openAiSettings(){
     Object.keys(LLM_PROVIDERS).forEach(function(k){ var o = document.createElement('option'); o.value = k; o.textContent = LLM_PROVIDERS[k].name; lsel.appendChild(o); });
   }
   aiDraft = {asr:{}, llm:{}}; aiCur = ''; llmCur = '';
+  $('aiTerms').checked = !ai.termsOff;
   $('aiLang').value = ai.lang == null ? 'zh' : ai.lang;
   aiFormFill(AI_PROVIDERS[ai.provider] ? ai.provider : 'openai');
   llmFormFill(ai.chat && LLM_PROVIDERS[ai.chat.provider] ? ai.chat.provider : '');
@@ -2480,6 +2482,7 @@ $('bAiSave').onclick = function(){
   var lp = LLM_PROVIDERS[g.provider];
   ai.chat = useLlm ? {provider:g.provider, key:g.key, base:g.base === lp.base ? '' : g.base, model:g.model === lp.model ? '' : g.model}
                    : {provider:g.provider || '', key:'', base:'', model:''};
+  if($('aiTerms').checked) delete ai.termsOff; else ai.termsOff = true;
   // 每家填过的都存下来（地址、模型和默认一样就不存）
   aiStash();
   [['asr', AI_PROVIDERS], ['llm', LLM_PROVIDERS]].forEach(function(x){
@@ -3198,8 +3201,78 @@ function autoChapters(key){
   trJob.sentAt = 0; trJob.msg = (trJob.batch ? '第 ' + trJob.batch.i + ' / ' + trJob.batch.n + ' 集 · ' : '') + '正在用 AI 分章节…'; trRender();
   return chapterize(key, trJob.abort.signal).then(function(){ return {}; }, function(err){ return {chapterErr:err && err.cancelled ? null : err}; });
 }
+/* ---- 外文名称、专有名词：写成原文，第一次出现时括号注中文（如 Miles Davis（迈尔斯·戴维斯）），后面只写原文 ---- */
+// 语音识别只会写音译，所以让文本模型找出这些词、给出原文和中文译名，网页按表替换；只换这些词，别的字和时间点都不动
+function termsPrompt(text){
+  return '下面是一段中文播客的语音识别文稿。语音识别会把外文名称写成中文音译（例如「迈尔斯戴维斯」），也可能写错。\n' +
+    '请找出其中的外国人名、地名、乐队、作品（书、电影、专辑、歌曲）、机构、品牌和外文专有名词，给出它的外文原文。\n' +
+    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"from":"文稿里的原样写法","en":"外文原文","zh":"常用中文译名"}。\n' +
+    '要求：from 必须和文稿里的文字一字不差，同一个名字在文稿里有几种写法就列几项；文稿里本来就是外文的也要列（from 就是那个外文）；' +
+    '中国人名、中文常用词、你不确定原文的都不要列。\n\n文稿：\n' + text;
+}
+function parseTerms(txt){
+  var m = /\[[\s\S]*\]/.exec(txt || ''), arr = [];
+  try{ arr = JSON.parse(m ? m[0] : '[]'); }catch(e){ arr = []; }
+  return (Array.isArray(arr) ? arr : []).map(function(x){
+    return x && {from:clean(String(x.from || '')), en:clean(String(x.en || '')), zh:toSimp(clean(String(x.zh || '')))};
+  }).filter(function(x){ return x && x.from && x.en && x.from.length <= 60 && x.en.length <= 80 && /[A-Za-z]/.test(x.en); });
+}
+function reEsc(t){ return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+// 按表替换整篇文稿：同一个外文名第一次出现写「原文（中文）」，后面只写原文；已经带括号的不再重复加
+function applyTerms(tr, terms){
+  var map = {};
+  terms.forEach(function(x){ if(!map[x.from]) map[x.from] = x; });
+  var keys = Object.keys(map).sort(function(a, b){ return b.length - a.length; });
+  if(!keys.length) return 0;
+  var re = new RegExp(keys.map(reEsc).join('|'), 'g'), seen = {}, n = 0;
+  // 已经标过的（以前处理过，或文稿里本来就有）算第一次已经出现
+  tr.segments.forEach(function(s){ keys.forEach(function(k){ var x = map[k]; if(s.text.indexOf(x.en + '（') >= 0) seen[x.en.toLowerCase()] = true; }); });
+  tr.segments.forEach(function(s){
+    s.text = s.text.replace(re, function(m, off, str){
+      var x = map[m], nx = str.charAt(off + m.length), id = x.en.toLowerCase();
+      if(nx === '（' || nx === '(') return m;                 // 后面已经有括号
+      if(str.lastIndexOf('（', off) > str.lastIndexOf('）', off)) return m;   // 在括号里面（注的中文）
+      if(m === x.en && seen[id]) return m;                    // 本来就是外文、前面注过了
+      n++;
+      if(!seen[id]){ seen[id] = true; return x.en + (x.zh && x.zh !== x.en ? '（' + x.zh + '）' : ''); }
+      return x.en;
+    });
+  });
+  return n;
+}
+function termify(key, signal){
+  var tr = trCache[key];
+  if(!tr || !tr.segments.length) return Promise.reject(new Error('还没有文稿'));
+  // 长文稿分块问（每块约 6000 字），结果合在一起
+  var chunks = [], cur = '';
+  tr.segments.forEach(function(s){ if(cur.length + s.text.length > 6000){ chunks.push(cur); cur = ''; } cur += s.text + '\n'; });
+  if(cur) chunks.push(cur);
+  var all = [];
+  return chunks.reduce(function(p, text){
+    return p.then(function(){
+      return withRetry(function(){ return llmCall('你是熟悉中外文化的播客文稿编辑。', termsPrompt(text), signal); }, signal, 3).then(function(txt){ all = all.concat(parseTerms(txt)); });
+    });
+  }, Promise.resolve()).then(function(){
+    var n = applyTerms(tr, all);
+    tr.terms = all; tr.termsAt = Date.now();
+    return trPut(tr).then(function(){ return n; });
+  });
+}
+function autoTerms(key){
+  if(!llmReady() || ai.termsOff) return Promise.resolve();
+  trJob.sentAt = 0; trJob.msg = (trJob.batch ? '第 ' + trJob.batch.i + ' / ' + trJob.batch.n + ' 集 · ' : '') + '正在标注外文名称…'; trRender();
+  return termify(key, trJob.abort.signal).then(function(){}, function(err){ if(err && err.cancelled) throw err; });   // 标注失败不影响文稿
+}
+var termBusy = null;
+function termsRun(key){
+  if(chapBusy || termBusy || trJob){ toast('正在处理，请稍等'); return; }
+  if(!llmReady()){ toast('先设置文本模型'); openAiSettings(); return; }
+  termBusy = key; toast('正在标注外文名称…', 3000);
+  termify(key, new AbortController().signal).then(function(n){ toast(n ? '已标注 ' + n + ' 处外文名称' : '没有找到需要标注的外文名称'); }, function(err){ toast('标注失败：' + aiErrMsg(err), 5000); })
+    .then(function(){ termBusy = null; render(); });
+}
 function chapterRun(key){
-  if(chapBusy || trJob){ toast('正在处理，请稍等'); return; }
+  if(chapBusy || termBusy || trJob){ toast('正在处理，请稍等'); return; }
   if(!llmReady()){ toast('先设置文本模型'); openAiSettings(); return; }
   chapBusy = key; render();
   chapterize(key, new AbortController().signal).then(function(){ toast('已分好章节'); }, function(err){ toast('分章节失败：' + aiErrMsg(err), 5000); }).then(function(){ chapBusy = null; render(); });
@@ -3227,7 +3300,7 @@ function trRun(key, restart, batch){
       return gate.then(function(ok){
       if(!ok) throw {cancelled:true};
       var tr = rec || {key:key, provider:aiProv().name, model:aiModel(), lang:ai.lang, created:Date.now(), duration:plan.duration, total:plan.chunks.length, done:0, segments:[], status:'partial', simp:true};
-      return trLoop(plan, route, tr).then(function(){ return autoChapters(key); });
+      return trLoop(plan, route, tr).then(function(){ return autoTerms(key); }).then(function(){ return autoChapters(key); });
       });
     });
   }).then(function(x){ x = x || {}; delete trErr[key]; return {res:'done', noLlm:x.noLlm, chapterErr:x.chapterErr}; }, function(err){
@@ -3679,6 +3752,9 @@ function showTrMore(key){
     var lc = llmCfg();
     items.push({label:tr.chapters && tr.chapters.length ? '重新分章节' : 'AI 分章节', note:llmReady() ? '用 ' + lc.name + ' · ' + lc.model : '要先设置文本模型', pick:function(){
       closeSheet('trMoreSheet'); if(llmReady()) chapterRun(key); else openAiSettings();
+    }});
+    items.push({label:'外文名称写成原文', note:llmReady() ? '用 ' + lc.name + ' · ' + lc.model + '，第一次出现时括号注中文' : '要先设置文本模型', pick:function(){
+      closeSheet('trMoreSheet'); if(llmReady()) termsRun(key); else openAiSettings();
     }});
   }
   if(ep && !trJob){
