@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.28.0">
+<meta name="app-version" content="0.28.1">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -144,10 +144,13 @@ body.selecting .list-scroll{padding-bottom:90px}
 
 /* 悬浮播放器 */
 .mini{
-  position:absolute;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:5;
-  background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);
-  padding:10px 12px 6px;
+  position:absolute;left:0;right:0;bottom:0;z-index:5;   /* 贴紧屏幕底部（底部留出 iPhone 横条的位置） */
+  background:var(--card);border:1px solid var(--line);border-bottom:none;border-radius:18px 18px 0 0;box-shadow:var(--shadow);
+  padding:10px 12px calc(6px + env(safe-area-inset-bottom));
 }
+/* 专辑页（节目列表）：没在播放时不显示播放器 */
+body.show-page:not(.playing) .mini{display:none}
+body.show-page:not(.playing) .list-scroll{padding-bottom:16px}
 .mini[hidden]{display:none}
 .mini-top{display:flex;align-items:center;gap:10px}
 .mini-cover{width:48px;height:48px;border-radius:9px;object-fit:cover;flex:none;background:var(--line)}
@@ -218,7 +221,7 @@ li.has-edit{position:relative}
 .ep-album{font-size:13px;color:var(--muted);margin:2px 2px 0}
 .ep-name,.ep-album{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 /* 文稿页的播放器：还在底部，但矮一点、没有封面 */
-body.ep-page .mini{padding:6px 10px 2px;border-radius:16px}
+body.ep-page .mini{padding:6px 10px calc(2px + env(safe-area-inset-bottom))}
 body.ep-page .mini-cover{display:none}
 body.ep-page .mini-top{gap:6px}
 body.ep-page .mini-title{display:none}   /* 集名已经在页面上面了 */
@@ -1079,6 +1082,7 @@ function setPlayIcon(){
   var playing = !audio.paused;
   $('playIcon').innerHTML = playing ? '<path d="M6 5h4v14H6zm8 0h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
   $('bPlay').setAttribute('aria-label', playing ? '暂停' : '播放');
+  document.body.classList.toggle('playing', playing);
 }
 
 audio.addEventListener('timeupdate', function(){ updateTimes(); recordNow(false); checkSleep(); });
@@ -2295,6 +2299,7 @@ function render(){
   $('bSelAll').textContent = selCount() >= nKeys ? '取消全选' : '全选';
   $('title').textContent = home ? '播客节目' : isEp ? '' : selecting ? '已选 ' + selCount() + ' 集' : '';
   document.body.classList.toggle('ep-page', isEp);
+  document.body.classList.toggle('show-page', !home && !isEp);
   if(!isEp) trEdit = false;
   if(!home) openSeries = {};   // 离开首页，展开的分季专辑收起来
   // 专辑页：播放时每几秒会重画一次，顶部封面那块没变就原样留着，不拆掉重建（拆了会闪）
@@ -2489,7 +2494,7 @@ function showNameLines(name){
 }
 var headImg = null;   // 专辑页封面图元素复用（播放时每隔几秒会重画，不复用会一直闪）
 function renderShow(box){
-  var keys = episodeKeys(view.show);
+  var keys = episodeKeys(view.show), isFeed = !!feedOfShow(view.show);
   if(!keys.length && !isCustom(view.show)){ view = {page:'home'}; history.replaceState(null, ''); render(); return; }
   if(!keys.length){
     box.appendChild(el('div', 'empty', '这个专辑还没有内容。到其他专辑里选中几集，点「移动到专辑」，就能移到这里。'));
@@ -2540,7 +2545,7 @@ function renderShow(box){
     li.appendChild(main);
     if(!ep) li.appendChild(el('span', 'tag', '文件缺失'));
     else if(ep.rss && !ep.remote) li.appendChild(el('span', 'tag', '已下载'));
-    li.appendChild(el('span', 'ep-seq', String(idx + 1)));   // 右下角：这一集在列表里的位置
+    if(!isFeed) li.appendChild(el('span', 'ep-seq', String(idx + 1)));   // 右下角：这一集在列表里的位置（订阅的播客不显示）
     if(!selMode){
       var ib = el('button', 'info-btn');
       ib.setAttribute('aria-label', '详情');

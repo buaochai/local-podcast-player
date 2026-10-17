@@ -3,7 +3,7 @@
 - 单文件手机网页 `index.html`（本地播客播放器），PWA 文件是 `manifest.webmanifest`、`sw.js`、`icon*`、`cover*`（通知栏/锁屏封面必须是不透明的方形图）。用 Cloudflare Pages 从 `main` 发布（前面有 Cloudflare Access 登录；GitHub Pages 已不用）
 - 播放记录存在 `localStorage`（`lpp.records.v1`），键是「文件名|文件大小」，记录里带节目名 `show`（实际显示的专辑）、`tagShow`（音频标签里的专辑）、`customShow`（用户移动后的专辑）、标题 `title`、收藏时间点 `marks:[{t,note,created}]`；自建专辑在 `lpp.shows.v1` 里标 `custom:true`；节目封面小图在 `lpp.shows.v1`；音频文件本身存在 IndexedDB（库 `lpp` 版本 2，表 `files` 和 `transcripts`，主键同上；文稿 `{segments:[{t,text}], done, total, status}`）。专辑识别按文件内容判断格式（ID3v2.2/2.3/2.4、ID3v1、APEv2、MP4、FLAC、Ogg），每次打开重新识别；`readTags` 的结果里 `frames` 是给「标签详情」看的原始内容。没有专辑的放在 `OTHER`（「未分类」，旧版叫「其他音频」，`migrateOther` 负责改名）。改数据格式要兼容旧记录和导出文件。
 - 每次改网页：升 `<meta name="app-version">`、同步升 `sw.js` 里的 `CACHE`，写 `CHANGELOG.md`，回复里先给版本号。
-- 首页固定一屏：不能缩放、页面不能滚动，只有 `.view` 内容区域内部滚动（节目页是 `.list-scroll` 里的列表滚动，封面和标题固定），底部是悬浮播放器 `.mini`。新增内容不要撑出屏幕。
+- 首页固定一屏：不能缩放、页面不能滚动，只有 `.view` 内容区域内部滚动（节目页是 `.list-scroll` 里的列表滚动，封面和标题固定），底部是播放器 `.mini`（贴紧屏幕底部，`body.show-page:not(.playing)` 时隐藏，`playing` 类在 `setPlayIcon` 里切换）。新增内容不要撑出屏幕。
 - 界面文字用中文。
 - 同名 CSS 类会冲突（例如 `.toast.show`），新增类名前先搜索一下。
 - 顶部提示、标题等文字最多两行（`.clamp2`），信息行一行（`.line1`）。
@@ -23,7 +23,7 @@
 - 分季专辑展开状态 `openSeries` 在离开首页或点首页非封面处时清空。界面上不要放操作说明类小字（如「点一下收起」）。「关于」里 `#bClearFiles` 清除全部本地音频（保留记录和文稿）。
 - 登录用 Cloudflare Access（在 Cloudflare 后台配置，代码里没有登录逻辑）。`sw.js` 对页面导航请求用 `fetch(e.request)`，让 Access 的登录跳转能生效；`syncFetch` 用 `redirect:'manual'` 识别登录过期。
 - 修改文稿：播放器上的笔 `#bTrEdit`（`body.can-edit` 时显示）切换 `trEdit`，编辑时点段落 → `trEditPara` 打开 `#trEditSheet`，保存后自动退出修改模式；保存时 `trSplitText` 拆句、按文字位置从原句换算时间，替换 `tr.segments` 里那一段。文稿同步：后端 `functions/api/tr.js`（表 `tr(id,k,data,updated)`，`k`=文件键，GET 按 `since/after` 翻页），前端 `trSyncAll`（`trPull` + `trPush`），`trPut` 写 `tr.mt` 并 `trDirty`，`trDelete` 也会上传删除标记；只上传 `status:'done'` 的文稿，`syncCfg.trInit` 标记是否已把本机旧文稿全部排队。
-- 集名优化：`tidyTitle(原名, 是否双序号专辑)`（在 `titleOf` 里调用，只改显示；`dblAlbum(专辑)` 判断专辑里有没有双序号的集，有的话单序号也去掉，序号指后面紧跟「.」的数字；所有专辑列表右下角用 `.ep-seq` 显示列表位置号；`settings.tidyOff` 关闭，开关 `#tidyChk` 在「关于」）。显示集名一律用 `titleOf(key)`，不要直接用 `ep.title` / `cur.title`。列表排序仍按文件名（`episodeKeys`）。
+- 集名优化：`tidyTitle(原名, 是否双序号专辑)`（在 `titleOf` 里调用，只改显示；`dblAlbum(专辑)` 判断专辑里有没有双序号的集，有的话单序号也去掉，序号指后面紧跟「.」的数字；专辑列表右下角用 `.ep-seq` 显示列表位置号（RSS 订阅的专辑不显示）；`settings.tidyOff` 关闭，开关 `#tidyChk` 在「关于」）。显示集名一律用 `titleOf(key)`，不要直接用 `ep.title` / `cur.title`。列表排序仍按文件名（`episodeKeys`）。
 - 识别幻觉清理：`segmentsOf` 按 `no_speech_prob`/`avg_logprob`/`compression_ratio` 丢段；`trClean`/`cleanText` 删 `HALLU` 里的字幕套话（先转简体再匹配）、连续重复句和句内重复，新识别的在 `sendChunk` 里清，旧文稿在 `trSimp`（读进内存时）清。文稿页 `.ep-name`/`.ep-album` 可以选中复制（全局默认 `user-select:none`）。
 - 阿里云百炼识别：`AI_PROVIDERS.aliyun`（`style:'ali'`），`aiRoute` 里 `r.ali`（每段最长 3600 秒 / 80MB）。`reqAli` 经 `aliFetch` 调自己的 `functions/api/ali.js`（Key 放 `X-Ali-Key` 请求头，`base` 只允许 *.aliyuncs.com）：`op=policy`（只拿上传凭证；音频由网页用 `mode:'no-cors'` 表单直接 POST 到 `upload_host`，绝不能经过 Cloudflare，`ali.js` 拒绝大于 64KB 的请求）→ `op=submit`（POST /services/audio/asr/transcription，带 `X-DashScope-Async` 和 `X-DashScope-OssResourceResolve`）→ `op=task` 轮询 /tasks/{id}，成功时后台顺便取回 transcription_url 的结果放进 `output.transcripts`；`segmentsOf` 用 `aliSentences` 的 `begin_time`（毫秒）；`ALI_EMPTY`（如 ASR_RESPONSE_HAVE_NO_WORDS，纯音乐段）当作空结果不报错；百炼路由 `noConv`，不转 wav。只用模拟服务测过，没用真实 Key 测过。
 - AI 设置每家服务商各存一份：`ai.saved.asr[服务商]` / `ai.saved.llm[服务商]` = `{key, base, model(, wav)}`（`aiSaved` 会把旧版的 `ai.key`/`ai.chat` 搬进来）。面板打开期间没保存的内容在 `aiDraft`，`aiStash` 在切换服务商前暂存表单；`ai.provider/key/base/model` 和 `ai.chat` 仍是当前用的那一家，识别代码照旧读它们。
