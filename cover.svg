@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- 方形满版：给锁屏/通知栏封面、安卓自适应图标、iOS 主屏幕用，系统自己切圆角 -->
+  <rect width="512" height="512" fill="#1f6f5c"/>
+  <g transform="translate(256 260) scale(.8) translate(-256 -260)">
+    <path d="M256 120a120 120 0 0 0-120 120v40h40v-40a80 80 0 0 1 160 0v40h40v-40a120 120 0 0 0-120-120z" fill="#fff"/>
+    <rect x="116" y="270" width="80" height="130" rx="28" fill="#fff"/>
+    <rect x="316" y="270" width="80" height="130" rx="28" fill="#fff"/>
+  </g>
+</svg>

@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.2.0">
+<meta name="app-version" content="0.3.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="本地播客">
 <style>
@@ -50,6 +50,9 @@ button{font:inherit;color:inherit;cursor:pointer}
 
 /* 播放器 */
 .player{flex:none;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin:4px 0 12px}
+.now{display:flex;align-items:center;gap:12px}
+.now-text{flex:1;min-width:0}
+.cover{flex:none;width:52px;height:52px;border-radius:10px;object-fit:cover;background:var(--line)}
 .now-title{font-weight:600;font-size:17px;min-height:26px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .now-sub{color:var(--muted);font-size:13px;min-height:20px}
 .seek{width:100%;margin:12px 0 2px;accent-color:var(--accent)}
@@ -130,8 +133,13 @@ input[type=file]{display:none}
 </header>
 
 <section class="player">
-  <div class="now-title" id="nowTitle">还没有选择音频</div>
-  <div class="now-sub" id="nowSub">点下面「添加音频」，从手机里选文件</div>
+  <div class="now">
+    <img class="cover" id="cover" src="cover-192.png" alt="">
+    <div class="now-text">
+      <div class="now-title" id="nowTitle">还没有选择音频</div>
+      <div class="now-sub" id="nowSub">点下面「添加音频」，从手机里选文件</div>
+    </div>
+  </div>
   <input type="range" class="seek" id="seek" min="0" max="0" step="1" value="0" disabled>
   <div class="times"><span id="tCur">0:00</span><span id="tDur">0:00</span></div>
   <div class="controls">
@@ -398,9 +406,106 @@ function renderSpeeds(){
 }
 
 /* ---------- 锁屏 / 耳机控制 ---------- */
+// 锁屏/通知栏封面：用方形满版图（不能有透明圆角，否则安卓会把四角填成白色）
+var DEFAULT_ART = [
+  {src:'cover-192.png', sizes:'192x192', type:'image/png'},
+  {src:'cover-512.png', sizes:'512x512', type:'image/png'}
+];
 function setMediaSession(q){
+  $('cover').src = q.art ? q.art.url : 'cover-192.png';
   if(!('mediaSession' in navigator)) return;
-  navigator.mediaSession.metadata = new MediaMetadata({title: stripExt(q.file.name), artist:'本地播客'});
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: stripExt(q.file.name), artist:'本地播客',
+    artwork: q.art ? [{src:q.art.url, type:q.art.type}] : DEFAULT_ART
+  });
+}
+
+/* ---------- 读取音频文件里自带的封面（mp3 的 ID3、m4a 的 covr） ---------- */
+function readBytes(file, start, len){
+  return file.slice(start, start + len).arrayBuffer().then(function(b){ return new Uint8Array(b); });
+}
+function latin1(b, s, e){ var r = ''; for(var i = s; i < e; i++) r += String.fromCharCode(b[i]); return r; }
+function imgType(b, s){
+  if(b[s] === 0x89 && b[s+1] === 0x50) return 'image/png';
+  if(b[s] === 0xFF && b[s+1] === 0xD8) return 'image/jpeg';
+  return '';
+}
+function readId3Cover(file){
+  return readBytes(file, 0, 10).then(function(h){
+    if(latin1(h, 0, 3) !== 'ID3') return null;
+    var ver = h[3], flags = h[5];
+    var size = (h[6]&127)<<21 | (h[7]&127)<<14 | (h[8]&127)<<7 | (h[9]&127);
+    if(flags & 0x80 || size > 30e6) return null; // 不同步编码的标签少见，跳过
+    return readBytes(file, 10, size).then(function(b){
+      var p = 0, best = null;
+      if(flags & 0x40) p = ver === 4 ? ((b[0]&127)<<21 | (b[1]&127)<<14 | (b[2]&127)<<7 | (b[3]&127)) : (b[0]<<24 | b[1]<<16 | b[2]<<8 | b[3]) + 4;
+      var idLen = ver === 2 ? 3 : 4, hdr = ver === 2 ? 6 : 10;
+      while(p + hdr <= b.length){
+        var id = latin1(b, p, p + idLen);
+        if(!/^[A-Z0-9]+$/.test(id)) break;
+        var fs = ver === 2 ? (b[p+3]<<16 | b[p+4]<<8 | b[p+5])
+               : ver === 4 ? ((b[p+4]&127)<<21 | (b[p+5]&127)<<14 | (b[p+6]&127)<<7 | (b[p+7]&127))
+               : (b[p+4]<<24 | b[p+5]<<16 | b[p+6]<<8 | b[p+7]) >>> 0;
+        var s = p + hdr, e = Math.min(b.length, s + fs);
+        if(id === 'APIC' || id === 'PIC'){
+          var enc = b[s], q = s + 1;
+          if(id === 'APIC'){ while(q < e && b[q] !== 0) q++; q++; } else q += 3;
+          var picType = b[q++];
+          if(enc === 1 || enc === 2){ while(q + 1 < e && !(b[q] === 0 && b[q+1] === 0)) q += 2; q += 2; }
+          else { while(q < e && b[q] !== 0) q++; q++; }
+          var type = imgType(b, q);
+          if(type && (!best || picType === 3)) best = {data:b.subarray(q, e), type:type};
+          if(best && picType === 3) break;
+        }
+        p = e;
+      }
+      return best;
+    });
+  });
+}
+function readMp4Cover(file){
+  // 依次找 moov > udta > meta > ilst > covr > data，只读每个盒子的头
+  function find(start, end, type){
+    if(start + 8 > end) return Promise.resolve(null);
+    return readBytes(file, start, 16).then(function(h){
+      var size = (h[0]<<24 | h[1]<<16 | h[2]<<8 | h[3]) >>> 0, t = latin1(h, 4, 8), hl = 8;
+      if(size === 1){ size = (h[8]<<24 | h[9]<<16 | h[10]<<8 | h[11]) * 4294967296 + ((h[12]<<24 | h[13]<<16 | h[14]<<8 | h[15]) >>> 0); hl = 16; }
+      else if(size === 0) size = end - start;
+      if(size < hl) return null;
+      if(t === type) return {start:start, body:start + hl, end:start + size};
+      return find(start + size, end, type);
+    });
+  }
+  var path = ['moov','udta','meta','ilst','covr','data'];
+  function walk(i, start, end){
+    return find(start, end, path[i]).then(function(box){
+      if(!box) return null;
+      if(path[i] === 'data'){
+        if(box.end - box.body > 30e6) return null;
+        return readBytes(file, box.body + 8, box.end - box.body - 8).then(function(d){
+          var type = imgType(d, 0);
+          return type ? {data:d, type:type} : null;
+        });
+      }
+      var body = box.body;
+      if(path[i] === 'meta'){ // meta 通常是 full box，多 4 字节
+        return readBytes(file, body, 8).then(function(h){
+          return walk(i + 1, latin1(h, 4, 8) === 'hdlr' ? body : body + 4, box.end);
+        });
+      }
+      return walk(i + 1, body, box.end);
+    });
+  }
+  return walk(0, 0, file.size);
+}
+function loadCover(q){
+  var name = q.file.name.toLowerCase();
+  var reader = /\.(m4a|m4b|mp4)$/.test(name) ? readMp4Cover : readId3Cover;
+  return reader(q.file).catch(function(){ return null; }).then(function(img){
+    if(!img) return;
+    q.art = {url:URL.createObjectURL(new Blob([img.data], {type:img.type})), type:img.type};
+    if(queue[cur] === q) setMediaSession(q);
+  });
 }
 if('mediaSession' in navigator){
   var ms = navigator.mediaSession;
@@ -425,7 +530,9 @@ $('fileInput').addEventListener('change', function(e){
   files.forEach(function(f){
     var k = keyOf(f);
     if(queue.some(function(q){ return q.key === k; })) return;
-    queue.push({file:f, key:k, url:URL.createObjectURL(f)});
+    var q = {file:f, key:k, url:URL.createObjectURL(f), art:null};
+    queue.push(q);
+    loadCover(q);
     added++;
   });
   showTab('queue');
@@ -448,12 +555,14 @@ function removeFromQueue(i){
   var wasCur = i === cur;
   if(wasCur){ recordNow(true); audio.pause(); audio.removeAttribute('src'); audio.load(); }
   URL.revokeObjectURL(queue[i].url);
+  if(queue[i].art) URL.revokeObjectURL(queue[i].art.url);
   queue.splice(i, 1);
   if(wasCur){
     cur = -1;
     if(queue.length) open(Math.min(i, queue.length - 1), false);
     else{
       $('nowTitle').textContent = '还没有选择音频';
+      $('cover').src = 'cover-192.png';
       $('nowSub').textContent = '点下面「添加音频」，从手机里选文件';
       $('tCur').textContent = '0:00'; $('tDur').textContent = '0:00';
       seekEl.max = 0; seekEl.value = 0;
