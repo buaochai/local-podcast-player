@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.7.0">
+<meta name="app-version" content="0.7.1">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -59,6 +59,12 @@ header .icon-btn:last-child{margin-right:-8px}
 /* 内容区（唯一可以滚动的地方） */
 .view{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:16px}
 body.has-player .view{padding-bottom:170px}
+/* 节目页：封面和标题固定，只有每一集的列表滚动 */
+.view.fixed{overflow:hidden;display:flex;flex-direction:column;padding-bottom:0}
+body.has-player .view.fixed{padding-bottom:0}
+.list-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:16px}
+body.has-player .list-scroll{padding-bottom:170px}
+.view.fixed .pod-head{flex:none}
 
 /* 首页：节目封面 */
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px 12px}
@@ -1427,15 +1433,22 @@ window.addEventListener('popstate', function(e){
 });
 $('bBack').onclick = goHome;
 
+var renderedKey = '';
 function render(){
   if(!ready) return;
-  var box = $('view'), top = box.scrollTop;
+  var box = $('view'), sc = box.querySelector('.list-scroll');
   var home = view.page === 'home';
+  var pageKey = home ? 'home' : 'show:' + view.show;
+  // 重画时保持滚动位置；换了页面就回到顶部
+  var top = pageKey !== renderedKey ? 0 : sc ? sc.scrollTop : box.scrollTop;
+  renderedKey = pageKey;
   $('bBack').hidden = home;
   $('title').textContent = home ? '播客节目' : view.show;
   box.innerHTML = '';
+  box.classList.remove('fixed');
   if(home) renderHome(box); else renderShow(box);
-  box.scrollTop = top;
+  sc = box.querySelector('.list-scroll');
+  if(sc) sc.scrollTop = top; else box.scrollTop = top;
   renderMini();
 }
 function renderHome(box){
@@ -1491,7 +1504,9 @@ function renderShow(box){
     info.appendChild(b);
   }
   head.appendChild(img); head.appendChild(info);
+  box.classList.add('fixed');
   box.appendChild(head);
+  var scroll = el('div', 'list-scroll');
 
   var ul = el('ul', 'list');
   keys.forEach(function(k){
@@ -1508,8 +1523,9 @@ function renderShow(box){
     onLongPress(li, function(){ showEpMenu(k); });
     ul.appendChild(li);
   });
-  box.appendChild(ul);
-  box.appendChild(el('p', 'hint', '长按某一集：收藏的时间点、移动到专辑、删除'));
+  scroll.appendChild(ul);
+  scroll.appendChild(el('p', 'hint', '长按某一集：收藏的时间点、移动到专辑、删除'));
+  box.appendChild(scroll);
 }
 
 /* ---------- 关于 / 更新 ---------- */
