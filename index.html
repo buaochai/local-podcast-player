@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.17.0">
+<meta name="app-version" content="0.19.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -87,6 +87,11 @@ body.has-player .list-scroll{padding-bottom:170px}
 }
 .pod-name{font-size:14px;font-weight:600;margin-top:6px;line-height:1.3}
 .pod-meta{font-size:12px;color:var(--muted)}
+.pod-sub{font-size:12px;color:var(--muted);margin-top:1px}
+.pod-stack .stk{position:relative}
+.pod-stack .stk .pod-3d{transition:transform .25s ease,opacity .25s}
+.pod-stack .stk .pod-3d.back{position:absolute;left:0;right:0;top:0}
+.pod-stack .stk .pod-3d.back .pod-face::after{background:rgba(0,0,0,.18)}
 .empty{color:var(--muted);text-align:center;padding:32px 12px;font-size:14px;background:var(--card);border:1px dashed var(--line);border-radius:14px}
 .empty .btn{margin-top:12px}
 .loading{color:var(--muted);text-align:center;padding:40px 0;font-size:14px}
@@ -276,6 +281,7 @@ input[type=file]{display:none}
   <input class="search-in" id="searchIn" type="search" placeholder="搜索节目、单集、文稿" enterkeyhint="search" autocomplete="off" hidden>
   <button class="icon-btn" id="bSearch" aria-label="搜索" hidden><svg viewBox="0 0 24 24"><path d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg></button>
   <button class="icon-btn" id="bTrJob" aria-label="AI 识别进度" hidden><svg viewBox="0 0 24 24"><path d="M3 10h2v4H3zm4-4h2v12H7zm4-3h2v18h-2zm4 3h2v12h-2zm4 4h2v4h-2z"/></svg><i class="trdot"></i></button>
+  <button class="icon-btn" id="bHome" aria-label="首页" hidden><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg></button>
   <button class="icon-btn" id="bEpMore" aria-label="更多" hidden><svg viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg></button>
   <button class="txt-btn" id="bSel" hidden>选择</button>
   <button class="txt-btn" id="bSelAll" hidden>全选</button>
@@ -931,7 +937,7 @@ function open(ep, autoplay, at){
   if(startAt > 0 && autoplay && at == null) toast('从 ' + fmt(startAt) + ' 继续');
   setMediaSession();
   if(view.page === 'ep' && view.key !== ep.key){   // 文稿页跟着正在播放的这一集走
-    view.key = ep.key; chapOpen = false; history.replaceState({ep:ep.key}, ''); loadTr(ep.key);
+    view.key = ep.key; chapOpen = false; history.replaceState({ep:ep.key, d:(history.state && history.state.d) || 1}, ''); loadTr(ep.key);
   }
   render();
 }
@@ -1925,8 +1931,8 @@ $('bTagCopy').onclick = function(){
 /* ---------- 页面 ---------- */
 function goShow(name){
   if(view.page === 'show' && view.show === name) return;
-  if(view.page === 'home') history.pushState({show:name}, '');
-  else history.replaceState({show:name}, '');
+  if(view.page === 'home') history.pushState({show:name, d:1}, '');
+  else history.replaceState({show:name, d:1}, '');
   view = {page:'show', show:name};
   $('view').scrollTop = 0;
   render();
@@ -1942,6 +1948,11 @@ window.addEventListener('popstate', function(e){
   render();
 });
 $('bBack').onclick = goHome;
+// 首页：一路退回最底下（文稿页可能是从专辑页进来的，也可能是从首页搜索直接进来的）
+$('bHome').onclick = function(){
+  var n = (history.state && history.state.d) || 0;
+  if(n > 0) history.go(-n); else { view = {page:'home'}; render(); }
+};
 $('bNewAlbum').onclick = function(){
   ask('新建专辑', '', '专辑名称', function(v){ createAlbum(v); render(); toast('已新建「' + v + '」，到别的专辑里选中后移进来'); });
 };
@@ -1971,7 +1982,7 @@ function render(){
   if(!home && searchOpen) closeSearch(true);
   document.querySelector('header').classList.toggle('searching', searchOpen);
   $('bSel').hidden = home || isEp || selecting || !nKeys;
-  $('bEpMore').hidden = !isEp;
+  $('bEpMore').hidden = !isEp; $('bHome').hidden = !isEp;
   $('bSelAll').hidden = !selecting; $('bSelDone').hidden = !selecting;
   $('bAdd').hidden = selecting || isEp; $('bAbout').hidden = selecting || isEp;
   $('selBar').hidden = !selecting;
@@ -1979,7 +1990,7 @@ function render(){
   showTrJob();
   $('bSelMove').disabled = $('bSelDel').disabled = $('bSelTr').disabled = !selCount();
   $('bSelAll').textContent = selCount() >= nKeys ? '取消全选' : '全选';
-  $('title').textContent = home ? '播客节目' : isEp ? titleOf(view.key) : selecting ? '已选 ' + selCount() + ' 集' : '';
+  $('title').textContent = home ? '播客节目' : isEp ? '' : selecting ? '已选 ' + selCount() + ' 集' : '';
   // 专辑页：播放时每几秒会重画一次，顶部封面那块没变就原样留着，不拆掉重建（拆了会闪）
   var keepHead = !home && !isEp && samePage ? box.querySelector('.pod-head') : null;
   Array.prototype.slice.call(box.children).forEach(function(c){ if(c !== keepHead) box.removeChild(c); });
@@ -2067,6 +2078,7 @@ function renderSearch(box){
   if(!shs.length && !eps.length && !hits.length) wrap.appendChild(el('div', 'empty', trAllReady ? '没有找到「' + searchQ.trim() + '」。' : '正在搜索文稿…'));
   box.appendChild(wrap);
 }
+var openSeries = {};   // 展开了的分季专辑（总名称 → true）
 var homeImgs = {};   // 首页封面图元素复用，重画时不重新加载（否则会闪）
 function renderHome(box){
   var list = allShows();
@@ -2080,21 +2092,61 @@ function renderHome(box){
     return;
   }
   var grid = el('div', 'grid');
-  list.forEach(function(s){
-    var card = el('button', 'pod');
-    var src = coverOf(s.name), img = homeImgs[s.name];
-    if(!img){ img = homeImgs[s.name] = el('img', 'pod-cover'); img.alt = ''; }
+  function coverImg(key, name){
+    var src = coverOf(name), img = homeImgs[key];
+    if(!img){ img = homeImgs[key] = el('img', 'pod-cover'); img.alt = ''; }
     if(img.getAttribute('src') !== src) img.src = src;
+    return img;
+  }
+  function layer(img){
     var face = el('div', 'pod-face'); face.appendChild(img);
-    var wrap3 = el('div', 'pod-3d'); wrap3.appendChild(face);
-    card.appendChild(wrap3);
-    card.appendChild(el('div', 'pod-name clamp2', s.name));
+    var w = el('div', 'pod-3d'); w.appendChild(face);
+    return w;
+  }
+  function podCard(s, lines, extra){
+    var card = el('button', 'pod');
+    card.appendChild(layer(coverImg(s.name, s.name)));
+    card.appendChild(el('div', 'pod-name clamp2', lines[0]));
+    if(lines[1]) card.appendChild(el('div', 'pod-sub line1', lines[1]));
     var missing = s.keys.length - s.loaded;
     if(missing) s.keys.forEach(function(k){ if(!findEp(k)) healEp(k); });
     card.appendChild(el('div', 'pod-meta line1', s.keys.length + ' 集' + (missing ? ' · ' + missing + ' 集缺失' : '')));
     card.onclick = function(){ goShow(s.name); };
     onLongPress(card, function(){ showAlbumMenu(s.name); });
+    if(extra) extra(card);
     grid.appendChild(card);
+  }
+  // 分了季的专辑（同一个总名称、至少两季）叠在一起，点开才分开
+  var series = {};
+  list.forEach(function(s){ var ps = parseSeason(s.name); if(ps){ s.ps = ps; (series[ps.base] = series[ps.base] || []).push(s); } });
+  var done = {};
+  list.forEach(function(s){
+    var grp = s.ps && series[s.ps.base].length > 1 ? series[s.ps.base] : null;
+    if(!grp){ podCard(s, [s.name]); return; }
+    var base = s.ps.base;
+    if(done[base]) return;
+    done[base] = true;
+    var seasons = grp.slice().sort(function(a, b){ return a.ps.season - b.ps.season; });
+    var open = !!openSeries[base], keys = 0;
+    seasons.forEach(function(x){ keys += x.keys.length; });
+    var st = el('button', 'pod pod-stack' + (open ? ' open' : ''));
+    var wrap = el('div', 'stk');
+    var tops = grp.slice().sort(function(a, b){ return b.updated - a.updated; }).slice(0, 3);   // 最近听过的那一季放最上面
+    for(var i = tops.length - 1; i >= 0; i--){
+      var lw = layer(coverImg('stk:' + base + ':' + i, tops[i].name));
+      if(!i) lw.style.zIndex = '20';
+      if(i){ lw.className += ' back'; lw.style.transform = 'translate(' + (i * 12) + 'px,' + (-i * 7) + 'px) rotateY(18deg) rotateX(3deg) scale(' + (1 - i * .07) + ')'; lw.style.zIndex = String(10 - i); lw.style.opacity = String(1 - i * .12); }
+      wrap.appendChild(lw);
+    }
+    st.appendChild(wrap);
+    st.appendChild(el('div', 'pod-name clamp2', base));
+    st.appendChild(el('div', 'pod-meta line1', seasons.length + ' 季 · ' + keys + ' 集' + (open ? ' · 点一下收起' : '')));
+    st.onclick = function(){ openSeries[base] = !openSeries[base]; render(); };
+    grid.appendChild(st);
+    if(open) seasons.forEach(function(x){
+      var sub = x.ps.sub, t = '第' + x.ps.season + '季';
+      podCard(x, sub ? [sub, t] : [t]);
+    });
   });
   box.appendChild(grid);
 }
@@ -2111,6 +2163,13 @@ function cnToInt(t){
   return n + cur;
 }
 // 「西方艺术三万年第一季：永恒的古典」→ ['永恒的古典', '西方艺术三万年·第1季']
+// 「西方艺术三万年第一季：永恒的古典」→ {base:'西方艺术三万年', season:1, sub:'永恒的古典'}；没有「第X季」就返回 null
+function parseSeason(name){
+  var m = /^(.+?)\s*[：:]\s*(.+)$/.exec(name), main = m ? m[1] : name, sub = m ? m[2].trim() : '';
+  var q = /^(.*?)\s*[·・]?\s*第\s*([一二三四五六七八九十百零两\d]+)\s*季\s*$/.exec(main);
+  if(!q || !q[1].trim()) return null;
+  return {base:q[1].trim(), season:cnToInt(q[2]), sub:sub};
+}
 function showNameLines(name){
   var m = /^(.+?)\s*[：:]\s*(.+)$/.exec(name), main = m ? m[1] : name, sub = m ? m[2] : '';
   main = main.replace(/\s*[·・]?\s*第\s*([一二三四五六七八九十百零两\d]+)\s*季\s*$/, function(x, n){ return '·第' + cnToInt(n) + '季'; });
@@ -2203,6 +2262,9 @@ var AI_PROVIDERS = {
   openrouter:{name:'OpenRouter', style:'chat', base:'https://openrouter.ai/api/v1', model:'google/gemini-2.5-flash', formats:['mp3'], testPath:'/auth/key',
     models:['google/gemini-2.5-flash','google/gemini-2.5-pro','openai/gpt-4o-audio-preview'],
     help:'OpenRouter 用一个 Key 调用很多模型，要选支持音频输入的（如 Gemini）。时间标记由模型给出。'},
+  openrouter_stt:{name:'OpenRouter（转写 Whisper）', style:'whisper', base:'https://openrouter.ai/api/v1', model:'openai/whisper-1', formats:['mp3','m4a'], testPath:'/auth/key', maxSec:300,
+    models:['openai/whisper-1','openai/whisper-large-v3','openai/whisper-large-v3-turbo'],
+    help:'OpenRouter 的语音转写接口，和上面的 OpenRouter（聊天）用同一个 Key。模型名要带「openai/」前缀，如 openai/whisper-1。OpenRouter 对每段的处理时间有限制，所以这里每段切得短一些。'},
   custom_whisper:{name:'自定义（OpenAI 转写接口）', style:'whisper', base:'', model:'whisper-1', formats:['mp3','m4a'], models:[],
     help:'任何兼容 OpenAI 转写接口（/audio/transcriptions）的服务：填接口地址（到 /v1 为止）和模型名。'},
   custom_chat:{name:'自定义（聊天模型听音频）', style:'chat', base:'', model:'', formats:['mp3'], models:[],
@@ -2598,6 +2660,7 @@ function aiRoute(){
   var p = aiProv(), model = aiModel(), chat = p.style === 'chat';
   var timed = !chat && /whisper/i.test(model);
   var r = {chat:chat, timed:timed, formats:ai.wav ? ['wav'] : (p.formats || ['mp3']), maxBytes:chat ? 12e6 : 24e6, maxSec:chat ? 300 : timed ? 600 : 300, convSec:300};
+  if(p.maxSec) r.maxSec = Math.min(r.maxSec, p.maxSec);
   if(ai.maxSec) r.maxSec = r.convSec = ai.maxSec;   // 调试用，设置里没有这一项
   return r;
 }
@@ -2661,7 +2724,7 @@ function apiError(status, text){
 function aiErrMsg(err){
   if(err && err.cancelled) return '已停止';
   var s = err && err.status;
-  if(s === 401 || s === 403) return 'API Key 不对或没有权限（' + s + '）';
+  if(s === 401 || s === 403) return 'API Key 不对或没有权限（' + s + '）' + (err.msg ? '：' + err.msg.slice(0, 80) : '');
   if(s === 404) return '接口地址或模型名不对（404）';
   if(s === 413) return '音频段太大，服务商不收（413）';
   if(s === 429) return '请求太频繁，或额度用完了（429）';
@@ -2902,7 +2965,7 @@ function trFinish(){ keepAwake(false); trJob = null; trRender(); render(); }
 function trGuard(){
   if(trJob){ toast('正在识别，请稍等'); return false; }
   if(aiProv().style === 'chat' && /whisper|transcribe|sensevoice|speech|asr/i.test(aiModel())){
-    toast('「' + aiModel() + '」是转写模型，不能用聊天接口。请换成 OpenAI / Groq 这类转写服务商，或改用能听音频的聊天模型。', 6000);
+    toast('「' + aiModel() + '」是转写模型，不能用聊天接口。请把服务商换成「OpenRouter（转写 Whisper）」、OpenAI 或 Groq，或改用能听音频的聊天模型。', 6000);
     openAiSettings(); return false;
   }
   if(!aiReady()){ toast('先设置 AI 服务商和 API Key'); openAiSettings(); return false; }
@@ -3040,7 +3103,8 @@ function loadTr(key){
 }
 function goEp(key){
   if(view.page === 'ep' && view.key === key){ render(); return; }
-  if(view.page === 'ep') history.replaceState({ep:key}, ''); else history.pushState({ep:key}, '');
+  var d0 = (history.state && history.state.d) || 0;
+  if(view.page === 'ep') history.replaceState({ep:key, d:d0}, ''); else history.pushState({ep:key, d:d0 + 1}, '');
   view = {page:'ep', key:key}; chapOpen = false;
   $('view').scrollTop = 0;
   loadTr(key);
