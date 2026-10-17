@@ -15,3 +15,4 @@
 - 测试：用本地模拟服务测过（OpenAI 转写 / 聊天两种格式，切出来的每段用 ffmpeg 检查过），没有对真实服务商测过，只有 Gemini 的跨域预检确认过可用。
 - 转文字入口：单集「!」菜单（`trOpen`）、多选 `bSelTr` 和长按专辑（都走 `trBatch`，逐集 `trRun`，`trJob` 同一时间只有一个）。首页封面是 `.pod-3d`（侧转 + 厚度 + 高光），图片和高光必须放在同一个 `.pod-face` 里，不然会和侧边厚度互相切割。
 - 页面有三层：首页 `home`、专辑页 `show`、文稿页 `ep`（`view.page`，用 history.pushState 存 `{show}` / `{ep}`，返回键一层层退）。点一集 → `openEpPage`（播放并进入文稿页）；播放别的集时文稿页跟着换（`open()` 里处理）。文稿页用 `renderEp`，章节条和文稿列表分开，只有列表在 `.list-scroll` 里滚动。
+- 识别入口都先弹小确认窗 `trAsk`（Promise，不要再用 `confirm`），默认后台识别；顶部 `#bTrJob` 是进度图标，点开 `#trProgSheet`。所有 `.sheet` 都支持下滑关闭（统一在 `renderOpts` 前那段手势代码）。首页封面图元素存在 `homeImgs` 里复用，别每次重画都新建。启动时读文件库失败时用 `healEp` 按需补读。
