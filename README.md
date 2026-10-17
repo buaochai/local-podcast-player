@@ -14,7 +14,8 @@
 - 锁屏和通知栏显示封面（这一集没有就用专辑封面）、标题、创作者，可以用锁屏和耳机按钮控制；可以在「关于」里把「下一首」键改成收藏当前时间点
 - AI 识别文稿：用自己的 API Key（OpenAI / Groq / 硅基流动 / Gemini / OpenRouter / 自定义）把音频识别成带时间的文字（单集、多选、整个专辑都可以），在独立的文稿页里点一句就跳到那里播放，文稿跟着播放滚动；顶部有 AI 自动分的章节条，收起时显示当前章节，展开选章节跳转；首页放大镜可搜节目、单集和文稿内容；识别默认在后台进行，顶部小图标点开看进度，弹窗都可以下滑关闭
 - 「关于」里有功能介绍、版本号、「刷新」更新按钮和导出 / 导入记录
-- 云同步（Cloudflare D1）：播放记录、收藏时间点、自建专辑、AI 设置（含 API Key）和文稿用同步密码在本机加密（AES-GCM，密钥由 PBKDF2 从密码算出）后存到 D1，服务器只存密文；多台设备填同一个密码自动同步。音频不同步
+- 云同步（Cloudflare D1）：播放记录、收藏时间点、自建专辑、AI 设置（含 API Key）和文稿存到 D1，按 Cloudflare Access 登录的账号同步，登录同一账号的设备自动同步。音频不同步
+- 集名优化（「关于」里可以关）：「0.」开头显示为「发刊词：」；名字前两个序号去掉第一个；番外以「番外：」开头。只改显示，列表顺序仍按文件名
 - 首页固定一屏，不能缩放；断网也能打开
 
 ## 注意
@@ -25,17 +26,17 @@
 1. Cloudflare 后台 → Storage & Databases → D1 → Create：名字随便（如 `podcast`），位置选默认的 Location，不要选 jurisdiction。表不用手动建，第一次同步时会自动建。
 2. Workers & Pages → Create → Pages → 连接 GitHub，选这个仓库：生产分支 `main`，Framework 选 None，构建命令留空，输出目录填 `/`。
 3. 进这个 Pages 项目 → Settings → Bindings → Add → D1 database：变量名填 `DB`，选第 1 步的数据库。然后到 Deployments 里对最新一次部署点「Retry deployment」，绑定才会生效。
-4. 打开 `xxx.pages.dev`，「关于」→「云同步」→ 设同步密码 → 开启同步。其他设备打开同一个网址，填同一个密码。
-   在 GitHub Pages 上打开的网页也能同步：「服务器地址」填 `https://xxx.pages.dev`。
+4. 按下面设置好登录后，打开 `xxx.pages.dev`，「关于」→「云同步」→「开启同步」。其他设备登录同一个账号后也点一下「开启同步」。
 
 ### 登录后才能打开（Cloudflare Access）
 1. Cloudflare 后台左侧 → Zero Trust（第一次要选团队名和套餐，选 Free）。
 2. Access → Applications → Add an application → Self-hosted：Application domain 填 `xxx.pages.dev`（再加一条 `*.xxx.pages.dev` 保护预览地址）；Session duration 可以选长一点（如 1 month），不用常常登录。
 3. Policy：Action 选 Allow，Include 选 Emails，填自己的邮箱（可以填多个）。
 4. 登录方式默认是 One-time PIN：打开网页时输入邮箱，收到验证码登录。
-保护后同步接口也在登录后面，所以只能在 `xxx.pages.dev` 上同步，GitHub Pages 上的网页不能再连这个同步接口。
+同步接口按登录的邮箱区分账号（`functions/api/_middleware.js` 读 Access 加的 `Cf-Access-Authenticated-User-Email` 请求头），没登录就不能同步。
+更安全的做法：在 Pages 项目 → Settings → Variables 里加 `ACCESS_TEAM`（团队域名，如 `myteam.cloudflareaccess.com`）和 `ACCESS_AUD`（Access 应用页面上的 Application Audience (AUD) Tag），接口就会校验 Access 的签名令牌，而不是只看请求头。
 
-后端接口是 `functions/api/sync.js`（Cloudflare Pages Functions）：`GET/PUT /api/sync`，请求头 `X-Sync-Id` 是由密码算出的编号，D1 表 `sync(id, data, ver, updated)` 每个密码一行，`ver` 用来防止两台设备同时上传互相覆盖。文稿走 `functions/api/tr.js`，表 `tr(id, k, data, updated)` 每篇文稿一行（同样是加密后的）。
+后端接口是 `functions/api/sync.js`（Cloudflare Pages Functions）：`GET/PUT /api/sync`，D1 表 `sync(id, data, ver, updated)` 每个账号一行（`id` 是登录邮箱的 SHA-256），`ver` 用来防止两台设备同时上传互相覆盖。文稿走 `functions/api/tr.js`，表 `tr(id, k, data, updated)` 每篇文稿一行。数据以明文 JSON 存在你自己的 D1 里（含 API Key），靠 Cloudflare 登录保护。
 
 ## 文件
 - `index.html`：整个网页
