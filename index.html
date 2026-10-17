@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.25.1">
+<meta name="app-version" content="0.26.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -600,7 +600,7 @@ input[type=file]{display:none}
       </ul>
 
       <h3>AI 文稿</h3>
-      <p>用你自己的 API Key，把音频识别成带时间的文字，再由文本模型自动分章节。语音识别支持 OpenAI、Groq、硅基流动、Gemini、OpenRouter 和自定义接口；分章节支持 Claude、DeepSeek、通义千问、智谱、Kimi、豆包、混元、OpenAI、Gemini 等。</p>
+      <p>用你自己的 API Key，把音频识别成带时间的文字，再由文本模型自动分章节。语音识别支持阿里云百炼 Fun-ASR、OpenAI、Groq、硅基流动、Gemini、OpenRouter 和自定义接口；分章节支持 Claude、DeepSeek、通义千问、智谱、Kimi、豆包、混元、OpenAI、Gemini 等。</p>
       <div class="ver-row">
         <div class="ver-text">
           <div class="ver-num">AI 设置</div>
@@ -2336,6 +2336,9 @@ var AI_PROVIDERS = {
   openrouter_stt:{name:'OpenRouter（转写 Whisper）', style:'whisper', base:'https://openrouter.ai/api/v1', model:'openai/whisper-1', formats:['mp3','m4a'], testPath:'/auth/key', maxSec:300,
     models:['openai/whisper-1','openai/whisper-large-v3','openai/whisper-large-v3-turbo'],
     help:'OpenRouter 的语音转写接口，和上面的 OpenRouter（聊天）用同一个 Key。模型名要带「openai/」前缀，如 openai/whisper-1。OpenRouter 对每段的处理时间有限制，所以这里每段切得短一些。'},
+  aliyun:{name:'阿里云百炼 Fun-ASR（中文推荐）', style:'ali', base:'https://dashscope.aliyuncs.com/api/v1', model:'fun-asr', formats:['mp3','m4a'],
+    models:['fun-asr','paraformer-v2'],
+    help:'阿里的中文语音识别（FunASR 系列），中文准、自带标点和逐句时间，音乐处不容易乱编。在阿里云百炼控制台创建 API Key。音频会经你的 Cloudflare 后台传到百炼的临时存储（48 小时后自动失效）再识别，所以要在 Cloudflare 上的网址使用。新加坡地域的 Key 要把接口地址改成 https://dashscope-intl.aliyuncs.com/api/v1。'},
   custom_whisper:{name:'自定义（OpenAI 转写接口）', style:'whisper', base:'', model:'whisper-1', formats:['mp3','m4a'], models:[],
     help:'任何兼容 OpenAI 转写接口（/audio/transcriptions）的服务：填接口地址（到 /v1 为止）和模型名。'},
   custom_chat:{name:'自定义（聊天模型听音频）', style:'chat', base:'', model:'', formats:['mp3'], models:[],
@@ -2489,8 +2492,18 @@ function testConn(f, style, testPath, out, btn){
   });
 }
 $('bAiTest').onclick = function(){
-  var f = readAiForm();
-  testConn(f, 'openai', AI_PROVIDERS[f.provider].testPath, $('aiTestResult'), this);
+  var f = readAiForm(), out = $('aiTestResult'), btn = this;
+  if(AI_PROVIDERS[f.provider].style === 'ali'){
+    if(!f.key){ out.textContent = '先填好 API Key'; return; }
+    out.textContent = '正在连接…'; btn.disabled = true;
+    aliFetch('policy', '', {}, f.key, f.base, f.model).then(function(){
+      btn.disabled = false; out.textContent = '连接成功，Key 可以用。';
+    }, function(err){
+      btn.disabled = false; out.textContent = err && err.status ? aiErrMsg(err) : (err && err.message) || '连不上';
+    });
+    return;
+  }
+  testConn(f, 'openai', AI_PROVIDERS[f.provider].testPath, out, btn);
 };
 $('bLlmTest').onclick = function(){
   var g = readLlmForm();
@@ -2731,6 +2744,7 @@ function aiRoute(){
   var p = aiProv(), model = aiModel(), chat = p.style === 'chat';
   var timed = !chat && /whisper/i.test(model);
   var r = {chat:chat, timed:timed, formats:ai.wav ? ['wav'] : (p.formats || ['mp3']), maxBytes:chat ? 12e6 : 24e6, maxSec:chat ? 300 : timed ? 600 : 300, convSec:300};
+  if(p.style === 'ali'){ r.ali = true; r.timed = true; r.maxBytes = 80e6; r.maxSec = 3600; }   // 百炼是提交任务再取结果，一次可以送很长的音频
   if(p.maxSec) r.maxSec = Math.min(r.maxSec, p.maxSec);
   if(ai.maxSec) r.maxSec = r.convSec = ai.maxSec;   // 调试用，设置里没有这一项
   return r;
@@ -2835,6 +2849,60 @@ function reqWhisper(blob, fmt, route, signal, verbose){
     throw err;
   });
 }
+/* ---- 阿里云百炼（Fun-ASR / Paraformer）：经自己的 Cloudflare 后台 functions/api/ali.js 转发 ---- */
+function aliFetch(op, query, opt, key, base, model){
+  opt = opt || {};
+  opt.headers = Object.assign({'X-Ali-Key':key || ai.key}, opt.headers || {});
+  opt.cache = 'no-store';
+  var url = 'api/ali?op=' + op + '&base=' + encodeURIComponent(base || aiBase()) + '&model=' + encodeURIComponent(model || aiModel()) + (query || '');
+  return fetch(url, opt).then(function(r){
+    return r.text().then(function(t){
+      if(r.ok){ try{ return JSON.parse(t); }catch(e){} }
+      if(r.status === 404 && !/^\s*\{/.test(t)) throw new Error('这个网址没有百炼的转发接口：要在 Cloudflare 上的网址使用');
+      throw apiError(r.status, t);
+    });
+  });
+}
+function aliWait(ms, signal){
+  return new Promise(function(res, rej){
+    var tm = setTimeout(res, ms);
+    if(signal) signal.addEventListener('abort', function(){ clearTimeout(tm); rej({cancelled:true}); });
+  });
+}
+function reqAli(blob, fmt, signal){
+  var start = Date.now();
+  function poll(id, n){
+    if(Date.now() - start > 3600000) throw new Error('百炼一个小时都没识别完，请稍后重试');
+    return aliWait(n < 5 ? 3000 : 8000, signal).then(function(){
+      return aliFetch('task', '&id=' + encodeURIComponent(id), {signal:signal});
+    }).then(function(j){
+      var out = j.output || {}, st = out.task_status;
+      if(st === 'SUCCEEDED'){
+        var sents = [], text = '';
+        (out.transcripts || []).forEach(function(f){
+          (f.transcripts || []).forEach(function(c){
+            text += c.text || '';
+            (c.sentences || []).forEach(function(x){ sents.push(x); });
+          });
+        });
+        var bad = (out.results || []).filter(function(r){ return r.subtask_status && r.subtask_status !== 'SUCCEEDED'; })[0];
+        if(!sents.length && !text && bad) throw new Error('百炼识别失败：' + (bad.message || bad.code || bad.subtask_status));
+        sents.sort(function(a, b){ return (a.begin_time || 0) - (b.begin_time || 0); });
+        return {aliSentences:sents, text:text};
+      }
+      if(st === 'FAILED' || st === 'UNKNOWN' || st === 'CANCELED') throw new Error('百炼识别失败：' + (out.message || out.code || st));
+      return poll(id, n + 1);
+    });
+  }
+  return aliFetch('upload', '&name=part.' + fmt, {method:'POST', body:blob, headers:{'Content-Type':fmt === 'm4a' ? 'audio/mp4' : 'audio/mpeg'}, signal:signal}).then(function(j){
+    if(!j.url) throw new Error('上传到百炼失败');
+    return aliFetch('submit', '', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:j.url, model:aiModel()}), signal:signal});
+  }).then(function(j){
+    var id = j.output && j.output.task_id;
+    if(!id) throw new Error('百炼没有返回任务编号' + (j.message ? '：' + j.message : ''));
+    return poll(id, 0);
+  });
+}
 function chatPrompt(dur){
   var zh = ai.lang === 'zh';
   return '请把这段音频里的人声逐字转写成文字，保持原语言，不要翻译、不要总结、不要加任何评论' + (zh ? '，用简体中文并加标点' : '') + '。这段音频长 ' + fmt(dur) + '。按自然段落分段，每一段的开头写一个时间标记，格式是 [分:秒]，表示这一段从这段音频的第几分几秒开始。只输出转写结果。';
@@ -2872,6 +2940,10 @@ function parseTimed(text, t0, dur){
   return segs;
 }
 function segmentsOf(resp, chunk, route){
+  if(resp.aliSentences){   // 百炼：逐句的开始时间（毫秒）
+    var as = resp.aliSentences.map(function(x){ return {t:chunk.t0 + (+x.begin_time || 0) / 1000, text:clean(x.text)}; }).filter(function(x){ return x.text; });
+    if(as.length) return as;
+  }
   if(resp.segments && resp.segments.length){
     return resp.segments.filter(function(s){
       // 很可能没人说话（音乐、静音），或者一直在重复：这类段多半是模型编出来的
@@ -2888,7 +2960,7 @@ function sendChunk(chunk, plan, route, signal){
   var blob = chunk.blob();
   var prep = plan.conv ? toWav(blob).then(function(w){ return {blob:w, fmt:'wav'}; }) : Promise.resolve({blob:blob, fmt:chunk.fmt});
   return prep.then(function(pp){
-    var call = route.chat ? reqChat(pp.blob, pp.fmt, chunk.dur, signal) : reqWhisper(pp.blob, pp.fmt, route, signal, route.timed);
+    var call = route.ali ? reqAli(pp.blob, pp.fmt, signal) : route.chat ? reqChat(pp.blob, pp.fmt, chunk.dur, signal) : reqWhisper(pp.blob, pp.fmt, route, signal, route.timed);
     return call.then(function(resp){
       var segs = segmentsOf(resp, chunk, route);
       if(ai.lang === 'zh' || !ai.lang) segs.forEach(function(x){ x.text = toSimp(x.text); });

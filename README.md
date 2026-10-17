@@ -40,7 +40,7 @@
 
 ## 文件
 - `index.html`：整个网页
-- `functions/api/sync.js`：云同步接口（Cloudflare Pages Functions + D1）
+- `functions/api/sync.js`、`tr.js`：云同步接口（Cloudflare Pages Functions + D1）；`_middleware.js`：登录检查；`ali.js`：转发阿里云百炼的语音识别
 - `manifest.webmanifest`、`sw.js`、`icon*`：PWA（主屏幕图标、离线缓存）
 - `cover.svg` → `cover-*.png`、`apple-touch-icon.png`：方形满版封面（无透明），用于通知栏/锁屏封面、安卓自适应图标和 iPhone 主屏幕图标
 
