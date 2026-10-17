@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.15.0">
+<meta name="app-version" content="0.16.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -95,6 +95,17 @@ body.has-player .list-scroll{padding-bottom:170px}
 .pod-head{display:flex;gap:14px;align-items:center;margin:4px 0 14px}
 .pod-head img{width:96px;height:96px;border-radius:12px;object-fit:cover;flex:none;background:var(--line)}
 .pod-head .t{font-size:18px;font-weight:700;line-height:1.3}
+.search-in{flex:1;min-width:0;height:38px;border:1px solid var(--line);border-radius:19px;background:var(--card);color:var(--text);font:inherit;font-size:16px;padding:0 14px;outline-color:var(--accent);transform-origin:right center;animation:sin .22s ease-out;-webkit-appearance:none;appearance:none}
+.search-in[hidden]{display:none}
+@keyframes sin{from{opacity:0;transform:scaleX(.15)}to{opacity:1;transform:none}}
+header.searching h1{display:none}
+#bSearch.on{color:var(--accent)}
+.sr-sec{font-size:13px;color:var(--muted);margin:14px 2px 6px}
+.sr-item{display:block;width:100%;text-align:left;border:none;background:var(--card);border-radius:12px;padding:10px 12px;margin:0 0 8px;color:var(--text)}
+.sr-item .a{font-size:15px;font-weight:600}
+.sr-item .b{font-size:13px;color:var(--muted);margin-top:2px}
+.sr-item mark{background:rgba(255,200,0,.35);color:inherit;border-radius:3px}
+.pod-head .t2{font-size:14px;color:var(--muted);margin-top:2px}
 .pod-head .m{font-size:13px;color:var(--muted);margin:2px 0 8px}
 .pod-head .btn{min-height:34px;padding:4px 14px;font-size:14px}
 .pod-actions{display:flex;gap:8px;flex-wrap:wrap}
@@ -261,6 +272,8 @@ input[type=file]{display:none}
 <header>
   <button class="icon-btn" id="bBack" aria-label="返回" hidden><svg viewBox="0 0 24 24"><path d="M15.4 5.4 14 4l-8 8 8 8 1.4-1.4L8.8 12z"/></svg></button>
   <h1 id="title" class="line1">播客节目</h1>
+  <input class="search-in" id="searchIn" type="search" placeholder="搜索节目、单集、文稿" enterkeyhint="search" autocomplete="off" hidden>
+  <button class="icon-btn" id="bSearch" aria-label="搜索" hidden><svg viewBox="0 0 24 24"><path d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg></button>
   <button class="icon-btn" id="bTrJob" aria-label="AI 识别进度" hidden><svg viewBox="0 0 24 24"><path d="M3 10h2v4H3zm4-4h2v12H7zm4-3h2v18h-2zm4 3h2v12h-2zm4 4h2v4h-2z"/></svg><i class="trdot"></i></button>
   <button class="icon-btn" id="bEpMore" aria-label="更多" hidden><svg viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg></button>
   <button class="txt-btn" id="bSel" hidden>选择</button>
@@ -533,16 +546,6 @@ input[type=file]{display:none}
           <div class="ver-status" id="aiStatus"></div>
         </div>
         <button class="btn" id="bAiSet">设置</button>
-      </div>
-
-      <h3>锁屏和耳机按键</h3>
-      <p>网页没办法在锁屏上新增按钮。可以把「下一首」键（耳机双击一般也是这个键）改成收藏当前时间点，收藏时锁屏标题会闪一下「已收藏」。</p>
-      <div class="ver-row">
-        <div class="ver-text">
-          <div class="ver-num">「下一首」键收藏时间点</div>
-          <div class="ver-status" id="keyStatus"></div>
-        </div>
-        <button class="btn" id="bKeyMark">开启</button>
       </div>
 
       <h3>存储空间</h3>
@@ -1100,18 +1103,6 @@ function saveMark(){
   closeSheet('markSheet');
   toast('已收藏 ' + fmt(markAt));
 }
-// 锁屏 / 耳机的「下一首」键：不填原因直接收藏当前时间点
-var flashTimer = null;
-function quickMark(){
-  if(!cur || !cur.loaded) return;
-  var sec = audio.currentTime;
-  addMark(sec, '');
-  if(navigator.vibrate) navigator.vibrate(30);
-  toast('已收藏 ' + fmt(sec));
-  setMediaSession('★ 已收藏 ' + fmt(sec));
-  clearTimeout(flashTimer);
-  flashTimer = setTimeout(function(){ setMediaSession(); }, 2500);
-}
 $('bMarkSave').onclick = saveMark;
 $('markNote').addEventListener('keydown', function(e){ if(e.key === 'Enter') saveMark(); });
 
@@ -1333,7 +1324,7 @@ if('mediaSession' in navigator){
   h('seekbackward', function(){ skip(-SKIP); });
   h('seekforward', function(){ skip(SKIP); });
   h('previoustrack', prev);
-  h('nexttrack', function(){ if(settings.nextMark) quickMark(); else next(); });
+  h('nexttrack', next);
   h('seekto', function(d){ if(d.seekTime != null){ audio.currentTime = d.seekTime; recordNow(true); } });
 }
 
@@ -1927,6 +1918,7 @@ function render(){
   var home = view.page === 'home', isEp = view.page === 'ep';
   var pageKey = home ? 'home' : isEp ? 'ep:' + view.key : 'show:' + view.show;
   // 重画时保持滚动位置；换了页面就回到顶部
+  var samePage = pageKey === renderedKey;
   if(pageKey !== renderedKey){ selMode = false; selKeys = {}; }   // 换了页面就退出多选
   var top = pageKey !== renderedKey ? 0 : sc ? sc.scrollTop : box.scrollTop;
   renderedKey = pageKey;
@@ -1935,6 +1927,9 @@ function render(){
   if(!selecting && selMode){ selMode = false; selKeys = {}; }
   $('bBack').hidden = home || selecting;
   $('bNewAlbum').hidden = !home;
+  $('bSearch').hidden = !home;
+  if(!home && searchOpen) closeSearch(true);
+  document.querySelector('header').classList.toggle('searching', searchOpen);
   $('bSel').hidden = home || isEp || selecting || !nKeys;
   $('bEpMore').hidden = !isEp;
   $('bSelAll').hidden = !selecting; $('bSelDone').hidden = !selecting;
@@ -1944,15 +1939,93 @@ function render(){
   showTrJob();
   $('bSelMove').disabled = $('bSelDel').disabled = $('bSelTr').disabled = !selCount();
   $('bSelAll').textContent = selCount() >= nKeys ? '取消全选' : '全选';
-  $('title').textContent = home ? '播客节目' : isEp ? titleOf(view.key) : selecting ? '已选 ' + selCount() + ' 集' : view.show;
-  box.innerHTML = '';
+  $('title').textContent = home ? '播客节目' : isEp ? titleOf(view.key) : selecting ? '已选 ' + selCount() + ' 集' : '';
+  // 专辑页：播放时每几秒会重画一次，顶部封面那块没变就原样留着，不拆掉重建（拆了会闪）
+  var keepHead = !home && !isEp && samePage ? box.querySelector('.pod-head') : null;
+  Array.prototype.slice.call(box.children).forEach(function(c){ if(c !== keepHead) box.removeChild(c); });
+  if(!keepHead) box.innerHTML = '';
   box.classList.remove('fixed');
-  if(home) renderHome(box); else if(isEp) renderEp(box); else renderShow(box);
+  box._keepHead = keepHead;
+  if(home && searchOpen && searchQ.trim()) renderSearch(box); else if(home) renderHome(box); else if(isEp) renderEp(box); else renderShow(box);
   sc = box.querySelector('.list-scroll');
   if(sc) sc.scrollTop = top; else box.scrollTop = top;
   renderMini();
   if(isEp) trTick(true, pageKey !== lastEpKey);
   lastEpKey = pageKey;
+}
+/* ---------- 搜索（首页右上角放大镜，向左展开输入框）---------- */
+var searchOpen = false, searchQ = '', searchTimer = null, trAllReady = false, trAllLoading = false;
+function openSearch(){
+  searchOpen = true; $('searchIn').hidden = false; $('bSearch').classList.add('on');
+  document.querySelector('header').classList.add('searching');
+  $('searchIn').focus();
+  if(!trAllReady && !trAllLoading){
+    trAllLoading = true;
+    store('readonly', function(st){ return st.getAll(); }, 'transcripts').then(function(rows){
+      (rows || []).forEach(function(r){ trCache[r.key] = r; hasTr[r.key] = true; });
+    }).catch(function(){}).then(function(){ trAllReady = true; trAllLoading = false; if(searchOpen && searchQ.trim()) render(); });
+  }
+}
+function closeSearch(quiet){
+  searchOpen = false; searchQ = ''; $('searchIn').value = ''; $('searchIn').hidden = true; $('searchIn').blur();
+  $('bSearch').classList.remove('on');
+  document.querySelector('header').classList.remove('searching');
+  if(!quiet) render();
+}
+$('bSearch').onclick = function(){ if(searchOpen) closeSearch(); else openSearch(); };
+$('searchIn').addEventListener('input', function(){
+  searchQ = this.value; clearTimeout(searchTimer);
+  searchTimer = setTimeout(function(){ if(view.page === 'home') render(); }, 150);
+});
+$('searchIn').addEventListener('keydown', function(e){ if(e.key === 'Escape') closeSearch(); else if(e.key === 'Enter') this.blur(); });
+function hilite(parent, text, q){
+  var low = text.toLowerCase(), i = low.indexOf(q), pos = 0;
+  if(i < 0){ parent.appendChild(document.createTextNode(text)); return; }
+  while(i >= 0){
+    if(i > pos) parent.appendChild(document.createTextNode(text.slice(pos, i)));
+    parent.appendChild(el('mark', null, text.slice(i, i + q.length)));
+    pos = i + q.length; i = low.indexOf(q, pos);
+  }
+  if(pos < text.length) parent.appendChild(document.createTextNode(text.slice(pos)));
+}
+function snippet(text, q){
+  var i = text.toLowerCase().indexOf(q), a = Math.max(0, i - 18), b = Math.min(text.length, i + q.length + 40);
+  return (a ? '…' : '') + text.slice(a, b) + (b < text.length ? '…' : '');
+}
+function renderSearch(box){
+  var q = searchQ.trim().toLowerCase();
+  var shs = allShows().filter(function(x){ return x.name.toLowerCase().indexOf(q) >= 0 || (authorOf(x.name) || '').toLowerCase().indexOf(q) >= 0; });
+  var keys = Object.keys(records);
+  episodes.forEach(function(e){ if(keys.indexOf(e.key) < 0) keys.push(e.key); });
+  var eps = keys.filter(function(k){
+    var r = records[k] || {}, hay = [titleOf(k), showOf(k), r.artist || '', (r.marks || []).map(function(m){ return m.note || ''; }).join(' ')].join('\n').toLowerCase();
+    return hay.indexOf(q) >= 0;
+  });
+  var hits = [], total = 0;
+  Object.keys(trCache).forEach(function(k){
+    var tr = trCache[k]; if(!tr || !tr.segments || total >= 60) return;
+    var n = 0;
+    for(var i = 0; i < tr.segments.length && n < 3 && total < 60; i++){
+      if(tr.segments[i].text.toLowerCase().indexOf(q) >= 0){ hits.push({key:k, t:tr.segments[i].t, text:tr.segments[i].text}); n++; total++; }
+    }
+  });
+  var wrap = el('div', 'search-res');
+  function sec(t){ wrap.appendChild(el('div', 'sr-sec', t)); }
+  function item(a, b, fn, hl){
+    var it = el('button', 'sr-item'), x = el('div', 'a clamp2');
+    hilite(x, a, q); it.appendChild(x);
+    if(b){ var y = el('div', 'b ' + (hl ? 'clamp2' : 'line1')); if(hl) hilite(y, b, q); else y.textContent = b; it.appendChild(y); }
+    it.onclick = fn; wrap.appendChild(it);
+  }
+  if(shs.length){ sec('节目'); shs.slice(0, 20).forEach(function(x){ item(x.name, x.keys.length + ' 集', function(){ closeSearch(true); goShow(x.name); }); }); }
+  if(eps.length){ sec('单集'); eps.slice(0, 40).forEach(function(k){ item(titleOf(k), showOf(k), function(){ closeSearch(true); openEpPage(k); }); }); }
+  if(hits.length){ sec('文稿内容'); hits.forEach(function(h){ item(titleOf(h.key) + ' · ' + fmt(h.t), snippet(h.text, q), function(){
+    var ep = findEp(h.key); closeSearch(true);
+    if(ep) open(ep, true, h.t);
+    goEp(h.key);
+  }, true); }); }
+  if(!shs.length && !eps.length && !hits.length) wrap.appendChild(el('div', 'empty', trAllReady ? '没有找到「' + searchQ.trim() + '」。' : '正在搜索文稿…'));
+  box.appendChild(wrap);
 }
 var homeImgs = {};   // 首页封面图元素复用，重画时不重新加载（否则会闪）
 function renderHome(box){
@@ -1985,6 +2058,25 @@ function renderHome(box){
   });
   box.appendChild(grid);
 }
+var CN_NUM = {'零':0,'一':1,'二':2,'两':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9};
+function cnToInt(t){
+  if(/^\d+$/.test(t)) return parseInt(t, 10);
+  var n = 0, cur = 0, i, c;
+  for(i = 0; i < t.length; i++){
+    c = t.charAt(i);
+    if(c === '十'){ n += (cur || 1) * 10; cur = 0; }
+    else if(c === '百'){ n += (cur || 1) * 100; cur = 0; }
+    else cur = CN_NUM[c] || 0;
+  }
+  return n + cur;
+}
+// 「西方艺术三万年第一季：永恒的古典」→ ['永恒的古典', '西方艺术三万年·第1季']
+function showNameLines(name){
+  var m = /^(.+?)\s*[：:]\s*(.+)$/.exec(name), main = m ? m[1] : name, sub = m ? m[2] : '';
+  main = main.replace(/\s*[·・]?\s*第\s*([一二三四五六七八九十百零两\d]+)\s*季\s*$/, function(x, n){ return '·第' + cnToInt(n) + '季'; });
+  return sub ? [sub.trim(), main.trim()] : [main.trim()];
+}
+var headImg = null;   // 专辑页封面图元素复用（播放时每隔几秒会重画，不复用会一直闪）
 function renderShow(box){
   var keys = episodeKeys(view.show);
   if(!keys.length && !isCustom(view.show)){ view = {page:'home'}; history.replaceState(null, ''); render(); return; }
@@ -1993,9 +2085,11 @@ function renderShow(box){
     return;
   }
   var head = el('div', 'pod-head');
-  var img = el('img'); img.src = coverOf(view.show); img.alt = '';
-  var info = el('div');
-  info.appendChild(el('div', 't clamp2', view.show));
+  var img = headImg || (headImg = el('img')), hsrc = coverOf(view.show); img.alt = '';
+  if(img.getAttribute('src') !== hsrc) img.src = hsrc;
+  var info = el('div'), lines = showNameLines(view.show);
+  info.appendChild(el('div', 't clamp2', lines[0]));
+  if(lines[1]) info.appendChild(el('div', 't2 line1', lines[1]));
   keys.forEach(function(k){ if(!findEp(k)) healEp(k); });
   var missing = keys.length - keys.filter(findEp).length;
   var au = authorOf(view.show);
@@ -2014,9 +2108,12 @@ function renderShow(box){
   eb.onclick = function(){ editAlbum(view.show); };
   acts.appendChild(eb);
   info.appendChild(acts);
-  head.appendChild(img); head.appendChild(info);
+  head.appendChild(info);
   box.classList.add('fixed');
-  box.appendChild(head);
+  var sig = [view.show, hsrc, lines.join('/'), keys.length, missing, au, resume && resume.key, !!(cur && cur.show === view.show), acts.textContent].join('|');
+  head.dataset.sig = sig;
+  var old = box._keepHead; box._keepHead = null;
+  if(!(old && old.dataset.sig === sig)){ if(old) box.removeChild(old); head.insertBefore(img, head.firstChild); box.insertBefore(head, box.firstChild); }
   var scroll = el('div', 'list-scroll');
 
   var ul = el('ul', 'list');
@@ -2460,7 +2557,7 @@ function sniffAudio(file){
 function aiRoute(){
   var p = aiProv(), model = aiModel(), chat = p.style === 'chat';
   var timed = !chat && /whisper/i.test(model);
-  var r = {chat:chat, timed:timed, formats:ai.wav ? ['wav'] : (p.formats || ['mp3']), maxBytes:chat ? 12e6 : 24e6, maxSec:chat ? 600 : timed ? 1200 : 300, convSec:300};
+  var r = {chat:chat, timed:timed, formats:ai.wav ? ['wav'] : (p.formats || ['mp3']), maxBytes:chat ? 12e6 : 24e6, maxSec:chat ? 300 : timed ? 600 : 300, convSec:300};
   if(ai.maxSec) r.maxSec = r.convSec = ai.maxSec;   // 调试用，设置里没有这一项
   return r;
 }
@@ -2528,14 +2625,25 @@ function aiErrMsg(err){
   if(s === 404) return '接口地址或模型名不对（404）';
   if(s === 413) return '音频段太大，服务商不收（413）';
   if(s === 429) return '请求太频繁，或额度用完了（429）';
+  if(s === 400 && /transcription model|chat.?completions/i.test(err.msg || '')) return '这个模型是转写模型，不能走聊天接口：请在 AI 设置里换成转写类服务商（OpenAI / Groq / 自定义转写），或换成能听音频的聊天模型';
   if(s) return '服务商返回错误 ' + s + (err.msg ? '：' + err.msg.slice(0, 60) : '');
   if(err && err.name === 'TypeError') return '连不上服务商：网络不通，或这家服务商不允许网页直接访问（跨域限制）';
   return (err && err.message) || '识别失败';
 }
+// 服务商 5 分钟都没回应就放弃（不然会一直转圈）
+var AI_TIMEOUT = 300000;
 function postJson(url, body, signal, asForm){
-  return fetch(url, {method:'POST', headers:asForm ? {Authorization:'Bearer ' + ai.key} : {Authorization:'Bearer ' + ai.key, 'Content-Type':'application/json'}, body:asForm ? body : JSON.stringify(body), signal:signal}).then(function(r){
+  var ac = new AbortController(), timedOut = false, timer = setTimeout(function(){ timedOut = true; ac.abort(); }, AI_TIMEOUT);
+  function onAbort(){ ac.abort(); }
+  if(signal){ if(signal.aborted) ac.abort(); else signal.addEventListener('abort', onAbort); }
+  function done(){ clearTimeout(timer); if(signal) signal.removeEventListener('abort', onAbort); }
+  return fetch(url, {method:'POST', headers:asForm ? {Authorization:'Bearer ' + ai.key} : {Authorization:'Bearer ' + ai.key, 'Content-Type':'application/json'}, body:asForm ? body : JSON.stringify(body), signal:ac.signal}).then(function(r){
     if(r.ok) return r.json();
     return r.text().then(function(t){ throw apiError(r.status, t); });
+  }).then(function(j){ done(); return j; }, function(err){
+    done();
+    if(timedOut && !(signal && signal.aborted)) throw new Error('服务商 5 分钟都没有回应。可以换个模型或服务商再试，或在设置里确认接口地址。');
+    throw err;
   });
 }
 function reqWhisper(blob, fmt, route, signal, verbose){
@@ -2713,7 +2821,7 @@ function chapIndexAt(chs, t){
 // 识别完以后自动分章节（没设置文本模型就跳过；分章节失败不影响文稿）
 function autoChapters(key){
   if(!llmReady()) return Promise.resolve({noLlm:true});
-  trJob.msg = (trJob.batch ? '第 ' + trJob.batch.i + ' / ' + trJob.batch.n + ' 集 · ' : '') + '正在用 AI 分章节…'; trRender();
+  trJob.sentAt = 0; trJob.msg = (trJob.batch ? '第 ' + trJob.batch.i + ' / ' + trJob.batch.n + ' 集 · ' : '') + '正在用 AI 分章节…'; trRender();
   return chapterize(key, trJob.abort.signal).then(function(){ return {}; }, function(err){ return {chapterErr:err && err.cancelled ? null : err}; });
 }
 function chapterRun(key){
@@ -2753,6 +2861,10 @@ function trRun(key, restart, batch){
 function trFinish(){ keepAwake(false); trJob = null; trRender(); render(); }
 function trGuard(){
   if(trJob){ toast('正在识别，请稍等'); return false; }
+  if(aiProv().style === 'chat' && /whisper|transcribe|sensevoice|speech|asr/i.test(aiModel())){
+    toast('「' + aiModel() + '」是转写模型，不能用聊天接口。请换成 OpenAI / Groq 这类转写服务商，或改用能听音频的聊天模型。', 6000);
+    openAiSettings(); return false;
+  }
   if(!aiReady()){ toast('先设置 AI 服务商和 API Key'); openAiSettings(); return false; }
   return true;
 }
@@ -2809,6 +2921,14 @@ function trBatch(keys){
     });
   });
 }
+// 一段发出去以后每秒更新「已等待 N 秒」，让人知道没卡死
+setInterval(function(){
+  if(!trJob || !trJob.sentAt || (trJob.msg !== trJob.base && trJob.msg !== trJob.shown)) return;
+  var w = Math.floor((Date.now() - trJob.sentAt) / 1000);
+  trJob.msg = trJob.shown = trJob.base + (w >= 8 ? '（已等待 ' + w + ' 秒' + (w >= 90 ? '，服务商比较慢' : '') + '）' : '');
+  var st = $('trStatus'); if(st && view.page === 'ep' && view.key === trJob.key) st.textContent = trJob.msg;
+  trSheetFill();
+}, 1000);
 function showTrJob(){
   var b = $('bTrJob');
   b.hidden = !trJob || document.body.classList.contains('selecting');
@@ -2845,7 +2965,8 @@ function trLoop(plan, route, tr){
     if(tr.done >= n){ tr.status = 'done'; return trPut(tr); }
     if(signal.aborted) throw {cancelled:true};
     trJob.done = tr.done; trJob.total = n;
-    trJob.msg = (trJob.batch ? '第 ' + trJob.batch.i + ' / ' + trJob.batch.n + ' 集 · ' : '') + '正在识别第 ' + (tr.done + 1) + ' / ' + n + ' 段…';
+    trJob.msg = trJob.base = (trJob.batch ? '第 ' + trJob.batch.i + ' / ' + trJob.batch.n + ' 集 · ' : '') + '正在识别第 ' + (tr.done + 1) + ' / ' + n + ' 段…';
+    trJob.sentAt = Date.now();
     trRender();
     var ch = plan.chunks[tr.done];
     return withRetry(function(){ return sendChunk(ch, plan, route, signal); }, signal, 3).then(function(segs){
@@ -3170,15 +3291,6 @@ window.addEventListener('pagehide', function(){ recordNow(true); });
 document.addEventListener('touchmove', function(e){ if(e.touches.length > 1) e.preventDefault(); }, {passive:false});
 
 /* ---------- 启动：读出保存在网页里的音频 ---------- */
-function showKeyMode(){
-  $('keyStatus').textContent = '现在：' + (settings.nextMark ? '收藏当前时间点' : '切换到下一集');
-  $('bKeyMark').textContent = settings.nextMark ? '关闭' : '开启';
-}
-$('bKeyMark').onclick = function(){
-  settings.nextMark = !settings.nextMark; saveSettings(); showKeyMode();
-  toast(settings.nextMark ? '「下一首」键现在会收藏时间点' : '「下一首」键恢复为切换下一集');
-};
-showKeyMode();
 showAiStatus();
 $('ver').textContent = VERSION;
 if(history.state && (history.state.show || history.state.ep)) history.replaceState(null, '');
