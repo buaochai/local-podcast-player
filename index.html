@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.31.0">
+<meta name="app-version" content="0.31.1">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -2993,11 +2993,29 @@ $('bAiTest').onclick = function(){
   if(AI_PROVIDERS[f.provider].style === 'ali'){
     if(!f.key){ out.textContent = '先填好 API Key'; return; }
     out.textContent = '正在连接…'; btn.disabled = true;
-    aliFetch('policy', '', {}, f.key, f.base, f.model).then(function(){
-      btn.disabled = false; out.textContent = '连接成功，Key 可以用。';
+    var base = f.base.replace(/\/+$/, ''), other = /intl/i.test(base) ? ALI_CN : ALI_INTL, otherName = other === ALI_INTL ? '国际版（新加坡）' : '国内版（北京）';
+    var altModel = f.model === 'paraformer-v2' ? 'fun-asr' : 'paraformer-v2';
+    function tryIt(b, m){ return aliFetch('policy', '', {}, f.key, b, m); }
+    function bad(err){ return err && (err.status === 401 || err.status === 403); }
+    tryIt(base, f.model).then(function(){
+      out.textContent = '连接成功，Key 可以用。';
     }, function(err){
-      btn.disabled = false; out.textContent = err && err.status ? aiErrMsg(err) : (err && err.message) || '连不上';
-    });
+      if(!bad(err)) throw err;
+      var first = aiErrMsg(err);
+      // 401：先看是不是地区不对（国内版和国际版的 Key 不通用），再看是不是这个模型在这个地区没开通
+      return tryIt(other, f.model).then(function(){
+        $('aiBase').value = other;
+        out.textContent = '这个 Key 是' + otherName + '的，接口地址不对。已经把接口地址改成 ' + other + '，点「保存」就行。';
+      }, function(){
+        return tryIt(base, altModel).then(function(){
+          out.textContent = 'Key 可以用，但「' + f.model + '」在这个地区没有开通。把模型改成「' + altModel + '」试试（或到百炼控制台开通 Fun-ASR）。';
+        }, function(){
+          out.textContent = first + '。国内版和国际版两个地址、两个模型我都试过了，这个 Key 都不行：请确认 Key 是在百炼控制台里复制的完整的一串，并且已经开通了语音识别（Fun-ASR / Paraformer）服务。';
+        });
+      });
+    }).catch(function(err){
+      out.textContent = err && err.status ? aiErrMsg(err) : (err && err.message) || '连不上';
+    }).then(function(){ btn.disabled = false; });
     return;
   }
   testConn(f, 'openai', AI_PROVIDERS[f.provider].testPath, out, btn);
@@ -3300,14 +3318,14 @@ function blobBase64(blob){
 /* ---- 向服务商发请求 ---- */
 function apiError(status, text){
   var msg = '';
-  try{ var j = JSON.parse(text); msg = (j.error && (j.error.message || j.error)) || j.message || ''; }catch(e){ msg = text || ''; }
+  try{ var j = JSON.parse(text); msg = (j.error && (j.error.message || j.error)) || j.message || ''; if(!j.error && j.code && typeof j.code === 'string') msg = j.code + '：' + msg; }catch(e){ msg = text || ''; }
   return {status:status, msg:String(msg).slice(0, 200)};
 }
 function aiErrMsg(err){
   if(err && err.cancelled) return '已停止';
   if(err && err.step) return err.step + '：' + aiErrMsg({status:err.status, msg:err.msg, message:err.message, name:err.name});
   var s = err && err.status;
-  if(s === 401 || s === 403) return 'API Key 不对或没有权限（' + s + '）' + (err.msg ? '：' + err.msg.slice(0, 80) : '');
+  if(s === 401 || s === 403) return 'API Key 不对或没有权限（' + s + '）' + (err.msg ? '：' + err.msg.slice(0, 120) : '') + (err.hint ? '。' + err.hint : '');
   if(s === 404) return '接口地址或模型名不对（404）';
   if(s === 413) return '音频段太大，服务商不收（413）';
   if(s === 429) return '请求太频繁，或额度用完了（429）';
@@ -3348,6 +3366,8 @@ function reqWhisper(blob, fmt, route, signal, verbose){
   });
 }
 /* ---- 阿里云百炼（Fun-ASR / Paraformer）：经自己的 Cloudflare 后台 functions/api/ali.js 转发 ---- */
+var ALI_CN = 'https://dashscope.aliyuncs.com/api/v1', ALI_INTL = 'https://dashscope-intl.aliyuncs.com/api/v1';
+var ALI_REGION_HINT = '国内版 Key 用 ' + ALI_CN + '，国际版（新加坡）Key 用 ' + ALI_INTL + '，两边的 Key 不通用；点「测试语音服务连接」会帮你查';
 function aliFetch(op, query, opt, key, base, model){
   opt = opt || {};
   opt.headers = Object.assign({'X-Ali-Key':key || ai.key}, opt.headers || {});
@@ -3399,7 +3419,13 @@ function reqAli(blob, fmt, signal, srcUrl){
       return poll(id, n + 1);
     });
   }
-  function step(name){ return function(err){ if(err && typeof err === 'object' && !err.cancelled && err.name !== 'AbortError') err.step = name; throw err; }; }
+  function step(name){ return function(err){
+    if(err && typeof err === 'object' && !err.cancelled && err.name !== 'AbortError'){
+      err.step = name;
+      if(err.status === 401 || err.status === 403) err.hint = ALI_REGION_HINT;
+    }
+    throw err;
+  }; }
   // 音频由手机直接传到百炼的临时存储（不经过 Cloudflare）。普通表单上传不会被跨域挡住，只是读不到回应，
   // 所以传完不判断结果；文件没传上去的话，下一步提交任务会报「找不到文件」。
   return (srcUrl ? Promise.resolve({url:srcUrl}) : aliFetch('policy', '', {signal:signal}).then(function(j){
