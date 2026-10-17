@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.30.1">
+<meta name="app-version" content="0.30.2">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -195,7 +195,11 @@ body.show-page:not(.playing) .list-scroll{padding-bottom:16px}
 .opt .time{flex:none;font-variant-numeric:tabular-nums;font-weight:600;color:var(--accent);margin-right:12px}
 .opt .grow{flex:1;min-width:0}
 li.has-edit{position:relative}
-.opt.mk{padding-right:54px}
+.opt.mk{padding-right:54px;align-items:flex-start}
+.opt.mk .time{padding-top:1px}
+.opt.mk .mk-note{display:-webkit-box}
+.opt.mk .mk-ctx{display:-webkit-box;-webkit-line-clamp:3;margin-top:3px;font-size:12px;line-height:1.5;color:var(--muted)}
+.mk-now{margin:8px 2px 0;font-size:12px;line-height:1.5;color:var(--muted)}
 .opt-edit{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:40px;height:40px;border:none;background:transparent;color:var(--muted);display:flex;align-items:center;justify-content:center;border-radius:50%}
 .opt-edit svg{width:20px;height:20px;fill:currentColor}
 .mini-cover{cursor:pointer}
@@ -514,6 +518,7 @@ input[type=file]{display:none}
     <div class="sheet-head"><h2 class="line1" id="markHead">收藏</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
     <div class="sheet-body">
       <input class="input" id="markNote" maxlength="100" placeholder="收藏原因（可以不填）" enterkeyhint="done">
+      <div class="mk-now clamp2" id="markCtx" hidden></div>
       <button class="btn primary block" id="bMarkSave">收藏这个时间点</button>
       <div class="sec" id="markListHead">这一集的收藏 · 点一下跳过去，长按删除</div>
       <ul class="opts" id="markList"></ul>
@@ -1208,13 +1213,30 @@ function renderOpts(ul, items){
 // records[key].marks = [{t:秒, note:'原因', created:时间}]
 var markAt = 0;
 function marksOf(key){ return (records[key] && records[key].marks) || []; }
+// 这个时间点所在或附近的文稿（有文稿才有）：取这一句，太短就接上后面几句，最多约 80 字
+function markContext(key, t){
+  var tr = trCache[key], segs = tr && tr.segments;
+  if(!segs || !segs.length) return '';
+  var i = -1;
+  for(var j = 0; j < segs.length && segs[j].t <= t + 1; j++) i = j;
+  if(i < 0){ if(segs[0].t - t > 30) return ''; i = 0; }                       // 在文稿开头之前一点
+  else if(t - segs[i].t > 90 && i === segs.length - 1) return '';             // 超出文稿覆盖的范围
+  var text = segs[i].text;
+  for(var k = i + 1; k < segs.length && text.length < 40 && k < i + 3; k++) text += segs[k].text;
+  return text.length > 80 ? text.slice(0, 80) + '…' : text;
+}
 function renderMarkList(ul, key, after){
   var list = marksOf(key).slice().sort(function(a, b){ return a.t - b.t; });
   ul.innerHTML = '';
+  // 有文稿但还没读进来：读好后再画一次（读进来之后 trCache 有了，不会重复）
+  if(list.length && hasTr[key] && !trCache[key]) trGet(key).then(function(r){ if(r && ul.isConnected) renderMarkList(ul, key, after); }, function(){});
   list.forEach(function(m){
     var li = el('li', 'has-edit'), b = el('button', 'opt mk');
     b.appendChild(el('span', 'time', fmt(m.t)));
-    b.appendChild(el('span', 'grow clamp2', m.note || '（没有写原因）'));
+    var g = el('span', 'grow'), ctx = markContext(key, m.t);
+    g.appendChild(el('span', 'mk-note clamp2', m.note || '（没有写原因）'));
+    if(ctx) g.appendChild(el('small', 'mk-ctx clamp2', ctx));   // 文稿里这个时间点附近的话，小字
+    b.appendChild(g);
     b.onclick = function(){
       var ep = findEp(key);
       if(!ep){ toast('文件缺失，点「＋」重新添加这一集'); return; }
@@ -1248,6 +1270,9 @@ $('bMark').onclick = function(){
   markAt = audio.currentTime;
   $('markHead').textContent = '收藏 ' + fmt(markAt);
   $('markNote').value = '';
+  function showCtx(){ var c = markContext(cur.key, markAt); $('markCtx').textContent = c; $('markCtx').hidden = !c; }
+  showCtx();
+  if(hasTr[cur.key] && !trCache[cur.key]) trGet(cur.key).then(showCtx, function(){});
   var n = renderMarkList($('markList'), cur.key, function(){ closeSheet('markSheet'); });
   $('markListHead').hidden = !n;
   openSheet('markSheet');
