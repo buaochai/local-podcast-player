@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.22.0">
+<meta name="app-version" content="0.22.1">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -3289,7 +3289,7 @@ var trEdit = false, trEditing = null;
 $('bTrEdit').onclick = function(){
   trEdit = !trEdit;
   $('bTrEdit').classList.toggle('on', trEdit);
-  toast(trEdit ? '点一段文字修改，改完再点笔退出' : '已退出修改');
+  toast(trEdit ? '点一段文字修改' : '已退出修改');
   if(!trEdit) trFollow(true);
   render();
 };
@@ -3337,7 +3337,8 @@ $('bTrEditSave').onclick = function(){
   Array.prototype.splice.apply(tr.segments, [i0, n].concat(segs));
   tr.edited = Date.now();
   closeSheet('trEditSheet');
-  trPut(tr).then(function(){ render(); toast('已保存修改'); }, function(){ toast('保存失败'); });
+  trEdit = false;   // 保存完就退出修改
+  trPut(tr).then(function(){ render(); trFollow(true); toast('已保存修改'); }, function(){ toast('保存失败'); });
 };
 
 // 把一句句的识别结果排成段落，并补上标点（只影响显示，存的原文不变）
