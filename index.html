@@ -2,8 +2,8 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="app-version" content="0.1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="app-version" content="0.2.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -23,17 +23,23 @@
   }
 }
 *{box-sizing:border-box}
-html,body{margin:0}
+/* 首页固定一屏：页面本身不滚动、不缩放，只有列表区域在内部滚动 */
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;touch-action:manipulation}
 body{
+  position:fixed; inset:0;
+  display:flex; flex-direction:column;
   background:var(--bg); color:var(--text);
   font:16px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;
-  padding:0 16px calc(24px + env(safe-area-inset-bottom));
+  padding:0 16px env(safe-area-inset-bottom);
   max-width:640px; margin:0 auto;
   -webkit-tap-highlight-color:transparent;
+  -webkit-user-select:none; user-select:none;
+  -webkit-text-size-adjust:100%;
 }
-header{display:flex;align-items:center;justify-content:space-between;padding:calc(12px + env(safe-area-inset-top)) 0 8px}
+header{flex:none;display:flex;align-items:center;justify-content:space-between;padding:calc(10px + env(safe-area-inset-top)) 0 6px}
 h1{font-size:20px;margin:0}
-.ver{font-size:12px;color:var(--muted)}
+.icon-btn{border:none;background:transparent;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--muted);margin-right:-8px}
+.icon-btn svg{width:24px;height:24px;fill:currentColor}
 button{font:inherit;color:inherit;cursor:pointer}
 .btn{
   border:1px solid var(--line); background:var(--card); border-radius:10px;
@@ -43,8 +49,8 @@ button{font:inherit;color:inherit;cursor:pointer}
 @media (prefers-color-scheme: dark){.btn.primary{color:#0d1f1a}}
 
 /* 播放器 */
-.player{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin:8px 0 16px}
-.now-title{font-weight:600;font-size:17px;word-break:break-all;min-height:26px}
+.player{flex:none;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin:4px 0 12px}
+.now-title{font-weight:600;font-size:17px;min-height:26px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .now-sub{color:var(--muted);font-size:13px;min-height:20px}
 .seek{width:100%;margin:12px 0 2px;accent-color:var(--accent)}
 .times{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
@@ -64,8 +70,14 @@ button{font:inherit;color:inherit;cursor:pointer}
 .speed.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
 
 /* 列表 */
-.bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:18px 0 8px}
-.bar h2{font-size:16px;margin:0}
+.bar{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px}
+.tabs{display:flex;background:var(--line);border-radius:10px;padding:3px;gap:2px}
+.tab{border:none;background:transparent;border-radius:8px;padding:5px 12px;font-size:15px;color:var(--muted)}
+.tab.on{background:var(--card);color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.bar .btn{min-height:36px;padding:5px 12px;font-size:15px}
+/* 只有这里可以滚动 */
+.panel{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:12px}
+.panel[hidden]{display:none}
 .list{list-style:none;margin:0;padding:0;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
 .list:empty{display:none}
 .item{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--line)}
@@ -83,7 +95,25 @@ button{font:inherit;color:inherit;cursor:pointer}
 .empty{color:var(--muted);text-align:center;padding:24px 8px;font-size:14px;background:var(--card);border:1px dashed var(--line);border-radius:14px}
 .tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .tools .btn{flex:1;min-width:120px}
-.note{font-size:12px;color:var(--muted);margin:8px 2px 0}
+
+/* 关于 */
+.sheet{position:fixed;inset:0;z-index:10;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center}
+.sheet[hidden]{display:none}
+.sheet-box{
+  background:var(--bg);width:100%;max-width:640px;max-height:88%;border-radius:18px 18px 0 0;
+  display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom);
+}
+.sheet-head{flex:none;display:flex;align-items:center;justify-content:space-between;padding:12px 16px 4px}
+.sheet-head h2{font-size:18px;margin:0}
+.sheet-body{overflow-y:auto;overscroll-behavior:contain;padding:4px 16px 20px;font-size:15px;-webkit-user-select:text;user-select:text}
+.sheet-body h3{font-size:15px;margin:18px 0 6px}
+.sheet-body ul{margin:0;padding-left:20px}
+.sheet-body li{margin:3px 0}
+.sheet-body p{margin:6px 0;color:var(--muted)}
+.ver-row{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:8px}
+.ver-row .ver-text{flex:1}
+.ver-row .ver-num{font-weight:600}
+.ver-row .ver-status{font-size:13px;color:var(--muted)}
 .toast{
   position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);
   background:var(--text);color:var(--bg);padding:8px 16px;border-radius:999px;font-size:14px;
@@ -96,7 +126,7 @@ input[type=file]{display:none}
 <body>
 <header>
   <h1>本地播客</h1>
-  <span class="ver" id="ver"></span>
+  <button class="icon-btn" id="bAbout" aria-label="关于"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-11h2V7h-2zm0 8h2v-6h-2z"/></svg></button>
 </header>
 
 <section class="player">
@@ -115,24 +145,60 @@ input[type=file]{display:none}
 </section>
 
 <div class="bar">
-  <h2>播放列表</h2>
+  <div class="tabs">
+    <button class="tab on" data-tab="queue" id="tabQueue">播放列表</button>
+    <button class="tab" data-tab="history" id="tabHistory">播放记录</button>
+  </div>
   <button class="btn primary" id="bAdd">＋ 添加音频</button>
 </div>
 <input type="file" id="fileInput" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.opus,.flac" multiple>
-<ul class="list" id="queue"></ul>
-<div class="empty" id="queueEmpty">播放列表是空的。网页不能直接读手机文件夹，每次打开后需要重新选择音频；听到哪里会自动记住。</div>
-
-<div class="bar">
-  <h2>播放记录</h2>
-</div>
-<ul class="list" id="history"></ul>
-<div class="empty" id="historyEmpty">还没有播放记录</div>
-<div class="tools">
-  <button class="btn" id="bExport">导出记录</button>
-  <button class="btn" id="bImport">导入记录</button>
-</div>
 <input type="file" id="importInput" accept=".json,application/json">
-<p class="note">播放记录存在浏览器里，清除浏览器数据会被删掉。建议时常「导出记录」存成文件，需要时再「导入记录」恢复。</p>
+
+<div class="panel" id="panelQueue">
+  <ul class="list" id="queue"></ul>
+  <div class="empty" id="queueEmpty">播放列表是空的。点「添加音频」从手机里选文件；听到哪里会自动记住。</div>
+</div>
+<div class="panel" id="panelHistory" hidden>
+  <ul class="list" id="history"></ul>
+  <div class="empty" id="historyEmpty">还没有播放记录</div>
+  <div class="tools">
+    <button class="btn" id="bExport">导出记录</button>
+    <button class="btn" id="bImport">导入记录</button>
+  </div>
+</div>
+
+<div class="sheet" id="about" hidden>
+  <div class="sheet-box" role="dialog" aria-label="关于">
+    <div class="sheet-head">
+      <h2>关于</h2>
+      <button class="icon-btn" id="bAboutClose" aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button>
+    </div>
+    <div class="sheet-body">
+      <div class="ver-row">
+        <div class="ver-text">
+          <div class="ver-num">本地播客 v<span id="ver"></span></div>
+          <div class="ver-status" id="verStatus">点右边按钮检查并更新到最新版本</div>
+        </div>
+        <button class="btn" id="bUpdate">刷新</button>
+      </div>
+
+      <h3>功能</h3>
+      <ul>
+        <li>从手机里选音频文件（mp3、m4a、aac、wav、ogg、opus、flac），可以一次选多个，按文件名排序</li>
+        <li>播放 / 暂停、后退 / 快进 15 秒、上一个 / 下一个，拖动进度条；播完自动接下一个</li>
+        <li>倍速 0.8x – 2x，会记住上次的选择</li>
+        <li>每个文件自动记住听到的位置，重新选回同一个文件会接着播放</li>
+        <li>「播放记录」里可以看到听过的文件、进度和最后收听时间</li>
+        <li>锁屏界面和耳机按钮可以控制播放</li>
+        <li>添加到主屏幕后像 App 一样打开，断网也能用</li>
+      </ul>
+
+      <h3>注意</h3>
+      <p>网页不能直接读手机文件夹，每次打开后要重新选择音频文件。同一个文件按「文件名 + 文件大小」识别。</p>
+      <p>播放记录存在浏览器里，清除浏览器数据会被删除。请时常在「播放记录」里点「导出记录」存成文件，需要时再「导入记录」恢复。</p>
+    </div>
+  </div>
+</div>
 
 <audio id="audio" preload="metadata"></audio>
 <div class="toast" id="toast"></div>
@@ -362,6 +428,7 @@ $('fileInput').addEventListener('change', function(e){
     queue.push({file:f, key:k, url:URL.createObjectURL(f)});
     added++;
   });
+  showTab('queue');
   if(added) toast('已添加 ' + added + ' 个文件');
   else toast('这些文件已经在列表里了');
   if(cur < 0 && queue.length){
@@ -501,8 +568,67 @@ $('importInput').addEventListener('change', function(e){
 document.addEventListener('visibilitychange', function(){ if(document.hidden) recordNow(true); });
 window.addEventListener('pagehide', function(){ recordNow(true); });
 
+/* ---------- 列表切换 ---------- */
+function showTab(name){
+  $('tabQueue').classList.toggle('on', name === 'queue');
+  $('tabHistory').classList.toggle('on', name === 'history');
+  $('panelQueue').hidden = name !== 'queue';
+  $('panelHistory').hidden = name !== 'history';
+}
+$('tabQueue').onclick = function(){ showTab('queue'); };
+$('tabHistory').onclick = function(){ showTab('history'); };
+
+/* ---------- 关于 / 更新 ---------- */
+var VERSION = document.querySelector('meta[name="app-version"]').content;
+$('bAbout').onclick = function(){ $('about').hidden = false; };
+$('bAboutClose').onclick = function(){ $('about').hidden = true; };
+$('about').addEventListener('click', function(e){ if(e.target === this) this.hidden = true; });
+
+function newer(a, b){ // a 比 b 新？
+  var x = a.split('.').map(Number), y = b.split('.').map(Number);
+  for(var i = 0; i < Math.max(x.length, y.length); i++){
+    if((x[i]||0) !== (y[i]||0)) return (x[i]||0) > (y[i]||0);
+  }
+  return false;
+}
+function reloadFresh(){
+  recordNow(true);
+  var jobs = [];
+  if(window.caches) jobs.push(caches.keys().then(function(ks){ return Promise.all(ks.map(function(k){ return caches.delete(k); })); }));
+  if('serviceWorker' in navigator) jobs.push(navigator.serviceWorker.getRegistration().then(function(r){ return r && r.update(); }));
+  Promise.all(jobs).catch(function(){}).then(function(){ location.reload(); });
+}
+$('bUpdate').onclick = function(){
+  var st = $('verStatus'), btn = this;
+  st.textContent = '正在检查…'; btn.disabled = true;
+  fetch('index.html?t=' + Date.now(), {cache:'no-store'}).then(function(res){
+    if(!res.ok) throw new Error(res.status);
+    return res.text();
+  }).then(function(html){
+    var m = html.match(/name="app-version" content="([^"]+)"/);
+    var latest = m ? m[1] : '';
+    btn.disabled = false;
+    if(!latest || !newer(latest, VERSION)){ st.textContent = '已经是最新版本'; return; }
+    if(queue.length && !confirm('有新版本 v' + latest + '。更新会重新打开网页，需要重新选择音频（听到的位置会保留）。现在更新吗？')){
+      st.textContent = '有新版本 v' + latest + '，点「刷新」更新'; return;
+    }
+    st.textContent = '正在更新到 v' + latest + '…';
+    reloadFresh();
+  }).catch(function(){
+    btn.disabled = false;
+    st.textContent = '连不上网络，暂时无法检查更新';
+  });
+};
+
+/* ---------- 禁止缩放 ---------- */
+// iOS Safari 不认 user-scalable=no，要另外拦截双指缩放
+['gesturestart','gesturechange','gestureend'].forEach(function(ev){
+  document.addEventListener(ev, function(e){ e.preventDefault(); }, {passive:false});
+});
+document.addEventListener('touchmove', function(e){ if(e.touches.length > 1) e.preventDefault(); }, {passive:false});
+
 /* ---------- 启动 ---------- */
-$('ver').textContent = 'v' + document.querySelector('meta[name="app-version"]').content;
+$('ver').textContent = VERSION;
 renderSpeeds(); renderQueue(); renderHistory();
 
 if('serviceWorker' in navigator && location.protocol !== 'file:'){
