@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.29.0">
+<meta name="app-version" content="0.30.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -57,6 +57,7 @@ header{flex:none;display:flex;align-items:center;gap:4px;padding:calc(10px + env
 header h1{flex:1;min-width:0;font-size:22px;margin:0}
 #bBack{margin-left:-10px;color:var(--text)}
 header .icon-btn.add{color:var(--accent)}
+header .icon-btn{width:38px}
 header .icon-btn:last-child{margin-right:-8px}
 
 /* 内容区（唯一可以滚动的地方） */
@@ -262,6 +263,24 @@ select.input{appearance:auto;-webkit-appearance:menulist}
 .slide-row.single + .ticks{margin:0 14px 6px}
 .ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}
 .pills{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 4px}
+.pills.g4{display:grid;grid-template-columns:repeat(4,1fr);margin:10px 0 4px}
+.pills.g4 .pill{padding:9px 0;text-align:center;white-space:nowrap}
+/* 收藏：专辑 → 集 → 时间点 */
+.fav-cover{width:48px;height:48px;border-radius:8px;object-fit:cover;flex:none;background:var(--line)}
+.fav-chev{flex:none;display:flex;color:var(--muted)}
+.fav-chev svg{width:22px;height:22px;fill:currentColor}
+.fav-sub{font-size:13px;color:var(--muted);margin:0 2px 10px}
+/* 定时关闭：像设置闹钟那样上下滑动选「几小时几分钟」 */
+.wheels{position:relative;display:flex;justify-content:center;gap:10px;margin:6px 0 12px}
+.wheels::before{content:'';position:absolute;left:10%;right:10%;top:80px;height:40px;border-radius:10px;background:var(--accent-soft)}
+.wheel-col{position:relative;display:flex;align-items:center;gap:4px}
+.wheel{height:200px;width:76px;box-sizing:border-box;padding:80px 0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scroll-snap-type:y mandatory;scrollbar-width:none;
+  -webkit-mask-image:linear-gradient(transparent,#000 28%,#000 72%,transparent);mask-image:linear-gradient(transparent,#000 28%,#000 72%,transparent)}
+.wheel::-webkit-scrollbar{display:none}
+.wheel div{height:40px;line-height:40px;text-align:center;font-size:22px;color:var(--muted);scroll-snap-align:center;font-variant-numeric:tabular-nums}
+.wheel div.on{color:var(--accent);font-weight:700}
+.wheel-unit{font-size:15px;color:var(--muted)}
+.sleep-now{color:var(--accent);font-weight:600;margin-top:-2px}
 .pill{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 14px;font-size:15px;font-variant-numeric:tabular-nums}
 .pill.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:600}
 .dump{font:12px/1.55 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0;max-height:48vh;overflow:auto;-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
@@ -312,6 +331,7 @@ input[type=file]{display:none}
   <button class="txt-btn" id="bSel" hidden>选择</button>
   <button class="txt-btn" id="bSelAll" hidden>全选</button>
   <button class="txt-btn" id="bSelDone" hidden>完成</button>
+  <button class="icon-btn" id="bFav" aria-label="收藏" hidden><svg viewBox="0 0 24 24"><path d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2zm0 15-5-2.18L7 18V5h10z"/></svg></button>
   <button class="icon-btn" id="bRss" aria-label="订阅播客" hidden><svg viewBox="0 0 24 24"><path d="M6.18 15.64a2.18 2.18 0 1 1 0 4.36 2.18 2.18 0 0 1 0-4.36zM4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27zm0 5.66A9.9 9.9 0 0 1 13.9 20h-2.83A7.07 7.07 0 0 0 4 12.93z"/></svg></button>
   <button class="icon-btn" id="bNewAlbum" aria-label="新建专辑" hidden><svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"/></svg></button>
   <button class="icon-btn add" id="bAdd" aria-label="添加音频"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg></button>
@@ -365,7 +385,7 @@ input[type=file]{display:none}
         <button class="btn" id="speedPlus" aria-label="快一点">＋</button>
       </div>
       <div class="ticks" id="speedTicks"></div>
-      <div class="pills" id="speedPills"></div>
+      <div class="pills g4" id="speedPills"></div>
     </div>
   </div>
 </div>
@@ -376,12 +396,15 @@ input[type=file]{display:none}
     <div class="sheet-head"><h2>定时关闭</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
     <div class="sheet-body">
       <div class="slide-big" id="sleepBig">30 分钟</div>
-      <div class="slide-sub" id="sleepSub">左右滑动选择多久后暂停播放</div>
-      <div class="slide-row single"><input type="range" class="slider" id="sleepRange" min="5" max="180" step="5" value="30"></div>
-      <div class="ticks" id="sleepTicks"></div>
+      <div class="slide-sub" id="sleepSub"></div>
+      <div class="slide-sub sleep-now" id="sleepNow" hidden></div>
+      <div class="wheels">
+        <div class="wheel-col"><div class="wheel" id="wheelH"></div><span class="wheel-unit">小时</span></div>
+        <div class="wheel-col"><div class="wheel" id="wheelM"></div><span class="wheel-unit">分钟</span></div>
+      </div>
       <button class="btn primary block" id="bSleepStart">开始定时</button>
       <div class="sec">快捷</div>
-      <ul class="opts" id="sleepOpts"></ul>
+      <div class="pills g4" id="sleepPills"></div>
     </div>
   </div>
 </div>
@@ -613,7 +636,7 @@ input[type=file]{display:none}
         <li>底部悬浮播放器：上一集 / 下一集、后退 / 快进 15 秒、拖动进度条</li>
         <li>点「1x」选播放速度，点月亮设置定时关闭（按时间或播完本集）</li>
         <li>每一集的「!」→「AI 转文字」可以识别成文字（需要自己的 API Key），点一句话就跳到那里播放；多选后点「转文字」、或长按专辑 →「AI 转文字」可以整批识别</li>
-        <li>点书签按钮收藏当前时间点，可以写上收藏原因；之后点一下就能跳回那里</li>
+        <li>点书签按钮收藏当前时间点，可以写上收藏原因；之后点一下就能跳回那里。首页右上角的书签图标是收藏入口：专辑 → 集 → 收藏的时间点和备注</li>
         <li>首页右上角的文件夹按钮可以新建专辑；选中集后点「移动到专辑」；长按专辑封面可以重命名或删除</li>
         <li>专辑页的「编辑」可以改专辑名称和创作者，创作者显示在锁屏和通知栏的播放信息里</li>
         <li>每一集自动记住听到的位置</li>
@@ -1146,7 +1169,7 @@ Array.prototype.forEach.call(document.querySelectorAll('.sheet'), function(sh){
   if(!box) return;
   box.addEventListener('touchstart', function(e){
     on = false; dy = 0;
-    if(e.touches.length !== 1 || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    if(e.touches.length !== 1 || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.closest('.wheel')) return;   // 滚轮里往下滑是选时间，不是关面板
     var sc = e.target.closest('.sheet-body');
     if(sc && sc.scrollTop > 0) return;
     y0 = e.touches[0].clientY; on = true;
@@ -1418,34 +1441,67 @@ function fmtMin(m){
   var h = Math.floor(m / 60), r = m % 60;
   return h + ' 小时' + (r ? ' ' + r + ' 分钟' : '');
 }
-function showSleepPick(){ $('sleepBig').textContent = fmtMin(+$('sleepRange').value); }
-function showSleepSub(){
-  $('sleepSub').textContent = sleep && sleep.episode ? '现在：本集播完后暂停'
-    : sleep && sleep.end ? '现在：还剩 ' + fmt((sleep.end - Date.now()) / 1000) + ' 后暂停'
-    : '左右滑动选择多久后暂停播放';
-  $('bSleepStart').textContent = sleep ? '重新设置' : '开始定时';
+/* 滚轮：每项 40px，往上滑到哪一项就选哪一项（scroll-snap 会自动吸附） */
+var WHEEL_H = 40;
+function buildWheel(id, count){
+  var w = $(id); w.innerHTML = '';
+  for(var i = 0; i < count; i++){
+    var d = el('div', null, String(i));
+    d.onclick = (function(n){ return function(){ w.scrollTo({top:n * WHEEL_H, behavior:'smooth'}); }; })(i);
+    w.appendChild(d);
+  }
+  var tm = 0;
+  w.addEventListener('scroll', function(){
+    markWheel(w);
+    clearTimeout(tm); tm = setTimeout(showSleepPick, 80);
+  }, {passive:true});
 }
-buildTicks($('sleepTicks'), [5, 30, 60, 90, 120, 150, 180], 5, 180, function(v){ return v; });
-$('sleepRange').addEventListener('input', showSleepPick);
+function wheelVal(id){
+  var w = $(id);
+  return Math.max(0, Math.min(w.children.length - 1, Math.round(w.scrollTop / WHEEL_H)));
+}
+function markWheel(w){
+  var v = Math.max(0, Math.min(w.children.length - 1, Math.round(w.scrollTop / WHEEL_H)));
+  Array.prototype.forEach.call(w.children, function(d, i){ d.classList.toggle('on', i === v); });
+}
+function setWheel(id, v){ var w = $(id); w.scrollTop = v * WHEEL_H; markWheel(w); }
+function clockOf(ts){ var d = new Date(ts); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+function wheelMin(){ return wheelVal('wheelH') * 60 + wheelVal('wheelM'); }
+function showSleepPick(){
+  var m = wheelMin();
+  $('sleepBig').textContent = m ? fmtMin(m) : '请选择时间';
+  $('sleepSub').textContent = m ? '到 ' + clockOf(Date.now() + m * 60000) + ' 暂停播放' : '上下滑动选择几小时几分钟';
+  $('bSleepStart').textContent = sleep ? '重新设置' : '开始定时';
+  $('bSleepStart').disabled = !m;
+}
+buildWheel('wheelH', 13);   // 0–12 小时
+buildWheel('wheelM', 60);   // 0–59 分钟
 $('bSleepStart').onclick = function(){
-  var m = +$('sleepRange').value;
+  var m = wheelMin();
+  if(!m) return;
   settings.sleepMin = m; saveSettings();
   setSleep(m); closeSheet('sleepSheet');
-  toast(fmtMin(m) + '后暂停');
+  toast(fmtMin(m) + '后暂停（' + clockOf(Date.now() + m * 60000) + '）');
 };
 $('bSleep').onclick = function(){
-  $('sleepRange').value = settings.sleepMin || 30;
-  showSleepPick(); showSleepSub();
-  renderOpts($('sleepOpts'), SLEEPS.map(function(v){
+  openSheet('sleepSheet');
+  // 面板显示出来之后才能设滚动位置
+  var m = settings.sleepMin || 30;
+  setWheel('wheelH', Math.min(12, Math.floor(m / 60))); setWheel('wheelM', m % 60);
+  showSleepPick();
+  $('sleepNow').hidden = !sleep;   // 已经在定时：写明现在的状态
+  if(sleep) $('sleepNow').textContent = sleep.episode ? '现在：本集播完后暂停' : '现在：还剩 ' + fmt((sleep.end - Date.now()) / 1000) + ' 后暂停';
+  var pills = $('sleepPills'); pills.innerHTML = '';
+  SLEEPS.forEach(function(v){
     var on = v === 0 ? !sleep : v === 'episode' ? !!(sleep && sleep.episode) : false;
-    var label = v === 0 ? '不定时' : v === 'episode' ? '播完本集' : v + ' 分钟';
-    if(v === 0 && sleep) label = '取消定时' + (sleep.end ? '（还剩 ' + fmt((sleep.end - Date.now()) / 1000) + '）' : '');
-    return {label: label, on: on, pick: function(){
+    var label = v === 0 ? (sleep ? '取消定时' : '不定时') : v === 'episode' ? '播完本集' : v + ' 分钟';
+    var b = el('button', 'pill' + (on ? ' on' : ''), label);
+    b.onclick = function(){
       setSleep(v); closeSheet('sleepSheet');
       if(v) toast(v === 'episode' ? '本集播完后暂停' : v + ' 分钟后暂停');
-    }};
-  }));
-  openSheet('sleepSheet');
+    };
+    pills.appendChild(b);
+  });
 };
 
 /* ---------- 锁屏 / 通知栏 ---------- */
@@ -2244,17 +2300,26 @@ function goShow(name){
   var f = feedOfShow(name);
   if(f && Date.now() - (f.fetched || 0) > 1800000) refreshFeed(f.url).catch(function(){});
 }
+// 收藏：lvl = 'albums'（有收藏的专辑）→ 'show'（这个专辑里有收藏的集）→ 'ep'（这一集的收藏时间点）
+function goFav(lvl, data){
+  var d0 = (history.state && history.state.d) || 0;
+  history.pushState({fav:lvl, show:data && data.show, key:data && data.key, d:d0 + 1}, '');
+  view = {page:'fav', lvl:lvl, show:data && data.show, key:data && data.key};
+  $('view').scrollTop = 0;
+  render();
+}
 function goHome(){
-  if(history.state && (history.state.show || history.state.ep)) history.back();
+  if(history.state && (history.state.show || history.state.ep || history.state.fav)) history.back();
   else { view = {page:'home'}; render(); }
 }
 window.addEventListener('popstate', function(e){
   var st = e.state;
-  view = st && st.ep ? {page:'ep', key:st.ep} : st && st.show ? {page:'show', show:st.show} : {page:'home'};
+  view = st && st.fav ? {page:'fav', lvl:st.fav, show:st.show, key:st.key} : st && st.ep ? {page:'ep', key:st.ep} : st && st.show ? {page:'show', show:st.show} : {page:'home'};
   if(view.page === 'ep') loadTr(view.key);
   render();
 });
 $('bBack').onclick = goHome;
+$('bFav').onclick = function(){ goFav('albums'); };
 // 首页：一路退回最底下（文稿页可能是从专辑页进来的，也可能是从首页搜索直接进来的）
 $('bHome').onclick = function(){
   var n = (history.state && history.state.d) || 0;
@@ -2273,47 +2338,105 @@ function render(){
     view = {page:'home'};
   }
   var box = $('view'), sc = box.querySelector('.list-scroll');
-  var home = view.page === 'home', isEp = view.page === 'ep';
-  var pageKey = home ? 'home' : isEp ? 'ep:' + view.key : 'show:' + view.show;
+  var home = view.page === 'home', isEp = view.page === 'ep', isFav = view.page === 'fav';
+  var pageKey = home ? 'home' : isEp ? 'ep:' + view.key : isFav ? 'fav:' + view.lvl + ':' + (view.show || view.key || '') : 'show:' + view.show;
   // 重画时保持滚动位置；换了页面就回到顶部
   var samePage = pageKey === renderedKey;
   if(pageKey !== renderedKey){ selMode = false; selKeys = {}; }   // 换了页面就退出多选
   var top = pageKey !== renderedKey ? 0 : sc ? sc.scrollTop : box.scrollTop;
   renderedKey = pageKey;
-  var nKeys = home || isEp ? 0 : episodeKeys(view.show).length;
+  var nKeys = home || isEp || isFav ? 0 : episodeKeys(view.show).length;
   var selecting = selMode && !home && !isEp && nKeys > 0;
   if(!selecting && selMode){ selMode = false; selKeys = {}; }
   $('bBack').hidden = home || selecting;
-  $('bNewAlbum').hidden = !home; $('bRss').hidden = !home;
+  $('bNewAlbum').hidden = !home; $('bRss').hidden = !home; $('bFav').hidden = !home;
   $('bSearch').hidden = !home;
   if(!home && searchOpen) closeSearch(true);
   document.querySelector('header').classList.toggle('searching', searchOpen);
   $('bSel').hidden = home || isEp || selecting || !nKeys;
   $('bEpMore').hidden = !isEp; $('bHome').hidden = !isEp;
   $('bSelAll').hidden = !selecting; $('bSelDone').hidden = !selecting;
-  $('bAdd').hidden = selecting || isEp; $('bAbout').hidden = selecting || isEp;
+  $('bAdd').hidden = selecting || isEp || isFav; $('bAbout').hidden = selecting || isEp || isFav;
   $('selBar').hidden = !selecting;
   document.body.classList.toggle('selecting', selecting);
   showTrJob();
   $('bSelMove').disabled = $('bSelDel').disabled = $('bSelTr').disabled = !selCount();
   $('bSelAll').textContent = selCount() >= nKeys ? '取消全选' : '全选';
-  $('title').textContent = home ? '播客节目' : isEp ? '' : selecting ? '已选 ' + selCount() + ' 集' : '';
+  $('title').textContent = home ? '播客节目' : isEp ? '' : isFav ? (view.lvl === 'albums' ? '收藏' : view.lvl === 'show' ? view.show : titleOf(view.key)) : selecting ? '已选 ' + selCount() + ' 集' : '';
   document.body.classList.toggle('ep-page', isEp);
   document.body.classList.toggle('show-page', !home && !isEp);
   if(!isEp) trEdit = false;
   if(!home) openSeries = {};   // 离开首页，展开的分季专辑收起来
   // 专辑页：播放时每几秒会重画一次，顶部封面那块没变就原样留着，不拆掉重建（拆了会闪）
-  var keepHead = !home && !isEp && samePage ? box.querySelector('.pod-head') : null;
+  var keepHead = !home && !isEp && !isFav && samePage ? box.querySelector('.pod-head') : null;
   Array.prototype.slice.call(box.children).forEach(function(c){ if(c !== keepHead) box.removeChild(c); });
   if(!keepHead) box.innerHTML = '';
   box.classList.remove('fixed');
   box._keepHead = keepHead;
-  if(home && searchOpen && searchQ.trim()) renderSearch(box); else if(home) renderHome(box); else if(isEp) renderEp(box); else renderShow(box);
+  if(home && searchOpen && searchQ.trim()) renderSearch(box); else if(home) renderHome(box); else if(isEp) renderEp(box); else if(isFav) renderFav(box); else renderShow(box);
   sc = box.querySelector('.list-scroll');
   if(sc) sc.scrollTop = top; else box.scrollTop = top;
   renderMini();
   if(isEp) trTick(true, pageKey !== lastEpKey);
   lastEpKey = pageKey;
+}
+/* ---------- 收藏页：专辑 → 集 → 时间点 ---------- */
+var FAV_CHEV = '<svg viewBox="0 0 24 24"><path d="M9.4 6 8 7.4 12.6 12 8 16.6 9.4 18l6-6z"/></svg>';
+function favAlbums(){
+  var map = {};
+  Object.keys(records).forEach(function(k){
+    var ms = records[k].marks;
+    if(!ms || !ms.length) return;
+    var name = showOf(k), a = map[name] || (map[name] = {name:name, keys:[], n:0, last:0});
+    a.keys.push(k); a.n += ms.length;
+    ms.forEach(function(m){ if((m.created || 0) > a.last) a.last = m.created || 0; });
+  });
+  return Object.keys(map).map(function(n){ return map[n]; }).sort(function(a, b){ return b.last - a.last; });
+}
+function favRow(img, name, meta, onclick){
+  var li = el('li', 'item');
+  if(img) li.appendChild(img);
+  var main = el('div', 'item-main');
+  main.appendChild(el('div', 'item-name clamp2', name));
+  main.appendChild(el('div', 'item-meta line1', meta));
+  li.appendChild(main);
+  var cv = el('span', 'fav-chev'); cv.innerHTML = FAV_CHEV; li.appendChild(cv);
+  li.onclick = onclick;
+  return li;
+}
+function renderFav(box){
+  box.classList.add('fixed');
+  var sc = el('div', 'list-scroll'), lvl = view.lvl;
+  if(lvl === 'albums'){
+    var albums = favAlbums();
+    if(!albums.length) sc.appendChild(el('div', 'empty', '还没有收藏。播放时点播放器上的书签按钮，就能收藏当前时间点。'));
+    else{
+      var ul = el('ul', 'list');
+      albums.forEach(function(a){
+        var img = el('img', 'fav-cover'); img.alt = ''; img.src = coverOf(a.name);
+        ul.appendChild(favRow(img, a.name, a.keys.length + ' 集 · ' + a.n + ' 个收藏', function(){ goFav('show', {show:a.name}); }));
+      });
+      sc.appendChild(ul);
+    }
+  }else if(lvl === 'show'){
+    var keys = episodeKeys(view.show).filter(function(k){ return marksOf(k).length; });
+    if(!keys.length) sc.appendChild(el('div', 'empty', '这个专辑里没有收藏了。'));
+    else{
+      var ul2 = el('ul', 'list');
+      keys.forEach(function(k){
+        var ms = marksOf(k), last = ms.reduce(function(t, m){ return Math.max(t, m.created || 0); }, 0);
+        ul2.appendChild(favRow(null, titleOf(k), ms.length + ' 个收藏' + (last ? ' · ' + fmtDate(last) : ''), function(){ goFav('ep', {key:k}); }));
+      });
+      sc.appendChild(ul2);
+    }
+  }else{
+    var key = view.key, n = marksOf(key).length;
+    sc.appendChild(el('div', 'fav-sub line1', showOf(key) + (n ? ' · ' + n + ' 个收藏' : '')));
+    var ul3 = el('ul', 'opts');
+    if(renderMarkList(ul3, key, null)) sc.appendChild(ul3);
+    else sc.appendChild(el('div', 'empty', '这一集没有收藏了。'));
+  }
+  box.appendChild(sc);
 }
 /* ---------- 搜索（首页右上角放大镜，向左展开输入框）---------- */
 var searchOpen = false, searchQ = '', searchTimer = null, trAllReady = false, trAllLoading = false;
