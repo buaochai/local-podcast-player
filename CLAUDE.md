@@ -8,7 +8,7 @@
 - 同名 CSS 类会冲突（例如 `.toast.show`），新增类名前先搜索一下。
 - 顶部提示、标题等文字最多两行（`.clamp2`），信息行一行（`.line1`）。
 - 使用者已授权：每次改完测试通过后，直接推送并合并到 `main` 发布，不用再问。
-- 专辑页：单集右边的「!」打开详情菜单 `showEpMenu`；长按或「选择」进入多选（`selMode` / `selKeys`），底部 `.selbar` 操作。
+- 专辑页：「编辑」旁边是排序按钮（「顺序」/「倒序」，按专辑存在 `settings.rev[专辑]`，只改 `renderShow` 的显示顺序，`episodeKeys`、位置号、上一集/下一集不变）；单集右边的「!」打开详情菜单 `showEpMenu`；长按或「选择」进入多选（`selMode` / `selKeys`），底部 `.selbar` 操作。
 - 锁屏信息（`setMediaSession`）：封面用 `artFor`（本集封面 > 专辑封面，data 链接要转 blob），创作者用 `authorOf`（`shows[专辑].author` > 标签艺术家）。网页无法在锁屏加自定义按钮，只能给 `nexttrack` 换功能（设置 `nextMark`）。
 - 「未分类」(`OTHER`) 不显示、也不存任何封面（`coverInfo` 直接返回 null）。
 - AI 文稿：配置在 `lpp.ai.v1`（含 API Key，不进导出文件，但会加密进云同步），语音识别用 `AI_PROVIDERS`，分章节用的文本模型放在 `ai.chat`（`LLM_PROVIDERS`，`llmCall` 分 Claude 的 /v1/messages 和 OpenAI 兼容的 /chat/completions 两种；Claude 浏览器直连必须带 `anthropic-dangerous-direct-browser-access: true`，且不要传 temperature）。章节存在文稿记录的 `chapters:[{t,title}]` 里（`chapterize` / `parseChapters`）。两种请求：`reqWhisper`（/audio/transcriptions，multipart）和 `reqChat`（/chat/completions + input_audio）。切段：`mp3Plan`（按帧）、`mp4Plan`/`buildM4a`（重新封装 m4a）、`toWav`（转 16k 单声道）。不要用正则后行断言（旧 Safari 不认）。`ai.maxSec` 是调试用的隐藏项（强制每段最长秒数）。

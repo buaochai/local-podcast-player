@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.28.3">
+<meta name="app-version" content="0.29.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -2523,6 +2523,17 @@ function renderShow(box){
   var eb = el('button', 'btn', '编辑');
   eb.onclick = function(){ editAlbum(view.show); };
   acts.appendChild(eb);
+  // 排序：默认「顺序」，可以切成「倒序」（每个专辑各自记住；只改显示，上一集 / 下一集照旧按顺序）
+  var rev = !!(settings.rev && settings.rev[view.show]);
+  var sb = el('button', 'btn', rev ? '倒序' : '顺序');
+  sb.setAttribute('aria-label', '切换排序');
+  sb.onclick = function(){
+    var m = settings.rev = settings.rev || {};
+    if(m[view.show]) delete m[view.show]; else m[view.show] = true;
+    saveSettings(); render();
+    var sc = $('view').querySelector('.list-scroll'); if(sc) sc.scrollTop = 0;
+  };
+  acts.appendChild(sb);
   info.appendChild(acts);
   head.appendChild(info);
   box.classList.add('fixed');
@@ -2533,7 +2544,10 @@ function renderShow(box){
   var scroll = el('div', 'list-scroll');
 
   var ul = el('ul', 'list');
-  keys.forEach(function(k, idx){
+  var order = keys.map(function(k, i){ return [k, i]; });
+  if(rev) order.reverse();
+  order.forEach(function(ki){
+    var k = ki[0], idx = ki[1];
     var ep = findEp(k), r = records[k];
     var li = el('li', 'item' + (ep && ep === cur ? ' cur' : '') + (ep ? '' : ' missing') + (selMode && selKeys[k] ? ' sel' : ''));
     if(selMode) li.appendChild(el('span', 'chk' + (selKeys[k] ? ' on' : '')));
