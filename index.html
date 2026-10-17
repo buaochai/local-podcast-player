@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.12.0">
+<meta name="app-version" content="0.13.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -172,8 +172,13 @@ body.selecting .list-scroll{padding-bottom:90px}
 .sec{font-size:13px;color:var(--muted);margin:16px 2px 6px}
 .opt .time{flex:none;font-variant-numeric:tabular-nums;font-weight:600;color:var(--accent);margin-right:12px}
 .opt .grow{flex:1;min-width:0}
-.sheet-box.tall{height:88%}
-.sheet-box.tall .sheet-body{flex:1;min-height:0}
+li.has-edit{position:relative}
+.opt.mk{padding-right:54px}
+.opt-edit{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:40px;height:40px;border:none;background:transparent;color:var(--muted);display:flex;align-items:center;justify-content:center;border-radius:50%}
+.opt-edit svg{width:20px;height:20px;fill:currentColor}
+.mini-cover{cursor:pointer}
+.ep-top{flex:none;position:relative}
+.ep-sub{font-size:13px;color:var(--muted);margin:0 2px 6px}
 .check{display:flex;gap:8px;align-items:flex-start;margin:12px 2px 0;font-size:14px;color:var(--muted)}
 .check input{margin-top:4px;flex:none}
 select.input{appearance:auto;-webkit-appearance:menulist}
@@ -183,7 +188,7 @@ select.input{appearance:auto;-webkit-appearance:menulist}
 .tr-prog i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s}
 .tr-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
 .tr-actions .btn{flex:1;min-width:110px}
-.tr-list{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+.tr-list{margin-top:2px;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 .tr-list[hidden]{display:none}
 .seg{display:flex;gap:10px;padding:10px 12px;border-top:1px solid var(--line);font-size:15px;line-height:1.6}
 .seg:first-child{border-top:none}
@@ -229,6 +234,7 @@ input[type=file]{display:none}
   <button class="icon-btn" id="bBack" aria-label="返回" hidden><svg viewBox="0 0 24 24"><path d="M15.4 5.4 14 4l-8 8 8 8 1.4-1.4L8.8 12z"/></svg></button>
   <h1 id="title" class="line1">播客节目</h1>
   <button class="txt-btn" id="bTrJob" hidden></button>
+  <button class="icon-btn" id="bEpMore" aria-label="更多" hidden><svg viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg></button>
   <button class="txt-btn" id="bSel" hidden>选择</button>
   <button class="txt-btn" id="bSelAll" hidden>全选</button>
   <button class="txt-btn" id="bSelDone" hidden>完成</button>
@@ -362,16 +368,11 @@ input[type=file]{display:none}
   </div>
 </div>
 
-<!-- AI 文稿 -->
-<div class="sheet" id="trSheet" hidden>
-  <div class="sheet-box tall" role="dialog" aria-label="AI 文稿">
-    <div class="sheet-head"><h2 class="clamp2" id="trTitle">AI 文稿</h2><button class="icon-btn" id="trPlay" aria-label="播放或暂停"><svg viewBox="0 0 24 24" id="trPlayIcon"><path d="M8 5v14l11-7z"/></svg></button><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
-    <div class="sheet-body">
-      <div class="tr-status" id="trStatus"></div>
-      <div class="tr-prog" id="trProg" hidden><i id="trProgBar"></i></div>
-      <div class="tr-actions" id="trActions"></div>
-      <div class="tr-list" id="trList" hidden></div>
-    </div>
+<!-- 文稿页的更多操作 -->
+<div class="sheet" id="trMoreSheet" hidden>
+  <div class="sheet-box" role="dialog" aria-label="文稿">
+    <div class="sheet-head"><h2>文稿</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
+    <div class="sheet-body"><ul class="opts" id="trMoreOpts"></ul></div>
   </div>
 </div>
 
@@ -811,6 +812,9 @@ function open(ep, autoplay, at){
   audio.load();
   if(startAt > 0 && autoplay && at == null) toast('从 ' + fmt(startAt) + ' 继续');
   setMediaSession();
+  if(view.page === 'ep' && view.key !== ep.key){   // 文稿页跟着正在播放的这一集走
+    view.key = ep.key; history.replaceState({ep:ep.key}, ''); loadTr(ep.key);
+  }
   render();
 }
 function stopPlayer(){
@@ -892,7 +896,8 @@ $('bRew').onclick = function(){ skip(-SKIP); };
 $('bFwd').onclick = function(){ skip(SKIP); };
 $('bPrev').onclick = prev;
 $('bNext').onclick = next;
-$('miniInfo').onclick = function(){ if(cur) goShow(cur.show); };
+$('miniInfo').onclick = function(){ if(cur) goEp(cur.key); };
+$('miniCover').onclick = function(){ if(cur) goEp(cur.key); };
 
 function renderMini(){
   $('mini').hidden = !cur;
@@ -936,7 +941,7 @@ function renderMarkList(ul, key, after){
   var list = marksOf(key).slice().sort(function(a, b){ return a.t - b.t; });
   ul.innerHTML = '';
   list.forEach(function(m){
-    var li = el('li'), b = el('button', 'opt');
+    var li = el('li', 'has-edit'), b = el('button', 'opt mk');
     b.appendChild(el('span', 'time', fmt(m.t)));
     b.appendChild(el('span', 'grow clamp2', m.note || '（没有写原因）'));
     b.onclick = function(){
@@ -951,9 +956,20 @@ function renderMarkList(ul, key, after){
       if(i >= 0) arr.splice(i, 1);
       saveRecords(); renderMarkList(ul, key, after); renderMini(); render();
     });
-    li.appendChild(b); ul.appendChild(li);
+    var ed = el('button', 'opt-edit');
+    ed.setAttribute('aria-label', '修改收藏原因');
+    ed.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
+    ed.onclick = function(e){ e.stopPropagation(); editMarkNote(key, m, function(){ renderMarkList(ul, key, after); }); };
+    li.appendChild(b); li.appendChild(ed); ul.appendChild(li);
   });
   return list.length;
+}
+function editMarkNote(key, m, done){
+  ask('修改收藏原因（' + fmt(m.t) + '）', m.note || '', '收藏原因（可以留空）', function(v){
+    m.note = v || ''; saveRecords();
+    if(done) done();
+    renderMini(); render(); toast('已修改');
+  }, {allowEmpty:true, maxlength:100});
 }
 $('bMark').onclick = function(){
   if(!cur) return;
@@ -993,9 +1009,11 @@ $('bMarkSave').onclick = saveMark;
 $('markNote').addEventListener('keydown', function(e){ if(e.key === 'Enter') saveMark(); });
 
 /* ---------- 输入框面板 ---------- */
-var askDone = null;
-function ask(title, value, placeholder, cb){
+var askDone = null, askOpts = null;
+function ask(title, value, placeholder, cb, opts){
+  askOpts = opts || {};
   $('askTitle').textContent = title;
+  $('askInput').maxLength = askOpts.maxlength || 40;
   $('askInput').value = value || '';
   $('askInput').placeholder = placeholder || '';
   askDone = cb;
@@ -1004,7 +1022,7 @@ function ask(title, value, placeholder, cb){
 }
 function askOk(){
   var v = clean($('askInput').value);
-  if(!v){ toast('名字不能为空'); return; }
+  if(!v && !(askOpts && askOpts.allowEmpty)){ toast('名字不能为空'); return; }
   $('askInput').blur();
   closeSheet('askSheet');
   if(askDone) askDone(v);
@@ -1685,7 +1703,7 @@ function showEpMenu(key){
   var n = renderMarkList($('epMarks'), key, function(){ closeSheet('epSheet'); });
   $('epMarksHead').hidden = !n;
   var items = [{label:'移动到专辑', note:'现在在「' + showOf(key) + '」', pick:function(){ closeSheet('epSheet'); showMoveMenu(key); }}];
-  if(ep || hasTr[key]) items.push({label:'AI 转文字', note: hasTr[key] ? '已有文稿，点开查看；也可以重新识别' : '把这一集识别成文字（要用自己的 API Key）', pick:function(){ trOpen(key); }});
+  if(ep || hasTr[key]) items.push({label:'AI 转文字', note: hasTr[key] ? '已有文稿，点开查看；也可以重新识别' : '把这一集识别成文字（要用自己的 API Key）', pick:function(){ closeSheet('epSheet'); goEp(key); }});
   if(ep) items.push({label:'查看标签详情', note:'看看文件里到底存了哪些信息', pick:function(){
     $('tagText').textContent = describeTags(ep);
     closeSheet('epSheet'); openSheet('tagSheet');
@@ -1764,11 +1782,13 @@ function goShow(name){
   render();
 }
 function goHome(){
-  if(history.state && history.state.show) history.back();
+  if(history.state && (history.state.show || history.state.ep)) history.back();
   else { view = {page:'home'}; render(); }
 }
 window.addEventListener('popstate', function(e){
-  view = e.state && e.state.show ? {page:'show', show:e.state.show} : {page:'home'};
+  var st = e.state;
+  view = st && st.ep ? {page:'ep', key:st.ep} : st && st.show ? {page:'show', show:st.show} : {page:'home'};
+  if(view.page === 'ep') loadTr(view.key);
   render();
 });
 $('bBack').onclick = goHome;
@@ -1776,36 +1796,44 @@ $('bNewAlbum').onclick = function(){
   ask('新建专辑', '', '专辑名称', function(v){ createAlbum(v); render(); toast('已新建「' + v + '」，到别的专辑里选中后移进来'); });
 };
 
-var renderedKey = '';
+var renderedKey = '', lastEpKey = '';
 function render(){
   if(!ready) return;
+  // 文稿页上的这一集已经被删光了：退回上一页
+  if(view.page === 'ep' && !records[view.key] && !findEp(view.key) && !hasTr[view.key]){
+    if(history.state && history.state.ep){ history.back(); return; }   // popstate 会重画
+    view = {page:'home'};
+  }
   var box = $('view'), sc = box.querySelector('.list-scroll');
-  var home = view.page === 'home';
-  var pageKey = home ? 'home' : 'show:' + view.show;
+  var home = view.page === 'home', isEp = view.page === 'ep';
+  var pageKey = home ? 'home' : isEp ? 'ep:' + view.key : 'show:' + view.show;
   // 重画时保持滚动位置；换了页面就回到顶部
   if(pageKey !== renderedKey){ selMode = false; selKeys = {}; }   // 换了页面就退出多选
   var top = pageKey !== renderedKey ? 0 : sc ? sc.scrollTop : box.scrollTop;
   renderedKey = pageKey;
-  var nKeys = home ? 0 : episodeKeys(view.show).length;
-  var selecting = selMode && !home && nKeys > 0;
+  var nKeys = home || isEp ? 0 : episodeKeys(view.show).length;
+  var selecting = selMode && !home && !isEp && nKeys > 0;
   if(!selecting && selMode){ selMode = false; selKeys = {}; }
   $('bBack').hidden = home || selecting;
   $('bNewAlbum').hidden = !home;
-  $('bSel').hidden = home || selecting || !nKeys;
+  $('bSel').hidden = home || isEp || selecting || !nKeys;
+  $('bEpMore').hidden = !isEp;
   $('bSelAll').hidden = !selecting; $('bSelDone').hidden = !selecting;
-  $('bAdd').hidden = selecting; $('bAbout').hidden = selecting;
+  $('bAdd').hidden = selecting || isEp; $('bAbout').hidden = selecting || isEp;
   $('selBar').hidden = !selecting;
   document.body.classList.toggle('selecting', selecting);
   showTrJob();
   $('bSelMove').disabled = $('bSelDel').disabled = $('bSelTr').disabled = !selCount();
   $('bSelAll').textContent = selCount() >= nKeys ? '取消全选' : '全选';
-  $('title').textContent = home ? '播客节目' : selecting ? '已选 ' + selCount() + ' 集' : view.show;
+  $('title').textContent = home ? '播客节目' : isEp ? titleOf(view.key) : selecting ? '已选 ' + selCount() + ' 集' : view.show;
   box.innerHTML = '';
   box.classList.remove('fixed');
-  if(home) renderHome(box); else renderShow(box);
+  if(home) renderHome(box); else if(isEp) renderEp(box); else renderShow(box);
   sc = box.querySelector('.list-scroll');
   if(sc) sc.scrollTop = top; else box.scrollTop = top;
   renderMini();
+  if(isEp) trTick(true, pageKey !== lastEpKey);
+  lastEpKey = pageKey;
 }
 function renderHome(box){
   var list = allShows();
@@ -1887,12 +1915,12 @@ function renderShow(box){
       li.appendChild(ib);
     }
     li.onclick = selMode ? function(){ if(Date.now() - selStamp > 600) toggleSel(k); }
-               : ep ? function(){ playEp(ep); } : function(){ toast('文件缺失，点「＋」重新添加这一集'); };
+               : function(){ openEpPage(k); };
     onLongPress(li, function(){ if(!selMode) enterSel(k); }, function(target){ return target.closest && target.closest('.info-btn'); });
     ul.appendChild(li);
   });
   scroll.appendChild(ul);
-  scroll.appendChild(el('p', 'hint', selMode ? '点一下选中或取消选中' : '长按可以多选；点右边的「!」查看信息和更多操作'));
+  scroll.appendChild(el('p', 'hint', selMode ? '点一下选中或取消选中' : '点一集进入文稿页并播放；长按可以多选；右边的「!」是更多操作'));
   box.appendChild(scroll);
 }
 
@@ -2387,7 +2415,7 @@ function trDelete(key){ delete trCache[key]; delete hasTr[key]; return store('re
 function trKeys(){ return store('readonly', function(s){ return s.getAllKeys(); }, 'transcripts'); }
 
 /* ---- 识别任务 ---- */
-var trJob = null, trViewKey = '', wakeLock = null;
+var trJob = null, wakeLock = null;
 function keepAwake(on){
   try{
     if(on && navigator.wakeLock) navigator.wakeLock.request('screen').then(function(l){ wakeLock = l; }).catch(function(){});
@@ -2471,11 +2499,11 @@ function trBatch(keys){
 }
 function showTrJob(){
   var b = $('bTrJob');
-  if(!trJob || document.body.classList.contains('selecting')){ b.hidden = true; return; }
+  if(!trJob || document.body.classList.contains('selecting') || (view.page === 'ep' && view.key === trJob.key)){ b.hidden = true; return; }
   b.hidden = false;
   b.textContent = trJob.batch ? '识别 ' + trJob.batch.i + '/' + trJob.batch.n : trJob.total ? '识别 ' + Math.min(trJob.total, trJob.done + 1) + '/' + trJob.total + ' 段' : '识别中';
 }
-$('bTrJob').onclick = function(){ if(trJob) trOpen(trJob.key); };
+$('bTrJob').onclick = function(){ if(trJob) goEp(trJob.key); };
 function trLoop(plan, route, tr){
   var n = plan.chunks.length, signal = trJob.abort.signal;
   function next(){
@@ -2494,7 +2522,7 @@ function trLoop(plan, route, tr){
   return next();
 }
 
-/* ---- 文稿界面 ---- */
+/* ---- 文稿页 ---- */
 function copyText(text){
   function fallback(){
     var ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;top:0;opacity:0';
@@ -2505,95 +2533,131 @@ function copyText(text){
   if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function(){ toast('已复制'); }, fallback);
   else fallback();
 }
-var trNodes = [], trSegs = [], trLastIdx = -1, trTouch = 0;
-function trOpen(key){ trViewKey = key; $('trTitle').textContent = titleOf(key); closeSheet('epSheet'); openSheet('trSheet'); trRender(); }
+var trLoaded = {}, trNodes = [], trSegs = [], trLastIdx = -1, trTouch = 0;
+function trPos(key){ return cur && cur.key === key ? audio.currentTime : ((records[key] && records[key].position) || 0); }
+function loadTr(key){
+  if(trLoaded[key]) return;
+  trGet(key).catch(function(){ return null; }).then(function(){
+    trLoaded[key] = true;
+    if(view.page === 'ep' && view.key === key) render();
+  });
+}
+function goEp(key){
+  if(view.page === 'ep' && view.key === key){ render(); return; }
+  if(view.page === 'ep') history.replaceState({ep:key}, ''); else history.pushState({ep:key}, '');
+  view = {page:'ep', key:key};
+  $('view').scrollTop = 0;
+  loadTr(key);
+  render();
+}
+// 点某一集：开始播放并进入文稿页
+function openEpPage(key){
+  var ep = findEp(key);
+  if(!ep && !hasTr[key]){ toast('文件缺失，点「＋」重新添加这一集'); return; }
+  if(ep && ep !== cur) open(ep, true);
+  else if(ep && audio.paused) play();          // 就是当前这一集但暂停着：接着播
+  goEp(key);
+}
 function trRender(){
   showTrJob();
-  if($('trSheet').hidden || !trViewKey) return;
-  var key = trViewKey;
-  trGet(key).then(function(tr){ if(trViewKey === key && !$('trSheet').hidden) trDraw(key, tr); });
+  if(view.page === 'ep') render();
 }
-function trDraw(key, tr){
-  trPlayIcon();
-  var running = trJob && trJob.key === key, other = trJob && trJob.key !== key, st = $('trStatus'), acts = $('trActions');
-  var prog = $('trProg');
-  prog.hidden = !running;
-  if(running) $('trProgBar').style.width = (trJob.total ? (trJob.done / trJob.total * 100) : 0) + '%';
-  st.textContent = running ? trJob.msg
+function trScrollTo(node, smooth){
+  var sb = $('view').querySelector('.list-scroll');
+  if(!sb) return;
+  var top = node.getBoundingClientRect().top - sb.getBoundingClientRect().top + sb.scrollTop - sb.clientHeight / 3;
+  sb.scrollTo({top:Math.max(0, top), behavior:smooth ? 'smooth' : 'auto'});
+}
+function renderEp(box){
+  var key = view.key;
+  if(!records[key] && !findEp(key) && !hasTr[key]){ view = {page:'home'}; history.replaceState(null, ''); render(); return; }
+  var tr = trCache[key] || null, ep = findEp(key), loaded = !!trLoaded[key];
+  var running = !!(trJob && trJob.key === key), other = !!(trJob && trJob.key !== key);
+  box.classList.add('fixed');
+  var top = el('div', 'ep-top'), au = authorOf(showOf(key), ep);
+  top.appendChild(el('div', 'ep-sub line1', showOf(key) + (au ? ' · ' + au : '') + (ep ? '' : ' · 文件缺失')));
+  var st = el('div', 'tr-status'); st.id = 'trStatus';
+  st.textContent = !loaded ? '正在读取文稿…' : running ? trJob.msg
     : other ? (trJob.batch ? '正在批量识别（第 ' + trJob.batch.i + ' / ' + trJob.batch.n + ' 集），结束后再来。' : '正在识别另一集，等它结束后再来。')
     : tr ? '已识别 ' + tr.done + ' / ' + tr.total + ' 段 · ' + tr.provider + ' · ' + tr.model + (tr.status === 'done' ? '' : '（还没识别完）')
     : aiReady() ? '还没有识别。将使用：' + aiProv().name + ' · ' + aiModel() : '还没有设置 AI 服务商。';
-  acts.innerHTML = '';
+  top.appendChild(st);
+  var prog = el('div', 'tr-prog'); prog.id = 'trProg'; prog.hidden = !running;
+  var bar = el('i'); bar.id = 'trProgBar'; bar.style.width = (running && trJob.total ? trJob.done / trJob.total * 100 : 0) + '%';
+  prog.appendChild(bar); top.appendChild(prog);
+  var acts = el('div', 'tr-actions'); acts.id = 'trActions';
   function btn(label, cls, fn){ var b = el('button', 'btn' + (cls ? ' ' + cls : ''), label); b.onclick = fn; acts.appendChild(b); }
   if(running) btn(trJob.batch ? '停止（整批都停）' : '停止识别', '', function(){ if(trJob.batch) trJob.batch.stop = true; trJob.abort.abort(); trJob.msg = '正在停止…'; trRender(); });
-  else if(!other){
-    var ep = findEp(key);
-    if(!tr && ep) btn(aiReady() ? '开始识别' : '去设置 AI 服务商', 'primary', function(){ if(aiReady()) trStart(key, false); else { closeSheet('trSheet'); openAiSettings(); } });
-    if(tr && tr.status !== 'done' && ep){ btn('继续识别', 'primary', function(){ trStart(key, false); }); btn('重新开始', '', function(){ if(confirm('丢掉已识别的内容，从头再来？')) trStart(key, true); }); }
-    if(tr && tr.segments.length){
-      btn('复制（带时间）', '', function(){ copyText(tr.segments.map(function(s){ return '[' + fmt(s.t) + '] ' + s.text; }).join('\n')); });
-      btn('复制纯文字', '', function(){ copyText(tr.segments.map(function(s){ return s.text; }).join('\n')); });
-    }
-    if(tr && tr.status === 'done' && ep) btn('重新识别', '', function(){ if(confirm('重新识别会覆盖现在的文稿，并再次产生费用。继续吗？')) trStart(key, true); });
-    if(tr) btn('删除文稿', 'danger', function(){ if(!confirm('删除这一集的文稿？')) return; trDelete(key).then(function(){ toast('已删除文稿'); trRender(); render(); }); });
-    if(!ep && !tr) st.textContent = '文件缺失，没法识别。';
+  else if(loaded && !other && ep){
+    if(!tr) btn(aiReady() ? '开始识别' : '去设置 AI 服务商', 'primary', function(){ if(aiReady()) trStart(key, false); else openAiSettings(); });
+    else if(tr.status !== 'done'){ btn('继续识别', 'primary', function(){ trStart(key, false); }); btn('重新开始', '', function(){ if(confirm('丢掉已识别的内容，从头再来？')) trStart(key, true); }); }
   }
-  btn('AI 设置', '', function(){ closeSheet('trSheet'); openAiSettings(); });
-  // 文稿列表：已经画过同一份就不重画（识别中每段完成才会变）
-  var list = $('trList');
-  if(!tr || !tr.segments.length){ list.innerHTML = ''; list.hidden = true; trNodes = []; trSegs = []; return; }
-  list.hidden = false;
-  if(trSegs === tr.segments && trNodes.length === tr.segments.length && list.dataset.key === key) { trTick(true); return; }
-  list.innerHTML = ''; list.dataset.key = key; trSegs = tr.segments; trNodes = []; trLastIdx = -1;
-  var frag = document.createDocumentFragment();
-  tr.segments.forEach(function(s){
-    var row = el('div', 'seg'); row.appendChild(el('span', 'seg-t', fmt(s.t))); row.appendChild(el('span', 'seg-x', s.text));
-    row.onclick = function(){
-      if(getSelection && String(getSelection()).length) return;   // 正在选字复制时，不跳转
-      var ep2 = findEp(key);
-      if(!ep2){ toast('文件缺失，没法播放'); return; }
-      open(ep2, true, s.t);
-    };
-    trNodes.push(row); frag.appendChild(row);
-  });
-  list.appendChild(frag);
-  trTick(true);
+  if(acts.children.length) top.appendChild(acts);
+  box.appendChild(top);
+  var scroll = el('div', 'list-scroll');
+  trNodes = []; trSegs = []; trLastIdx = -1;
+  if(tr && tr.segments.length){
+    var list = el('div', 'tr-list'); list.id = 'trList';
+    tr.segments.forEach(function(s){
+      var row = el('div', 'seg'); row.appendChild(el('span', 'seg-t', fmt(s.t))); row.appendChild(el('span', 'seg-x', s.text));
+      row.onclick = function(){
+        if(window.getSelection && String(getSelection()).length) return;   // 正在选字复制时，不跳转
+        var ep2 = findEp(key);
+        if(!ep2){ toast('文件缺失，没法播放'); return; }
+        open(ep2, true, s.t);
+      };
+      trNodes.push(row); list.appendChild(row);
+    });
+    trSegs = tr.segments;
+    scroll.appendChild(list);
+  }else{
+    scroll.appendChild(el('div', 'empty', !loaded ? '正在读取文稿…' : running ? '识别中，识别出来的内容会在这里一段一段出现。' : !ep ? '文件缺失，没法识别。' : '这一集还没有文稿。点上面的「开始识别」，用 AI 把它转成带时间的文字。'));
+  }
+  box.appendChild(scroll);
 }
-// 播放时高亮当前这一句
-function trTick(force){
-  if($('trSheet').hidden || !trSegs.length || !cur || cur.key !== trViewKey) return;
-  var t = audio.currentTime, lo = 0, hi = trSegs.length - 1, idx = -1;
+// 播放时高亮当前这一句，并让文稿跟着滚动
+function trTick(force, jump){
+  if(view.page !== 'ep' || !trSegs.length) return;
+  var key = view.key, t = trPos(key), lo = 0, hi = trSegs.length - 1, idx = -1;
   while(lo <= hi){ var mid = (lo + hi) >> 1; if(trSegs[mid].t <= t){ idx = mid; lo = mid + 1; } else hi = mid - 1; }
   if(idx === trLastIdx && !force) return;
   if(trNodes[trLastIdx]) trNodes[trLastIdx].classList.remove('now');
   trLastIdx = idx;
   if(idx >= 0 && trNodes[idx]){
     trNodes[idx].classList.add('now');
-    if(Date.now() - trTouch > 4000){
-      // 只滚动文稿区域本身，让当前这句停在中间
-      var sb = $('trSheet').querySelector('.sheet-body'), nd = trNodes[idx];
-      var top = nd.getBoundingClientRect().top - sb.getBoundingClientRect().top + sb.scrollTop - sb.clientHeight / 2 + nd.offsetHeight / 2;
-      sb.scrollTo({top:Math.max(0, top), behavior:'smooth'});
-    }
+    var following = cur && cur.key === key && Date.now() - trTouch > 4000;
+    if(jump) trScrollTo(trNodes[idx], false);          // 刚进入页面：直接跳到播放的位置
+    else if(following) trScrollTo(trNodes[idx], true);
   }
 }
-// 文稿标题栏里的播放 / 暂停（弹层盖住了底部播放器）
-function trPlayIcon(){
-  var playing = cur && cur.key === trViewKey && !audio.paused;
-  $('trPlayIcon').innerHTML = playing ? '<path d="M6 5h4v14H6zm8 0h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
-  $('trPlay').hidden = !findEp(trViewKey);
-}
-$('trPlay').onclick = function(){
-  var ep = findEp(trViewKey);
-  if(!ep) return;
-  if(cur && cur.key === trViewKey) togglePlay(); else open(ep, true);
-};
-audio.addEventListener('play', trPlayIcon);
-audio.addEventListener('pause', trPlayIcon);
-$('trList').addEventListener('touchstart', function(){ trTouch = Date.now(); }, {passive:true});
-$('trList').addEventListener('wheel', function(){ trTouch = Date.now(); }, {passive:true});
+$('view').addEventListener('touchstart', function(){ trTouch = Date.now(); }, {passive:true});
+$('view').addEventListener('wheel', function(){ trTouch = Date.now(); }, {passive:true});
 audio.addEventListener('timeupdate', function(){ trTick(false); });
 audio.addEventListener('seeked', function(){ trTick(true); });
+function showTrMore(key){
+  var tr = trCache[key], ep = findEp(key), items = [];
+  if(tr && tr.segments.length){
+    items.push({label:'复制全文（带时间）', pick:function(){ closeSheet('trMoreSheet'); copyText(tr.segments.map(function(s){ return '[' + fmt(s.t) + '] ' + s.text; }).join('\n')); }});
+    items.push({label:'复制纯文字', pick:function(){ closeSheet('trMoreSheet'); copyText(tr.segments.map(function(s){ return s.text; }).join('\n')); }});
+  }
+  if(ep && !trJob){
+    if(tr && tr.status !== 'done') items.push({label:'继续识别', pick:function(){ closeSheet('trMoreSheet'); trStart(key, false); }});
+    items.push({label:tr ? '重新识别' : '开始识别', note:tr ? '会覆盖现在的文稿，并再次产生费用' : '', pick:function(){
+      closeSheet('trMoreSheet');
+      if(!tr || confirm('重新识别会覆盖现在的文稿，并再次产生费用。继续吗？')) trStart(key, !!tr);
+    }});
+  }
+  if(tr) items.push({label:'删除文稿', danger:true, pick:function(){
+    closeSheet('trMoreSheet');
+    if(!confirm('删除这一集的文稿？')) return;
+    trDelete(key).then(function(){ toast('已删除文稿'); render(); });
+  }});
+  items.push({label:'这一集的信息和更多操作', note:'文件信息、移动到专辑、收藏的时间点、删除', pick:function(){ closeSheet('trMoreSheet'); showEpMenu(key); }});
+  items.push({label:'AI 设置', pick:function(){ closeSheet('trMoreSheet'); openAiSettings(); }});
+  renderOpts($('trMoreOpts'), items);
+  openSheet('trMoreSheet');
+}
+$('bEpMore').onclick = function(){ if(view.page === 'ep') showTrMore(view.key); };
 
 /* ---------- 关于 / 更新 ---------- */
 var VERSION = document.querySelector('meta[name="app-version"]').content;
@@ -2716,7 +2780,7 @@ $('bKeyMark').onclick = function(){
 showKeyMode();
 showAiStatus();
 $('ver').textContent = VERSION;
-if(history.state && history.state.show) history.replaceState(null, '');
+if(history.state && (history.state.show || history.state.ep)) history.replaceState(null, '');
 trKeys().catch(function(){ return []; }).then(function(ks){
   (ks || []).forEach(function(k){ hasTr[k] = true; });
   return fileAll().catch(function(){ return []; });
