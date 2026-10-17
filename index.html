@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.9.0">
+<meta name="app-version" content="0.9.1">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -413,6 +413,7 @@ function migrateOther(){
     ['show','tagShow','customShow'].forEach(function(f){ if(r[f] === OLD_OTHER){ r[f] = OTHER; changed = true; } });
   });
   if(shows[OLD_OTHER]){ shows[OTHER] = shows[OTHER] || shows[OLD_OTHER]; delete shows[OLD_OTHER]; changed = true; }
+  if(shows[OTHER] && shows[OTHER].cover){ delete shows[OTHER].cover; changed = true; }   // 未分类不存封面
   return changed;
 }
 if(migrateOther()){ saveRecords(); saveShows(); }
@@ -574,13 +575,14 @@ function playlist(){
 }
 // 专辑封面：先找这一专辑里有封面的那一集，再用存下来的小图，最后借用原专辑的封面
 function coverInfo(show){
+  if(show === OTHER) return null;   // 未分类不显示任何音频的封面
   for(var i = 0; i < episodes.length; i++){
     if(episodes[i].show === show && episodes[i].art) return {src:episodes[i].art.url, type:episodes[i].art.type};
   }
   if(shows[show] && shows[show].cover) return {src:shows[show].cover, type:'image/jpeg'};
   for(var k in records){
     var r = records[k];
-    if(r.show === show && r.tagShow && shows[r.tagShow] && shows[r.tagShow].cover) return {src:shows[r.tagShow].cover, type:'image/jpeg'};
+    if(r.show === show && r.tagShow && r.tagShow !== OTHER && shows[r.tagShow] && shows[r.tagShow].cover) return {src:shows[r.tagShow].cover, type:'image/jpeg'};
   }
   return null;
 }
@@ -1412,7 +1414,7 @@ function readInfo(ep){
     ep.show = r.customShow || ep.tagShow;
     r.tagShow = ep.tagShow; r.show = ep.show; r.title = ep.title; r.artist = info.artist || info.albumArtist || r.artist || '';
     // 封面存给原专辑（自建专辑会借用它）
-    if(ep.art && !(shows[ep.tagShow] && shows[ep.tagShow].cover)){
+    if(ep.art && ep.tagShow !== OTHER && !(shows[ep.tagShow] && shows[ep.tagShow].cover)){
       return thumb(ep.art.url).then(function(d){ if(d){ shows[ep.tagShow] = shows[ep.tagShow] || {}; shows[ep.tagShow].cover = d; } });
     }
   });
