@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.28.1">
+<meta name="app-version" content="0.28.2">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -454,7 +454,7 @@ input[type=file]{display:none}
         <datalist id="llmModels"></datalist>
         <div class="sec">接口地址</div>
         <input class="input" id="llmBase" autocapitalize="off" spellcheck="false" placeholder="https://…/v1">
-        <label class="check"><input type="checkbox" id="aiTerms"><span>外文人名、作品名、专有名词写成原文，第一次出现时后面括号注中文（识别完自动处理）</span></label>
+        <label class="check"><input type="checkbox" id="aiTerms"><span>说话人用外语说的词写成外文，第一次出现时后面括号注中文（识别完自动处理）</span></label>
         <button class="btn block" id="bLlmTest">测试文本模型连接</button>
         <p id="llmTestResult"></p>
       </div>
@@ -3450,18 +3450,43 @@ function autoChapters(key){
 /* ---- 外文名称、专有名词：写成原文，第一次出现时括号注中文（如 Miles Davis（迈尔斯·戴维斯）），后面只写原文 ---- */
 // 语音识别只会写音译，所以让文本模型找出这些词、给出原文和中文译名，网页按表替换；只换这些词，别的字和时间点都不动
 function termsPrompt(text){
-  return '下面是一段中文播客的语音识别文稿。语音识别会把外文名称写成中文音译（例如「迈尔斯戴维斯」），也可能写错。\n' +
-    '请找出其中的外国人名、地名、乐队、作品（书、电影、专辑、歌曲）、机构、品牌和外文专有名词，给出它的外文原文。\n' +
-    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"from":"文稿里的原样写法","en":"外文原文","zh":"常用中文译名"}。\n' +
-    '要求：from 必须和文稿里的文字一字不差，同一个名字在文稿里有几种写法就列几项；文稿里本来就是外文的也要列（from 就是那个外文）；' +
-    '中国人名、中文常用词、你不确定原文的都不要列。\n\n文稿：\n' + text;
+  return '下面是一段中文播客的语音识别文稿。说话人主要说中文，偶尔会直接说外语（英文单词、外国名字、外文歌名书名等）。\n' +
+    '请只找出说话人【实际用外语说出来】的词。它们在文稿里有两种样子：一是语音识别已经写成了外文；二是语音识别把外语发音写成了读不通的中文同音字。\n' +
+    '绝对不要列：用中文说的内容，包括中国的人名、地名、事件、作品（如 梁文道、汶川地震），以及外国名字的通行中文译名（如说话人用中文说的「迈尔斯·戴维斯」）——这些保持中文，不要翻成英文或拼音。\n' +
+    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"from":"文稿里的原样写法","en":"正确的外文写法","zh":"中文意思或通行译名","lang":"这个词原本的语言，如 英语"}。\n' +
+    'from 必须和文稿里的文字一字不差；拿不准是不是用外语说的就不要列。\n\n文稿：\n' + text;
+}
+// 拼音（如 Liang Wendao、Wenchuan）：这是中文的名字，不该写成外文
+var PINYIN = /^(?:(?:zh|ch|sh|[bpmfdtnlgkhjqxrzcsyw])?(?:iang|iong|uang|ang|eng|ing|ong|ian|iao|uai|uan|ai|ei|ao|ou|an|en|in|un|ia|ie|iu|ua|uo|ui|ue|er|a|o|e|i|u|v))+$/i;
+function pinyinLike(en){
+  var w = en.split(/[\s\-']+/).filter(Boolean);
+  if(!w.length || !/^[A-Z]/.test(w[0]) || /[A-Z]{2}/.test(en) || !PINYIN.test(w[0])) return false;
+  return w[0].length > 2 || w.every(function(x){ return PINYIN.test(x); });   // 第一个词是拼音；太短的（如 Da）要整个都是拼音
 }
 function parseTerms(txt){
   var m = /\[[\s\S]*\]/.exec(txt || ''), arr = [];
   try{ arr = JSON.parse(m ? m[0] : '[]'); }catch(e){ arr = []; }
   return (Array.isArray(arr) ? arr : []).map(function(x){
-    return x && {from:clean(String(x.from || '')), en:clean(String(x.en || '')), zh:toSimp(clean(String(x.zh || '')))};
-  }).filter(function(x){ return x && x.from && x.en && x.from.length <= 60 && x.en.length <= 80 && /[A-Za-z]/.test(x.en); });
+    return x && {from:clean(String(x.from || '')), en:clean(String(x.en || '')), zh:toSimp(clean(String(x.zh || ''))), lang:clean(String(x.lang || ''))};
+  }).filter(function(x){
+    if(!x || !x.from || !x.en || x.from.length > 60 || x.en.length > 80 || !/[A-Za-z]/.test(x.en)) return false;
+    if(/中文|汉语|普通话|粤语|chinese|mandarin|cantonese/i.test(x.lang)) return false;   // 本来就是中文的
+    if(!/[A-Za-z]/.test(x.from) && pinyinLike(x.en)) return false;                         // 中文名字被写成了拼音
+    return true;
+  });
+}
+// 撤销上次的标注（重新标注前先恢复原样，上次标错的也能改回来）
+function undoTerms(tr){
+  var ts = tr.terms || [];
+  if(!ts.length) return;
+  var seen = {}, list = ts.filter(function(x){ if(seen[x.en]) return false; seen[x.en] = true; return true; }).sort(function(a, b){ return b.en.length - a.en.length; });
+  tr.segments.forEach(function(s){
+    list.forEach(function(x){
+      if(x.zh) s.text = s.text.split(x.en + '（' + x.zh + '）').join(x.from === x.en ? x.en : x.from);
+      if(x.from !== x.en) s.text = s.text.split(x.en).join(x.from);
+    });
+  });
+  tr.terms = [];
 }
 function reEsc(t){ return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 // 按表替换整篇文稿：同一个外文名第一次出现写「原文（中文）」，后面只写原文；已经带括号的不再重复加
@@ -3489,6 +3514,7 @@ function applyTerms(tr, terms){
 function termify(key, signal){
   var tr = trCache[key];
   if(!tr || !tr.segments.length) return Promise.reject(new Error('还没有文稿'));
+  undoTerms(tr);
   // 长文稿分块问（每块约 6000 字），结果合在一起
   var chunks = [], cur = '';
   tr.segments.forEach(function(s){ if(cur.length + s.text.length > 6000){ chunks.push(cur); cur = ''; } cur += s.text + '\n'; });
@@ -4012,7 +4038,7 @@ function showTrMore(key){
     items.push({label:tr.chapters && tr.chapters.length ? '重新分章节' : 'AI 分章节', note:llmReady() ? '用 ' + lc.name + ' · ' + lc.model : '要先设置文本模型', pick:function(){
       closeSheet('trMoreSheet'); if(llmReady()) chapterRun(key); else openAiSettings();
     }});
-    items.push({label:'外文名称写成原文', note:llmReady() ? '用 ' + lc.name + ' · ' + lc.model + '，第一次出现时括号注中文' : '要先设置文本模型', pick:function(){
+    items.push({label:tr.termsAt ? '重新标注外文' : '标注外文', note:llmReady() ? '用 ' + lc.name + ' · ' + lc.model + '：说话人用外语说的词写成外文，第一次括号注中文' + (tr.termsAt ? '；会先撤销上次的标注' : '') : '要先设置文本模型', pick:function(){
       closeSheet('trMoreSheet'); if(llmReady()) termsRun(key); else openAiSettings();
     }});
   }
