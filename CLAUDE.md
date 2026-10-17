@@ -17,3 +17,4 @@
 - 页面有三层：首页 `home`、专辑页 `show`、文稿页 `ep`（`view.page`，用 history.pushState 存 `{show}` / `{ep}`，返回键一层层退）。点一集 → `openEpPage`（播放并进入文稿页）；播放别的集时文稿页跟着换（`open()` 里处理）。文稿页用 `renderEp`，章节条和文稿列表分开，只有列表在 `.list-scroll` 里滚动。
 - 识别入口都先弹小确认窗 `trAsk`（Promise，不要再用 `confirm`），默认后台识别；顶部 `#bTrJob` 是进度图标，点开 `#trProgSheet`。所有 `.sheet` 都支持下滑关闭（统一在 `renderOpts` 前那段手势代码）。首页封面图元素存在 `homeImgs` 里复用，别每次重画都新建。启动时读文件库失败时用 `healEp` 按需补读。
 - 首页搜索：`#bSearch` / `#searchIn`，搜索时 `renderSearch` 代替网格，文稿从 IndexedDB 一次性读进 `trCache`。专辑页重画时 `.pod-head` 用 `dataset.sig` 判断没变就保留（`render()` 里的 `keepHead`），封面图元素 `headImg` 只能放进真正用到的那个 head 里。专辑名排版 `showNameLines`。「下一首」键只切下一集，不再有收藏功能。
+- 分季专辑：`parseSeason` 按名字解析（总名称 / 第X季 / 副标题），首页同一总名称至少两季时叠成 `.pod-stack`，展开状态在 `openSeries`。文稿页顶部不显示标题，有 `#bHome`；history state 带 `d`（距首页的层数），`#bHome` 用 `history.go(-d)` 回首页。OpenRouter 有两个服务商：`openrouter`（聊天听音频）和 `openrouter_stt`（转写，模型带 `openai/` 前缀）。
