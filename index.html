@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.28.2">
+<meta name="app-version" content="0.28.3">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -3536,12 +3536,23 @@ function autoTerms(key){
   return termify(key, trJob.abort.signal).then(function(){}, function(err){ if(err && err.cancelled) throw err; });   // 标注失败不影响文稿
 }
 var termBusy = null;
-function termsRun(key){
+// 整理文稿：不重新识别，按最新的规则把这篇文稿重新处理一遍并保存——
+// 繁体转简体、去掉乱编的字幕套话和重复句；设置了文本模型（且没关外文标注）的话，再撤销上次的外文标注、按最新规则重新标注
+function tidyRun(key){
   if(chapBusy || termBusy || trJob){ toast('正在处理，请稍等'); return; }
-  if(!llmReady()){ toast('先设置文本模型'); openAiSettings(); return; }
-  termBusy = key; toast('正在标注外文名称…', 3000);
-  termify(key, new AbortController().signal).then(function(n){ toast(n ? '已标注 ' + n + ' 处外文名称' : '没有找到需要标注的外文名称'); }, function(err){ toast('标注失败：' + aiErrMsg(err), 5000); })
-    .then(function(){ termBusy = null; render(); });
+  var tr = trCache[key];
+  if(!tr || !tr.segments.length){ toast('还没有文稿'); return; }
+  function text(){ return tr.segments.map(function(x){ return x.text; }).join('\n'); }
+  var before = text(), useLlm = llmReady() && !ai.termsOff;
+  termBusy = key;
+  tr.simp = false; trSimp(tr);   // 重新转简体、清理（trSimp 里会调 trClean）
+  toast(useLlm ? '正在整理文稿…（外文标注要问文本模型，请稍等）' : '正在整理文稿…', 20000);
+  (useLlm ? termify(key, new AbortController().signal) : trPut(tr).then(function(){ return 0; })).then(function(n){
+    toast(text() !== before ? '已整理文稿' + (n ? '，标注外文 ' + n + ' 处' : '') : '已经是按最新规则整理的，没有要改的');
+  }, function(err){
+    trPut(tr);   // 外文标注失败，前面的整理照样保存
+    toast('繁简和重复句已整理；外文标注失败：' + aiErrMsg(err), 5000);
+  }).then(function(){ termBusy = null; render(); });
 }
 function chapterRun(key){
   if(chapBusy || termBusy || trJob){ toast('正在处理，请稍等'); return; }
@@ -4038,8 +4049,8 @@ function showTrMore(key){
     items.push({label:tr.chapters && tr.chapters.length ? '重新分章节' : 'AI 分章节', note:llmReady() ? '用 ' + lc.name + ' · ' + lc.model : '要先设置文本模型', pick:function(){
       closeSheet('trMoreSheet'); if(llmReady()) chapterRun(key); else openAiSettings();
     }});
-    items.push({label:tr.termsAt ? '重新标注外文' : '标注外文', note:llmReady() ? '用 ' + lc.name + ' · ' + lc.model + '：说话人用外语说的词写成外文，第一次括号注中文' + (tr.termsAt ? '；会先撤销上次的标注' : '') : '要先设置文本模型', pick:function(){
-      closeSheet('trMoreSheet'); if(llmReady()) termsRun(key); else openAiSettings();
+    items.push({label:'整理文稿', note:'不用重新识别，按最新规则重新整理：繁体转简体、去掉乱编的套话和重复句' + (llmReady() && !ai.termsOff ? '、重新标注外文（用 ' + lc.name + '）' : ''), pick:function(){
+      closeSheet('trMoreSheet'); tidyRun(key);
     }});
   }
   if(ep && !trJob){
