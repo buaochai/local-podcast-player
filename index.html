@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.31.1">
+<meta name="app-version" content="0.31.2">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -202,7 +202,7 @@ li.has-edit{position:relative}
 .opt.mk{padding-right:54px;align-items:flex-start}
 .opt.mk .time{padding-top:1px}
 .opt.mk .mk-note{display:-webkit-box}
-.opt.mk .mk-ctx{display:-webkit-box;-webkit-line-clamp:3;margin-top:3px;font-size:12px;line-height:1.5;color:var(--muted)}
+.opt.mk .mk-ctx{display:-webkit-box;-webkit-line-clamp:2;margin-top:3px;font-size:12px;line-height:1.5;color:var(--muted)}
 .mk-now{margin:8px 2px 0;font-size:12px;line-height:1.5;color:var(--muted)}
 .opt-edit{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:40px;height:40px;border:none;background:transparent;color:var(--muted);display:flex;align-items:center;justify-content:center;border-radius:50%}
 .opt-edit svg{width:20px;height:20px;fill:currentColor}
@@ -1218,7 +1218,7 @@ function renderOpts(ul, items){
 // records[key].marks = [{t:秒, note:'原因', created:时间}]
 var markAt = 0;
 function marksOf(key){ return (records[key] && records[key].marks) || []; }
-// 这个时间点所在或附近的文稿（有文稿才有）：取这一句，太短就接上后面几句，最多约 80 字
+// 这个时间点所在或附近的文稿（有文稿才有）：取这一句，太短（不到 16 字）就接上下一句，最多约 36 字
 function markContext(key, t){
   var tr = trCache[key], segs = tr && tr.segments;
   if(!segs || !segs.length) return '';
@@ -1227,8 +1227,8 @@ function markContext(key, t){
   if(i < 0){ if(segs[0].t - t > 30) return ''; i = 0; }                       // 在文稿开头之前一点
   else if(t - segs[i].t > 90 && i === segs.length - 1) return '';             // 超出文稿覆盖的范围
   var text = segs[i].text;
-  for(var k = i + 1; k < segs.length && text.length < 40 && k < i + 3; k++) text += segs[k].text;
-  return text.length > 80 ? text.slice(0, 80) + '…' : text;
+  for(var k = i + 1; k < segs.length && text.length < 16 && k < i + 2; k++) text += segs[k].text;
+  return text.length > 36 ? text.slice(0, 36) + '…' : text;
 }
 function renderMarkList(ul, key, after, q){
   var list = marksOf(key).slice().sort(function(a, b){ return a.t - b.t; });
