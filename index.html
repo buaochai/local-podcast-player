@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.24.1">
+<meta name="app-version" content="0.25.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -216,6 +216,7 @@ li.has-edit{position:relative}
 /* 文稿页：标题、嵌在页面里的播放器、章节条，下面是文稿 */
 .ep-name{font-size:19px;font-weight:700;line-height:1.35;margin:0 2px}
 .ep-album{font-size:13px;color:var(--muted);margin:2px 2px 0}
+.ep-name,.ep-album{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 /* 文稿页的播放器：还在底部，但矮一点、没有封面 */
 body.ep-page .mini{padding:6px 10px 2px;border-radius:16px}
 body.ep-page .mini-cover{display:none}
@@ -2872,7 +2873,12 @@ function parseTimed(text, t0, dur){
 }
 function segmentsOf(resp, chunk, route){
   if(resp.segments && resp.segments.length){
-    return resp.segments.map(function(s){ return {t:chunk.t0 + (+s.start || 0), text:clean(s.text)}; }).filter(function(s){ return s.text; });
+    return resp.segments.filter(function(s){
+      // 很可能没人说话（音乐、静音），或者一直在重复：这类段多半是模型编出来的
+      if(s.no_speech_prob > 0.6 && s.avg_logprob < -0.8) return false;
+      if(s.compression_ratio > 2.6) return false;
+      return true;
+    }).map(function(s){ return {t:chunk.t0 + (+s.start || 0), text:clean(s.text)}; }).filter(function(s){ return s.text; });
   }
   var text = resp.text || '';
   if(route.chat){ var timed = parseTimed(text, chunk.t0, chunk.dur); if(timed && timed.length) return timed; }
@@ -2886,7 +2892,7 @@ function sendChunk(chunk, plan, route, signal){
     return call.then(function(resp){
       var segs = segmentsOf(resp, chunk, route);
       if(ai.lang === 'zh' || !ai.lang) segs.forEach(function(x){ x.text = toSimp(x.text); });
-      return segs;
+      return trClean({segments:segs}).segments;
     });
   });
 }
@@ -2917,11 +2923,42 @@ function toSimp(text){
   return out;
 }
 // 中文（或自动识别）的文稿一律显示成简体；旧文稿读出来时也转
+/* ---- 去掉 Whisper 在音乐、静音处编出来的字幕套话和重复句 ---- */
+// 这些是它训练数据里视频字幕的常见结尾，几乎不会是真的节目内容
+var HALLU = [/请不吝.{0,8}点赞/, /点赞.{0,6}订阅.{0,6}(转发|打赏)/, /明镜与点点/, /Amara\.org/i, /字幕(由|志愿者|制作|提供)/,
+  /YoYo Television/i, /优优独播剧场/, /^(谢谢|感谢)(大家)?(观看|收看)[。！!.]?$/];
+function tKey(t){ return t.replace(/[\s，,。.！？!?、；;：:“”"'‘’]/g, ''); }
+function cleanText(text){
+  var parts = String(text || '').match(/[^。！？!?]+[。！？!?]*/g) || [], out = [], prev = '';
+  parts.forEach(function(p){
+    var k = tKey(p);
+    var ps = toSimp(p.trim());   // 繁体写的套话也认得出
+    if(!k || HALLU.some(function(re){ return re.test(ps); })) return;
+    if(k.length >= 6 && k === prev) return;   // 连着重复的同一句只留一次
+    prev = k; out.push(p);
+  });
+  // 一句话里同一小段连着出现 3 次以上，只留一次
+  return out.join('').trim().replace(/(.{2,30}?)(?:[，,、\s]*\1){2,}/g, '$1');
+}
+function trClean(tr){
+  var prev = '';
+  tr.segments = (tr.segments || []).filter(function(s){
+    s.text = cleanText(s.text);
+    var k = tKey(s.text);
+    if(!k || (k.length >= 6 && k === prev)) return false;
+    prev = k;
+    return true;
+  });
+  return tr;
+}
 function trSimp(tr){
-  if(!tr || tr.simp || (tr.lang && tr.lang !== 'zh')) return tr;
-  (tr.segments || []).forEach(function(s){ s.text = toSimp(s.text); });
-  (tr.chapters || []).forEach(function(c){ c.title = toSimp(c.title); });
-  tr.simp = true;
+  if(!tr) return tr;
+  if(!tr.simp && !(tr.lang && tr.lang !== 'zh')){
+    (tr.segments || []).forEach(function(s){ s.text = toSimp(s.text); });
+    (tr.chapters || []).forEach(function(c){ c.title = toSimp(c.title); });
+    tr.simp = true;
+  }
+  if(tr.segments) trClean(tr);   // 旧文稿打开时也清理一遍（只在内存里，改过或重新分章节时才存回去）
   return tr;
 }
 
