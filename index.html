@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.6.0">
+<meta name="app-version" content="0.7.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -138,6 +138,7 @@ body.has-player .view{padding-bottom:170px}
 .opt .time{flex:none;font-variant-numeric:tabular-nums;font-weight:600;color:var(--accent);margin-right:12px}
 .opt .grow{flex:1;min-width:0}
 .pod-new{display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--muted);background:transparent;box-shadow:none;color:var(--muted);font-size:34px;font-weight:300;opacity:.7}
+.dump{font:12px/1.55 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0;max-height:48vh;overflow:auto;-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 .facts{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px 14px;margin-bottom:12px;font-size:13px}
 .facts div{display:flex;gap:10px;padding:3px 0}
 .facts b{flex:none;width:4em;color:var(--muted);font-weight:normal}
@@ -221,6 +222,17 @@ input[type=file]{display:none}
       <ul class="opts" id="epMarks"></ul>
       <div class="sec">操作</div>
       <ul class="opts" id="epOpts"></ul>
+    </div>
+  </div>
+</div>
+
+<!-- 标签详情 -->
+<div class="sheet" id="tagSheet" hidden>
+  <div class="sheet-box" role="dialog" aria-label="标签详情">
+    <div class="sheet-head"><h2>标签详情</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
+    <div class="sheet-body">
+      <pre class="dump" id="tagText"></pre>
+      <button class="btn block" id="bTagCopy">复制全部内容</button>
     </div>
   </div>
 </div>
@@ -926,19 +938,43 @@ function decodeText(b, enc){
 function clean(s){ return (s || '').replace(/\u0000/g, ' ').replace(/\s+/g, ' ').trim(); }
 function synchsafe(b, i){ return (b[i]&127)<<21 | (b[i+1]&127)<<14 | (b[i+2]&127)<<7 | (b[i+3]&127); }
 function int32(b, i){ return (b[i]<<24 | b[i+1]<<16 | b[i+2]<<8 | b[i+3]) >>> 0; }
-function readId3v2(file){
-  return readBytes(file, 0, 10).then(function(h){
+function le32(b, i){ return (b[i] | b[i+1]<<8 | b[i+2]<<16 | b[i+3]<<24) >>> 0; }
+function hexAscii(h){
+  var hex = [], asc = '';
+  for(var i = 0; i < h.length; i++){ hex.push((h[i] < 16 ? '0' : '') + h[i].toString(16)); asc += h[i] >= 32 && h[i] < 127 ? String.fromCharCode(h[i]) : '.'; }
+  return hex.join(' ') + '  |' + asc + '|';
+}
+// 去掉「不同步」编码：FF 00 还原成 FF
+function unsync(b){
+  var out = [], j;
+  for(j = 0; j < b.length; j++){ out.push(b[j]); if(b[j] === 0xFF && b[j+1] === 0) j++; }
+  return new Uint8Array(out);
+}
+// 文字结尾标记的位置（编码 1、2 是两个 0 字节，要按两字节对齐找）
+function termAt(b, q, enc){
+  if(enc === 1 || enc === 2){ while(q + 1 < b.length && !(b[q] === 0 && b[q+1] === 0)) q += 2; return q; }
+  while(q < b.length && b[q] !== 0) q++;
+  return q;
+}
+// 有的文件开头多了一些字节，在前 256KB 里找 ID3 标签头
+function findId3(file){
+  return readBytes(file, 0, Math.min(file.size, 262144)).then(function(b){
+    for(var i = 1; i + 10 <= b.length; i++){
+      if(b[i] === 0x49 && b[i+1] === 0x44 && b[i+2] === 0x33 && b[i+3] >= 2 && b[i+3] <= 4 && b[i+4] === 0 &&
+         b[i+6] < 0x80 && b[i+7] < 0x80 && b[i+8] < 0x80 && b[i+9] < 0x80) return i;
+    }
+    return -1;
+  });
+}
+function readId3v2(file, off){
+  off = off || 0;
+  return readBytes(file, off, 10).then(function(h){
     if(latin1(h, 0, 3) !== 'ID3') return null;
     var ver = h[3], flags = h[5], size = synchsafe(h, 6);
     if(size > 40e6) return null;
-    return readBytes(file, 10, size).then(function(b){
-      // v2.3 整个标签做了「不同步」编码：FF 00 还原成 FF
-      if(flags & 0x80 && ver < 4){
-        var out = [], j;
-        for(j = 0; j < b.length; j++){ out.push(b[j]); if(b[j] === 0xFF && b[j+1] === 0) j++; }
-        b = new Uint8Array(out);
-      }
-      var p = 0, info = {}, cover = null;
+    return readBytes(file, off + 10, size).then(function(b){
+      if(flags & 0x80 && ver < 4) b = unsync(b);   // v2.2 / v2.3：整个标签做了不同步编码
+      var p = 0, info = {frames:[], offset:off}, cover = null;
       if(flags & 0x40) p = ver === 4 ? synchsafe(b, 0) : int32(b, 0) + 4;
       var idLen = ver === 2 ? 3 : 4, hdr = ver === 2 ? 6 : 10;
       var TEXT = ver === 2 ? {TT2:'title', TAL:'album', TP1:'artist', TP2:'albumArtist'}
@@ -964,34 +1000,151 @@ function readId3v2(file){
           var plain = int32(b, p + 4);
           if(plain !== fs && !endOk(p + hdr + fs) && endOk(p + hdr + plain)) fs = plain;
         }
-        var s = p + hdr, e = Math.min(b.length, s + fs);
-        if(TEXT[id] && e > s){
-          var v = clean(decodeText(b.subarray(s + 1, e), b[s]));
-          if(v && !info[TEXT[id]]) info[TEXT[id]] = v;
-        }else if((id === 'APIC' || id === 'PIC') && e > s){
-          var enc = b[s], q = s + 1;
-          if(id === 'APIC'){ while(q < e && b[q] !== 0) q++; q++; } else q += 3;
-          var picType = b[q++];
-          if(enc === 1 || enc === 2){ while(q + 1 < e && !(b[q] === 0 && b[q+1] === 0)) q += 2; q += 2; }
-          else { while(q < e && b[q] !== 0) q++; q++; }
-          var type = imgType(b, q);
-          // 有多张图时优先用「封面」(类型 3)
-          if(type && (!cover || (picType === 3 && cover.picType !== 3))) cover = {data:b.slice(q, e), type:type, picType:picType};
+        var fl = ver === 2 ? 0 : (b[p+8] << 8 | b[p+9]);
+        var s = p + hdr, e = Math.min(b.length, s + fs), body = b.subarray(s, e), skipped = '';
+        // 帧自己的标志：压缩、加密的跳过；数据长度标记、不同步编码的还原
+        if(ver === 4){
+          if(fl & 0x000C) skipped = '（压缩或加密，跳过）';
+          else{ if(fl & 0x0001) body = body.subarray(4); if(fl & 0x0002) body = unsync(body); }
+        }else if(ver === 3){
+          if(fl & 0x00C0) skipped = '（压缩或加密，跳过）';
+          else if(fl & 0x0020) body = body.subarray(1);
         }
+        var line = id + ' ' + fs + '字节' + skipped;
+        if(!skipped && body.length > 1){
+          var enc = body[0];
+          if(id === 'TXXX' || id === 'TXX'){
+            var de = termAt(body, 1, enc), tw = enc === 1 || enc === 2 ? 2 : 1;
+            var desc = clean(decodeText(body.subarray(1, de), enc)), val = clean(decodeText(body.subarray(de + tw), enc));
+            line = id + ' ' + desc + ' = ' + val.slice(0, 60);
+            if(val && /^(album|podcast|series|show|专辑|节目|播客)/i.test(desc) && !info.txAlbum) info.txAlbum = val;
+          }else if(id.charAt(0) === 'T'){
+            var v = clean(decodeText(body.subarray(1), enc));
+            line = id + ' = ' + v.slice(0, 60);
+            if(TEXT[id] && v && !info[TEXT[id]]) info[TEXT[id]] = v;
+          }else if(id === 'APIC' || id === 'PIC'){
+            var q = 1, mime = '';
+            if(id === 'APIC'){ var me = q; while(me < body.length && body[me] !== 0) me++; mime = latin1(body, q, me); q = me + 1; }
+            else { mime = latin1(body, 1, 4); q = 4; }
+            var picType = body[q++], dq = termAt(body, q, enc);
+            q = dq + (enc === 1 || enc === 2 ? 2 : 1);
+            var type = imgType(body, q);
+            line = id + ' ' + (mime || '?') + ' 类型' + picType + ' ' + fmtSize(Math.max(0, body.length - q)) + (type ? '' : '（认不出图片格式）');
+            // 有多张图时优先用「封面」(类型 3)
+            if(type && (!cover || (picType === 3 && cover.picType !== 3))) cover = {data:body.slice(q), type:type, picType:picType};
+          }
+        }
+        if(info.frames.length < 60) info.frames.push(line);
         p = s + fs;
       }
       info.cover = cover;
       info.format = 'ID3v2.' + ver;
+      if(!info.album && info.txAlbum) info.album = info.txAlbum;
       return info;
     });
   });
+}
+// 把一段 Vorbis 注释（FLAC / Ogg）读进 info
+function parseVorbis(b, p, info){
+  var vl = le32(b, p); p += 4 + vl;
+  var n = le32(b, p); p += 4;
+  var MAP = {TITLE:'title', ALBUM:'album', ARTIST:'artist', ALBUMARTIST:'albumArtist'};
+  for(var i = 0; i < n && p + 4 <= b.length; i++){
+    var l = le32(b, p); p += 4;
+    if(l > b.length - p) break;
+    var s = new TextDecoder('utf-8').decode(b.subarray(p, p + l)); p += l;
+    var k = s.indexOf('='); if(k < 0) continue;
+    var key = s.slice(0, k).toUpperCase(), val = s.slice(k + 1);
+    if(key === 'METADATA_BLOCK_PICTURE'){
+      try{ var raw = atob(val), pic = new Uint8Array(raw.length); for(var j = 0; j < raw.length; j++) pic[j] = raw.charCodeAt(j); parsePicture(pic, info); }catch(e){}
+      info.frames.push(key + ' ' + fmtSize(val.length * 3 / 4));
+    }else{
+      val = clean(val);
+      if(MAP[key] && val && !info[MAP[key]]) info[MAP[key]] = val;
+      if(info.frames.length < 60) info.frames.push(key + ' = ' + val.slice(0, 60));
+    }
+  }
+}
+function parsePicture(b, info){   // FLAC 的图片块
+  var picType = int32(b, 0), ml = int32(b, 4), dl = int32(b, 8 + ml);
+  var q = 12 + ml + dl + 16, len = int32(b, q), data = b.subarray(q + 4, q + 4 + len);
+  var type = imgType(data, 0);
+  if(type && (!info.cover || (picType === 3 && info.cover.picType !== 3))) info.cover = {data:data.slice(), type:type, picType:picType};
+}
+function readFlac(file){
+  var info = {format:'FLAC', frames:[]};
+  function next(pos){
+    return readBytes(file, pos, 4).then(function(h){
+      var last = h[0] & 0x80, type = h[0] & 0x7f, len = h[1]<<16 | h[2]<<8 | h[3];
+      function after(){ return last || pos + 4 + len >= file.size ? info : next(pos + 4 + len); }
+      if((type === 4 || type === 6) && len < 40e6){
+        return readBytes(file, pos + 4, len).then(function(b){ if(type === 4) parseVorbis(b, 0, info); else parsePicture(b, info); return after(); });
+      }
+      return after();
+    });
+  }
+  return next(4);
+}
+function readOgg(file){
+  // 把开头几个 Ogg 页拼成数据包，第 2 个包就是注释（Opus: OpusTags，Vorbis: 0x03 + vorbis）
+  return readBytes(file, 0, Math.min(file.size, 3e6)).then(function(b){
+    var packets = [], cur = [], p = 0;
+    while(p + 27 <= b.length && latin1(b, p, p + 4) === 'OggS' && packets.length < 2){
+      var n = b[p + 26], q = p + 27 + n, segs = b.subarray(p + 27, p + 27 + n);
+      for(var i = 0; i < n; i++){
+        var seg = b.subarray(q, q + segs[i]); q += segs[i];
+        for(var k = 0; k < seg.length; k++) cur.push(seg[k]);
+        if(segs[i] < 255){ packets.push(new Uint8Array(cur)); cur = []; if(packets.length >= 2) break; }
+      }
+      p = q;
+    }
+    var pk = packets[1], info = {format:'Ogg', frames:[]};
+    if(!pk) return info;
+    if(latin1(pk, 0, 8) === 'OpusTags'){ info.format = 'Ogg Opus'; parseVorbis(pk, 8, info); }
+    else if(pk[0] === 3 && latin1(pk, 1, 7) === 'vorbis'){ info.format = 'Ogg Vorbis'; parseVorbis(pk, 7, info); }
+    else if((pk[0] & 0x7f) === 4){ info.format = 'Ogg FLAC'; parseVorbis(pk, 4, info); }
+    return info;
+  });
+}
+// APEv2 标签（在文件末尾，有的 mp3 会带）
+function readApe(file){
+  function at(pos){
+    if(pos < 0) return Promise.resolve(null);
+    return readBytes(file, pos, 32).then(function(f){
+      if(latin1(f, 0, 8) !== 'APETAGEX') return null;
+      var size = le32(f, 12), count = le32(f, 16);
+      if(size < 32 || size > 40e6 || pos + 32 - size < 0) return null;
+      return readBytes(file, pos + 32 - size, size - 32).then(function(b){
+        var info = {format:'APEv2', frames:[]}, p = 0, MAP = {title:'title', album:'album', artist:'artist', 'album artist':'albumArtist', albumartist:'albumArtist'};
+        for(var n = 0; n < count && p + 8 < b.length; n++){
+          var vs = le32(b, p), ifl = le32(b, p + 4), q = p + 8;
+          while(q < b.length && b[q] !== 0) q++;
+          var key = latin1(b, p + 8, q), vals = b.subarray(q + 1, q + 1 + vs), lk = key.toLowerCase();
+          p = q + 1 + vs;
+          if(((ifl >> 1) & 3) === 0){
+            var v = clean(new TextDecoder('utf-8').decode(vals));
+            if(MAP[lk] && v && !info[MAP[lk]]) info[MAP[lk]] = v;
+            info.frames.push(key + ' = ' + v.slice(0, 60));
+          }else{
+            var z = vals.indexOf(0), data = vals.subarray(z + 1), type = imgType(data, 0);
+            if(lk.indexOf('cover art') === 0 && type && !info.cover) info.cover = {data:data.slice(), type:type};
+            info.frames.push(key + ' ' + fmtSize(vs));
+          }
+        }
+        return info;
+      });
+    });
+  }
+  return at(file.size - 32).then(function(r){ return r || at(file.size - 160); });
 }
 function readId3v1(file){
   if(file.size < 128) return Promise.resolve(null);
   return readBytes(file, file.size - 128, 128).then(function(b){
     if(latin1(b, 0, 3) !== 'TAG') return null;
     function txt(s, e){ var x = b.subarray(s, e), n = x.indexOf(0); return clean(decodeText(n >= 0 ? x.subarray(0, n) : x, 0)); }
-    return {title:txt(3, 33), artist:txt(33, 63), album:txt(63, 93), format:'ID3v1'};
+    var v1 = {title:txt(3, 33), artist:txt(33, 63), album:txt(63, 93), format:'ID3v1'};
+    v1.frames = ['title = ' + v1.title, 'artist = ' + v1.artist, 'album = ' + v1.album];
+    return v1;
   });
 }
 function readMp4(file){
@@ -1047,24 +1200,52 @@ function readMp4(file){
   }
   return walk(0, 0, file.size);
 }
-// 按文件内容判断格式（不看扩展名），读不到专辑时再看 ID3v1
+// 按文件内容判断格式（不看扩展名）；读不到的信息再依次看 APEv2、ID3v1
+function mergeInfo(info, more){
+  if(!more) return;
+  ['album','title','artist','albumArtist'].forEach(function(k){ if(!info[k] && more[k]) info[k] = more[k]; });
+  if(!info.cover && more.cover) info.cover = more.cover;
+  info.format = info.format ? info.format + ' + ' + more.format : more.format;
+  (more.frames || []).forEach(function(f){ info.frames.push(more.format + '：' + f); });
+}
 function readTags(file){
-  return readBytes(file, 0, 12).then(function(h){
-    var main = latin1(h, 0, 3) === 'ID3' ? readId3v2(file)
+  return readBytes(file, 0, 16).then(function(h){
+    var head = hexAscii(h), magic = latin1(h, 0, 4);
+    var main = magic.slice(0, 3) === 'ID3' ? readId3v2(file, 0)
              : latin1(h, 4, 8) === 'ftyp' ? readMp4(file)
-             : Promise.resolve(null);
+             : magic === 'fLaC' ? readFlac(file)
+             : magic === 'OggS' ? readOgg(file)
+             : findId3(file).then(function(off){ return off > 0 ? readId3v2(file, off) : null; });
     return main.catch(function(){ return null; }).then(function(info){
       info = info || {};
-      if(info.album && info.title) return info;
-      return readId3v1(file).catch(function(){ return null; }).then(function(v1){
-        if(v1){
-          ['album','title','artist'].forEach(function(k){ if(!info[k] && v1[k]) info[k] = v1[k]; });
-          info.format = info.format ? info.format + ' + ID3v1' : 'ID3v1';
-        }
-        return info;
+      info.head = head;
+      if(!info.frames) info.frames = [];
+      if(info.album && info.title && info.cover) return info;
+      return readApe(file).catch(function(){ return null; }).then(function(ape){
+        mergeInfo(info, ape);
+        if(info.album && info.title) return info;
+        return readId3v1(file).catch(function(){ return null; }).then(function(v1){ mergeInfo(info, v1); return info; });
       });
     });
   });
+}
+function describeTags(ep){
+  var t = ep.tags || {}, L = [];
+  L.push('文件：' + ep.name + '（' + fmtSize(ep.size) + '）');
+  L.push('开头：' + (t.head || '?'));
+  L.push('格式：' + (t.format || '没有认出标签') + (t.offset ? '（标签从第 ' + t.offset + ' 字节开始）' : ''));
+  L.push('专辑：' + (t.album || '（空）'));
+  L.push('标题：' + (t.title || '（空）'));
+  L.push('艺术家：' + (t.artist || '（空）'));
+  L.push('专辑艺术家：' + (t.albumArtist || '（空）'));
+  L.push('封面：' + (t.coverDesc || '没有'));
+  L.push('归入专辑：' + ep.tagShow);
+  L.push('');
+  if(t.frames && t.frames.length){
+    L.push('标签里的内容：');
+    t.frames.forEach(function(f){ L.push('  ' + f); });
+  }else L.push('文件里没有找到任何标签内容。');
+  return L.join('\n');
 }
 // 封面缩成小图存起来，首页显示用
 function thumb(url){
@@ -1083,10 +1264,12 @@ function thumb(url){
 function readInfo(ep){
   return readTags(ep.blob).catch(function(){ return {}; }).then(function(info){
     ep.tags = info;
+    if(info.cover) info.coverDesc = info.cover.type + ' ' + fmtSize(info.cover.data.length);
     ep.title = info.title || stripExt(ep.name);
     ep.tagShow = info.album || info.albumArtist || info.artist || OTHER;
     if(ep.art) URL.revokeObjectURL(ep.art.url);
     ep.art = info.cover ? {url:URL.createObjectURL(new Blob([info.cover.data], {type:info.cover.type})), type:info.cover.type} : null;
+    info.cover = null;   // 图片已经转成链接，不用在内存里再留一份
     // 每一集都留一条记录（没听过的 updated 为 0），文件删了以后节目里也能看到
     var r = records[ep.key] || (records[ep.key] = {name:ep.name, size:ep.size, duration:0, position:0, updated:0});
     ep.show = r.customShow || ep.tagShow;
@@ -1197,6 +1380,10 @@ function showEpMenu(key){
   var n = renderMarkList($('epMarks'), key, function(){ closeSheet('epSheet'); });
   $('epMarksHead').hidden = !n;
   var items = [{label:'移动到专辑', note:'现在在「' + showOf(key) + '」', pick:function(){ closeSheet('epSheet'); showMoveMenu(key); }}];
+  if(ep) items.push({label:'查看标签详情', note:'看看文件里到底存了哪些信息', pick:function(){
+    $('tagText').textContent = describeTags(ep);
+    closeSheet('epSheet'); openSheet('tagSheet');
+  }});
   if(ep) items.push({label:'删除本地音频文件', note:'释放空间，保留播放记录和信息', danger:true, pick:function(){
     closeSheet('epSheet');
     deleteFile(key).then(function(){ toast('已删除音频文件，播放记录还在'); render(); updateStorage(); });
@@ -1209,6 +1396,17 @@ function showEpMenu(key){
   renderOpts($('epOpts'), items);
   openSheet('epSheet');
 }
+
+$('bTagCopy').onclick = function(){
+  var text = $('tagText').textContent;
+  function pickText(){
+    var r = document.createRange(); r.selectNodeContents($('tagText'));
+    var s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    toast('已选中，请手动拷贝');
+  }
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function(){ toast('已复制'); }, pickText);
+  else pickText();
+};
 
 /* ---------- 页面 ---------- */
 function goShow(name){
