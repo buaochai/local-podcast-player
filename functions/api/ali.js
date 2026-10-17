@@ -56,7 +56,7 @@ export async function onRequest({request}){
     if(!/^[\w\-]+$/.test(id)) return json({error: '任务编号不对'}, 400);
     var tr = await fetch(base + '/tasks/' + id, {headers: auth(key)});
     if(!tr.ok) return pass(tr);
-    var t = await tr.json(), out = t.output || {};
+    var t = await tr.json(), out = t.output || t.data || {};
     // 完成了：把每个结果文件读回来，网页就不用再去阿里云取
     if(out.task_status === 'SUCCEEDED'){
       out.transcripts = [];

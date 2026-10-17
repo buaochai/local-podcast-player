@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.26.4">
+<meta name="app-version" content="0.26.5">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -2911,7 +2911,7 @@ function reqAli(blob, fmt, signal){
     return aliWait(n < 5 ? 3000 : 8000, signal).then(function(){
       return aliFetch('task', '&id=' + encodeURIComponent(id), {signal:signal});
     }).then(function(j){
-      var out = j.output || {}, st = out.task_status;
+      var out = j.output || j.data || {}, st = out.task_status;
       if(st === 'SUCCEEDED'){
         var sents = [], text = '';
         (out.transcripts || []).forEach(function(f){
@@ -2933,9 +2933,9 @@ function reqAli(blob, fmt, signal){
   // 音频由手机直接传到百炼的临时存储（不经过 Cloudflare）。普通表单上传不会被跨域挡住，只是读不到回应，
   // 所以传完不判断结果；文件没传上去的话，下一步提交任务会报「找不到文件」。
   return aliFetch('policy', '', {signal:signal}).then(function(j){
-    var p = j.output || {}, host = '';
+    var p = j.data || j.output || j, host = '';   // 百炼把凭证放在 data 里（官方 SDK 两种都认）
     try{ var hu = new URL(p.upload_host); if(/^https?:$/.test(hu.protocol) && /(^|\.)aliyuncs\.com$/.test(hu.hostname)) host = p.upload_host; }catch(e){}
-    if(!host || !p.upload_dir) throw new Error('百炼没有给出上传地址');
+    if(!host || !p.upload_dir) throw new Error('百炼没有给出上传地址（收到：' + Object.keys(p).slice(0, 8).join(', ') + '）');
     var objKey = p.upload_dir + '/' + Date.now() + '_part.' + fmt, type = fmt === 'm4a' ? 'audio/mp4' : fmt === 'wav' ? 'audio/wav' : 'audio/mpeg';
     var fd = new FormData();
     fd.append('OSSAccessKeyId', p.oss_access_key_id);
@@ -2950,7 +2950,7 @@ function reqAli(blob, fmt, signal){
     return fetch(host, {method:'POST', mode:'no-cors', body:fd, signal:signal}).then(function(){ return {url:'oss://' + objKey}; });
   }).catch(step('上传音频')).then(function(j){
     return aliFetch('submit', '', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:j.url, model:aiModel()}), signal:signal}).then(function(j){
-      var id = j.output && j.output.task_id;
+      var id = (j.output || j.data || {}).task_id;
       if(!id) throw new Error('百炼没有返回任务编号' + (j.message ? '：' + j.message : ''));
       return id;
     }).catch(step('提交识别任务'));
