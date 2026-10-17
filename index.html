@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.16.0">
+<meta name="app-version" content="0.17.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -243,6 +243,7 @@ select.input{appearance:auto;-webkit-appearance:menulist}
 .ver-row .ver-num{font-weight:600}
 .ver-row .ver-status{font-size:13px;color:var(--muted)}
 .tools{display:flex;gap:8px;margin-top:8px}
+#syncInfo{white-space:pre-line}
 .tools .btn{flex:1}
 
 /* 顶部提示：最多两行 */
@@ -509,6 +510,32 @@ input[type=file]{display:none}
   </div>
 </div>
 
+<!-- 云同步 -->
+<div class="sheet" id="syncSheet" hidden>
+  <div class="sheet-box" role="dialog" aria-label="云同步">
+    <div class="sheet-head"><h2>云同步</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
+    <div class="sheet-body">
+      <div id="syncOff">
+        <p>设一个同步密码（至少 8 位）。数据用这个密码在本机加密后才上传，密码本身不会上传；忘了密码云端数据就打不开了，请记好。其他设备填同一个密码即可。</p>
+        <div class="sec">同步密码</div>
+        <input class="input" id="syncPw" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="至少 8 位">
+        <div class="sec">再输一次</div>
+        <input class="input" id="syncPw2" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="确认密码">
+        <div class="sec">服务器地址</div>
+        <input class="input" id="syncServer" autocapitalize="off" spellcheck="false" placeholder="网页放在 Cloudflare 上时不用填">
+        <p>只有在别的地方（比如 GitHub Pages）打开网页时才要填，填 Cloudflare 上的网址，例如 https://xxx.pages.dev</p>
+        <button class="btn primary block" id="bSyncOn">开启同步</button>
+      </div>
+      <div id="syncOn" hidden>
+        <p id="syncInfo"></p>
+        <button class="btn primary block" id="bSyncNow">立即同步</button>
+        <button class="btn danger block" id="bSyncOff">在这台设备上关闭同步</button>
+        <p>关闭后本机记录保留，云端数据也保留；以后重新填同一个密码就能接着同步。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 关于 -->
 <div class="sheet" id="about" hidden>
   <div class="sheet-box" role="dialog" aria-label="关于">
@@ -558,6 +585,16 @@ input[type=file]{display:none}
         <button class="btn" id="bExport">导出记录</button>
         <button class="btn" id="bImport">导入记录</button>
       </div>
+
+      <h3>云同步</h3>
+      <p>播放记录、收藏的时间点、AI 设置（含 API Key）先用你的同步密码在本机加密，再存到 Cloudflare D1；服务器只存密文。其他设备填同一个密码就会自动同步。音频文件和文稿不同步。</p>
+      <div class="ver-row">
+        <div class="ver-text">
+          <div class="ver-num">云同步</div>
+          <div class="ver-status" id="syncStatus"></div>
+        </div>
+        <button class="btn" id="bSyncSet">设置</button>
+      </div>
     </div>
   </div>
 </div>
@@ -599,8 +636,8 @@ var records = load(STORE_KEY, {});
 // shows: { "<节目名>": {cover:"data:image/jpeg..."} } 节目封面小图
 var shows = load(SHOWS_KEY, {});
 var settings = load(SETTINGS_KEY, {speed:1});
-function saveRecords(){ save(STORE_KEY, records); }
-function saveShows(){ save(SHOWS_KEY, shows); }
+function saveRecords(){ save(STORE_KEY, records); syncSoon(); }
+function saveShows(){ save(SHOWS_KEY, shows); syncSoon(); }
 function saveSettings(){ save(SETTINGS_KEY, settings); }
 function migrateOther(){
   var changed = false;
@@ -818,16 +855,16 @@ function moveTo(key, name){
   if(!r) return;
   var tag = r.tagShow || OTHER;
   if(name === tag) delete r.customShow; else r.customShow = name;
-  r.show = name;
+  r.show = name; r.ct = Date.now();
   if(ep) ep.show = name;
-  if(name !== tag && !shows[name]) shows[name] = {custom:true};
+  if(name !== tag && !shows[name]) shows[name] = {custom:true, at:Date.now()};
   saveRecords(); saveShows();
   if(cur && cur.key === key) setMediaSession();
 }
 function createAlbum(name){
   name = clean(name);
   if(!name) return '';
-  if(!shows[name] && albumNames().indexOf(name) < 0) shows[name] = {custom:true};
+  if(!shows[name] && albumNames().indexOf(name) < 0) shows[name] = {custom:true, at:Date.now()};
   saveShows();
   return name;
 }
@@ -837,18 +874,18 @@ function renameAlbum(oldName, newName){
   var keys = episodeKeys(oldName).slice();
   var old = shows[oldName];
   shows[newName] = shows[newName] || {custom:true};
-  shows[newName].custom = true;
+  shows[newName].custom = true; shows[newName].at = Date.now();
   if(old && old.cover && !shows[newName].cover) shows[newName].cover = old.cover;
   if(old && old.author && !shows[newName].author) shows[newName].author = old.author;
   keys.forEach(function(k){ moveTo(k, newName); });
-  if(old && old.custom) delete shows[oldName];
-  else if(old) delete old.custom;
+  if(old && old.custom){ delete shows[oldName]; syncDel('s|' + oldName); }
+  else if(old){ delete old.custom; old.at = Date.now(); }
   saveShows();
 }
 // 删除自建专辑：里面的集回到各自原来的专辑
 function deleteAlbum(name){
   episodeKeys(name).slice().forEach(function(k){ moveTo(k, records[k].tagShow || OTHER); });
-  delete shows[name];
+  delete shows[name]; syncDel('s|' + name);
   saveShows();
 }
 
@@ -1064,6 +1101,7 @@ function renderMarkList(ul, key, after){
       if(!confirm('删除 ' + fmt(m.t) + ' 的收藏？')) return;
       var arr = records[key].marks, i = arr.indexOf(m);
       if(i >= 0) arr.splice(i, 1);
+      records[key].mt = Date.now();
       saveRecords(); renderMarkList(ul, key, after); renderMini(); render();
     });
     var ed = el('button', 'opt-edit');
@@ -1076,7 +1114,7 @@ function renderMarkList(ul, key, after){
 }
 function editMarkNote(key, m, done){
   ask('修改收藏原因（' + fmt(m.t) + '）', m.note || '', '收藏原因（可以留空）', function(v){
-    m.note = v || ''; saveRecords();
+    m.note = v || ''; if(records[key]) records[key].mt = Date.now(); saveRecords();
     if(done) done();
     renderMini(); render(); toast('已修改');
   }, {allowEmpty:true, maxlength:100});
@@ -1093,6 +1131,7 @@ $('bMark').onclick = function(){
 function addMark(sec, note){
   var r = records[cur.key] || (records[cur.key] = {name:cur.name, size:cur.size, duration:0, position:0, updated:0, show:cur.show, title:cur.title});
   (r.marks = r.marks || []).push({t:Math.floor(sec), note:note || '', created:Date.now()});
+  r.mt = Date.now();
   saveRecords();
   renderMini(); render();
 }
@@ -1170,6 +1209,7 @@ function saveAlbum(){
   if(nm !== old) renameAlbum(old, nm);
   shows[nm] = shows[nm] || {};
   if(au) shows[nm].author = au; else delete shows[nm].author;
+  shows[nm].at = Date.now();
   saveShows();
   if(view.page === 'show' && view.show === old){ view.show = nm; history.replaceState({show:nm}, ''); }
   if(cur) setMediaSession();
@@ -1692,7 +1732,7 @@ function readInfo(ep){
     ep.art = info.cover ? {url:URL.createObjectURL(new Blob([info.cover.data], {type:info.cover.type})), type:info.cover.type} : null;
     info.cover = null;   // 图片已经转成链接，不用在内存里再留一份
     // 每一集都留一条记录（没听过的 updated 为 0），文件删了以后节目里也能看到
-    var r = records[ep.key] || (records[ep.key] = {name:ep.name, size:ep.size, duration:0, position:0, updated:0});
+    var r = records[ep.key] || (records[ep.key] = {name:ep.name, size:ep.size, duration:0, position:0, updated:0, added:Date.now()});
     ep.show = r.customShow || ep.tagShow;
     r.tagShow = ep.tagShow; r.show = ep.show; r.title = ep.title; r.artist = info.artist || info.albumArtist || r.artist || '';
     // 封面存给原专辑（自建专辑会借用它）
@@ -1793,7 +1833,7 @@ function deleteFile(key){
 function deleteEpisode(key){
   var show = showOf(key);
   return deleteFile(key).then(function(){ return trDelete(key); }).then(function(){
-    delete records[key];
+    delete records[key]; syncDel(key);
     saveRecords();
     if(!episodeKeys(show).length && shows[show] && !shows[show].custom){ delete shows[show]; saveShows(); }
   });
@@ -2169,7 +2209,7 @@ var AI_PROVIDERS = {
     help:'任何兼容 OpenAI 聊天接口、能听音频（input_audio）的模型，例如阿里百炼的 Qwen-Audio / Qwen-Omni：填接口地址（到 /v1 为止）和模型名。'}
 };
 var ai = load(AI_KEY, {provider:'openai', key:'', model:'', base:'', lang:'zh', wav:false});
-function saveAi(){ save(AI_KEY, ai); }
+function saveAi(){ ai.mt = Date.now(); save(AI_KEY, ai); syncSoon(); }
 function aiProv(){ return AI_PROVIDERS[ai.provider] || AI_PROVIDERS.openai; }
 function aiBase(){ return (ai.base || aiProv().base || '').replace(/\/+$/, ''); }
 function aiModel(){ return ai.model || aiProv().model || ''; }
@@ -3181,6 +3221,234 @@ function showTrMore(key){
 }
 $('bEpMore').onclick = function(){ if(view.page === 'ep') showTrMore(view.key); };
 
+/* ======================== 云同步（Cloudflare D1，本机加密） ======================== */
+// 同步：播放记录（含收藏时间点）、自建专辑和创作者、AI 设置（含 Key）。整份用同步密码加密成一条存进 D1。
+// 合并：进度看 updated，收藏看 mt，移动专辑看 ct，AI 设置看 ai.mt，专辑看 at；删掉的记在 del 里（专辑前缀 s|）。
+var SYNC_KEY = 'lpp.sync.v1';
+var syncCfg = load(SYNC_KEY, {});   // {server, id, key:AES 密钥 base64, ver, last, del:{}}
+var syncTimer = 0, syncBusy = null, syncAgain = false, syncErr = '', syncWasEmpty = false;
+function saveSyncCfg(){ save(SYNC_KEY, syncCfg); }
+function syncOn(){ return !!(syncCfg && syncCfg.id && syncCfg.key && window.crypto && crypto.subtle); }
+function syncUrl(){ return (syncCfg.server || '').replace(/\/+$/, '') + '/api/sync'; }
+function syncDel(k){
+  if(!syncOn()) return;
+  (syncCfg.del = syncCfg.del || {})[k] = Date.now();
+  saveSyncCfg();
+}
+function syncSoon(){
+  if(!syncOn() || syncTimer) return;
+  syncTimer = setTimeout(function(){ syncTimer = 0; syncNow(); }, 30000);
+}
+
+/* ---- 加密：PBKDF2 从密码算出 AES 密钥和同步编号（两半互不相干，服务器拿到编号也推不出密钥）---- */
+function b64(buf){
+  var s = '', b = new Uint8Array(buf);
+  for(var i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+function unb64(s){
+  var t = atob(s), b = new Uint8Array(t.length);
+  for(var i = 0; i < t.length; i++) b[i] = t.charCodeAt(i);
+  return b;
+}
+function hex(buf){ return Array.prototype.map.call(new Uint8Array(buf), function(x){ return (x + 256).toString(16).slice(1); }).join(''); }
+function syncDerive(pw){
+  var enc = new TextEncoder();
+  return crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveBits']).then(function(k){
+    return crypto.subtle.deriveBits({name:'PBKDF2', salt:enc.encode('local-podcast-player/sync/v1'), iterations:300000, hash:'SHA-256'}, k, 512);
+  }).then(function(bits){
+    var b = new Uint8Array(bits);
+    return crypto.subtle.digest('SHA-256', b.slice(32)).then(function(h){ return {key:b64(b.slice(0, 32)), id:hex(h)}; });
+  });
+}
+function syncAes(){ return crypto.subtle.importKey('raw', unb64(syncCfg.key), 'AES-GCM', false, ['encrypt', 'decrypt']); }
+function syncEncrypt(text){
+  var iv = crypto.getRandomValues(new Uint8Array(12));
+  return syncAes().then(function(k){ return crypto.subtle.encrypt({name:'AES-GCM', iv:iv}, k, new TextEncoder().encode(text)); })
+    .then(function(c){ return JSON.stringify({v:1, iv:b64(iv), c:b64(c)}); });
+}
+function syncDecrypt(data){
+  return syncAes().then(function(k){
+    var o = JSON.parse(data);
+    return crypto.subtle.decrypt({name:'AES-GCM', iv:unb64(o.iv)}, k, unb64(o.c));
+  }).then(function(p){ return new TextDecoder().decode(p); });
+}
+// 键按顺序排好，内容一样时字符串也一样，用来判断要不要上传
+function stableJson(v){
+  if(Array.isArray(v)) return '[' + v.map(stableJson).join(',') + ']';
+  if(v && typeof v === 'object') return '{' + Object.keys(v).sort().filter(function(k){ return v[k] !== undefined; }).map(function(k){ return JSON.stringify(k) + ':' + stableJson(v[k]); }).join(',') + '}';
+  return JSON.stringify(v === undefined ? null : v);
+}
+
+/* ---- 合并 ---- */
+function syncPayload(){
+  var sh = {};
+  Object.keys(shows).forEach(function(n){
+    var s = shows[n];
+    if(s && (s.custom || s.author)) sh[n] = {custom:!!s.custom, author:s.author || '', at:s.at || 0};
+  });
+  return {app:'local-podcast-player', records:records, shows:sh, ai:ai, del:syncCfg.del || {}};
+}
+function syncMerge(R){
+  var changed = false, del = syncCfg.del = syncCfg.del || {};
+  Object.keys(R.del || {}).forEach(function(k){ if((R.del[k] || 0) > (del[k] || 0)) del[k] = R.del[k]; });
+  var rr = R.records || {};
+  Object.keys(rr).forEach(function(k){
+    var b = rr[k], a = records[k];
+    if(!b || typeof b.name !== 'string') return;
+    if(!a){ records[k] = b; changed = true; return; }
+    if((b.updated || 0) > (a.updated || 0)){
+      a.duration = b.duration || a.duration; a.position = b.position; a.finished = b.finished; a.updated = b.updated;
+      // 正停在这一集：跳到别的设备听到的位置
+      if(cur && cur.key === k && cur.loaded && audio.paused && isFinite(b.position)) audio.currentTime = b.position;
+      changed = true;
+    }
+    if((b.mt || 0) > (a.mt || 0)){ a.marks = b.marks || []; a.mt = b.mt; changed = true; }
+    if((b.ct || 0) > (a.ct || 0)){
+      if(b.customShow) a.customShow = b.customShow; else delete a.customShow;
+      a.ct = b.ct;
+      a.show = a.customShow || a.tagShow || a.show || OTHER;
+      var ep = findEp(k);
+      if(ep) ep.show = a.show;
+      changed = true;
+    }
+  });
+  var rs = R.shows || {};
+  Object.keys(rs).forEach(function(n){
+    var b = rs[n], a = shows[n];
+    if(!b || n === OTHER || (del['s|' + n] || 0) > (b.at || 0)) return;
+    if(a && (a.at || 0) >= (b.at || 0)) return;
+    a = shows[n] = a || {};
+    if(b.custom) a.custom = true; else delete a.custom;
+    if(b.author) a.author = b.author; else delete a.author;
+    a.at = b.at || 0;
+    changed = true;
+  });
+  // 别的设备删掉的：本机没有音频文件、之后也没再动过的才删
+  Object.keys(del).forEach(function(k){
+    if(k.indexOf('s|') === 0){
+      var n = k.slice(2), s = shows[n];
+      if(s && s.custom && (s.at || 0) < del[k] && !episodeKeys(n).length){ delete shows[n]; changed = true; }
+      return;
+    }
+    var r = records[k];
+    if(r && Math.max(r.updated || 0, r.mt || 0, r.ct || 0, r.added || 0) < del[k] && !findEp(k)){ delete records[k]; changed = true; }
+  });
+  if(R.ai && (R.ai.mt || 0) > (ai.mt || 0)){ ai = R.ai; save(AI_KEY, ai); showAiStatus(); }
+  return changed;
+}
+
+/* ---- 和服务器来回 ---- */
+function syncFetch(method, body){
+  var opt = {method:method, headers:{'X-Sync-Id':syncCfg.id}, cache:'no-store'};
+  if(body){ opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+  return fetch(syncUrl(), opt).then(function(res){
+    return res.json().catch(function(){ return null; }).then(function(j){
+      if(j && (res.ok || res.status === 409)) return j;
+      if(j && j.error) throw new Error(j.error);
+      throw new Error(res.status === 404 || res.status === 405 || !j ? '这个地址没有同步接口，请检查服务器地址' : '服务器出错（' + res.status + '）');
+    });
+  }, function(){ throw new Error('连不上同步服务器'); });
+}
+// 读出云端那份，合并进本机，返回 {ver, plain}
+function syncApply(j){
+  syncWasEmpty = !j.data;
+  if(!j.data) return Promise.resolve({ver:j.ver || 0, plain:''});
+  return syncDecrypt(j.data).catch(function(){ throw new Error('解不开云端数据（密码不对？）'); }).then(function(plain){
+    var R;
+    try{ R = JSON.parse(plain); }catch(e){ throw new Error('云端数据损坏'); }
+    if(syncMerge(R)){
+      save(STORE_KEY, records); save(SHOWS_KEY, shows);
+      if(ready){ render(); renderMini(); }
+    }
+    saveSyncCfg();
+    return {ver:j.ver, plain:plain};
+  });
+}
+function syncPush(st, n){
+  var plain = stableJson(syncPayload());
+  if(plain === st.plain){ syncCfg.ver = st.ver; return Promise.resolve(); }   // 云端已经是这份
+  return syncEncrypt(plain).then(function(data){
+    if(data.length > 1400000) throw new Error('记录太多，超过同步上限');
+    return syncFetch('PUT', {ver:st.ver, data:data});
+  }).then(function(j){
+    if(!j.conflict){ syncCfg.ver = j.ver; return; }
+    // 别的设备刚传过：先合并它那份再传
+    if(n >= 3) throw new Error('同步冲突，稍后会再试');
+    return syncApply(j).then(function(st2){ return syncPush(st2, n + 1); });
+  });
+}
+function syncNow(manual){
+  if(!syncOn()) return Promise.resolve(false);
+  if(syncBusy){ syncAgain = true; return syncBusy; }
+  clearTimeout(syncTimer); syncTimer = 0;
+  syncBusy = syncFetch('GET').then(syncApply).then(function(st){ return syncPush(st, 0); }).then(function(){
+    syncErr = ''; syncCfg.last = Date.now(); saveSyncCfg(); return true;
+  }, function(e){ syncErr = (e && e.message) || '同步失败'; return false; }).then(function(ok){
+    syncBusy = null; showSyncStatus();
+    if(syncAgain){ syncAgain = false; syncSoon(); }
+    if(manual) toast(ok ? '已同步' : '同步失败：' + syncErr);
+    return ok;
+  });
+  showSyncStatus();
+  return syncBusy;
+}
+
+/* ---- 设置界面 ---- */
+function syncStatusText(){
+  if(!syncOn()) return '没有开启';
+  if(syncBusy) return '正在同步…';
+  if(syncErr) return '同步失败：' + syncErr;
+  return '已开启' + (syncCfg.last ? ' · 上次同步 ' + fmtDate(syncCfg.last) : '');
+}
+function showSyncStatus(){
+  $('syncStatus').textContent = syncStatusText();
+  $('syncInfo').textContent = syncStatusText() + '\n服务器：' + (syncCfg.server || '本网站（' + location.host + '）');
+}
+function fillSyncSheet(){
+  var on = syncOn();
+  $('syncOff').hidden = on; $('syncOn').hidden = !on;
+  $('syncPw').value = ''; $('syncPw2').value = '';
+  $('syncServer').value = syncCfg.server || '';
+  showSyncStatus();
+}
+$('bSyncSet').onclick = function(){ fillSyncSheet(); closeSheet('about'); openSheet('syncSheet'); };
+$('bSyncOn').onclick = function(){
+  var pw = $('syncPw').value, server = clean($('syncServer').value).replace(/\/+$/, ''), btn = this;
+  if(!(window.crypto && crypto.subtle)){ toast('这个浏览器不支持加密（网页要用 https 打开）'); return; }
+  if(pw.length < 8){ toast('同步密码至少 8 位'); return; }
+  if(pw !== $('syncPw2').value){ toast('两次输入的密码不一样'); return; }
+  if(server && !/^https?:\/\//i.test(server)) server = 'https://' + server;
+  $('syncPw').blur(); $('syncPw2').blur(); $('syncServer').blur();
+  btn.disabled = true; btn.textContent = '正在连接…';
+  recordNow(true);
+  syncDerive(pw).then(function(d){
+    syncCfg = {server:server, id:d.id, key:d.key, ver:0, del:{}};
+    saveSyncCfg();
+    return syncNow();
+  }).then(function(ok){
+    btn.disabled = false; btn.textContent = '开启同步';
+    if(ok){ fillSyncSheet(); toast(syncWasEmpty ? '已开启：云端还没有这个密码的数据，这台是第一台' : '已开启，已和云端数据合并', 3500); return; }
+    var err = syncErr;
+    syncCfg = {server:server}; syncErr = ''; saveSyncCfg(); showSyncStatus();
+    toast('开启失败：' + err, 4000);
+  }, function(){
+    btn.disabled = false; btn.textContent = '开启同步';
+    toast('生成密钥失败');
+  });
+};
+$('bSyncNow').onclick = function(){ recordNow(true); syncNow(true); };
+$('bSyncOff').onclick = function(){
+  clearTimeout(syncTimer); syncTimer = 0;
+  syncCfg = {server:syncCfg.server || ''}; syncErr = ''; saveSyncCfg();
+  fillSyncSheet(); toast('这台设备已关闭云同步');
+};
+document.addEventListener('visibilitychange', function(){
+  if(document.hidden) syncNow();
+  else if(!syncCfg.last || Date.now() - syncCfg.last > 30000) syncNow();
+});
+window.addEventListener('online', function(){ syncNow(); });
+
 /* ---------- 关于 / 更新 ---------- */
 var VERSION = document.querySelector('meta[name="app-version"]').content;
 function updateStorage(){
@@ -3291,7 +3559,7 @@ window.addEventListener('pagehide', function(){ recordNow(true); });
 document.addEventListener('touchmove', function(e){ if(e.touches.length > 1) e.preventDefault(); }, {passive:false});
 
 /* ---------- 启动：读出保存在网页里的音频 ---------- */
-showAiStatus();
+showAiStatus(); showSyncStatus();
 $('ver').textContent = VERSION;
 if(history.state && (history.state.show || history.state.ep)) history.replaceState(null, '');
 trKeys().catch(function(){ return []; }).then(function(ks){
@@ -3306,7 +3574,9 @@ trKeys().catch(function(){ return []; }).then(function(ks){
   saveRecords(); saveShows();
   ready = true;
   render();
-  openRecent();
+  // 先等云同步一会儿（最多 2.5 秒），继续播放的位置用最新的
+  if(!syncOn()){ openRecent(); return; }
+  return Promise.race([syncNow(), new Promise(function(r){ setTimeout(r, 2500); })]).then(openRecent);
 });
 
 if('serviceWorker' in navigator && location.protocol !== 'file:'){
