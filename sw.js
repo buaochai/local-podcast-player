@@ -1,5 +1,5 @@
 // 离线缓存：网页本身的文件。改了文件要升 CACHE 版本号。
-var CACHE = 'lpp-0.10.0';
+var CACHE = 'lpp-0.11.0';
 var FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'cover-192.png', 'cover-512.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', function(e){
