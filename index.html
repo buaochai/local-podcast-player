@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.26.3">
+<meta name="app-version" content="0.26.4">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -2338,7 +2338,7 @@ var AI_PROVIDERS = {
     help:'OpenRouter 的语音转写接口，和上面的 OpenRouter（聊天）用同一个 Key。模型名要带「openai/」前缀，如 openai/whisper-1。OpenRouter 对每段的处理时间有限制，所以这里每段切得短一些。'},
   aliyun:{name:'阿里云百炼 Fun-ASR（中文推荐）', style:'ali', base:'https://dashscope.aliyuncs.com/api/v1', model:'fun-asr', formats:['mp3','m4a'],
     models:['fun-asr','paraformer-v2'],
-    help:'阿里的中文语音识别（FunASR 系列），中文准、自带标点和逐句时间，音乐处不容易乱编。在阿里云百炼控制台创建 API Key。音频会经你的 Cloudflare 后台传到百炼的临时存储（48 小时后自动失效）再识别，所以要在 Cloudflare 上的网址使用。新加坡地域的 Key 要把接口地址改成 https://dashscope-intl.aliyuncs.com/api/v1。'},
+    help:'阿里的中文语音识别（FunASR 系列），中文准、自带标点和逐句时间，音乐处不容易乱编。在阿里云百炼控制台创建 API Key。音频由手机直接传到百炼的临时存储（48 小时后自动失效）再识别，不经过 Cloudflare；Cloudflare 后台只转发几条文字请求（阿里云不让网页直接访问），所以要在 Cloudflare 上的网址使用。新加坡地域的 Key 要把接口地址改成 https://dashscope-intl.aliyuncs.com/api/v1。'},
   custom_whisper:{name:'自定义（OpenAI 转写接口）', style:'whisper', base:'', model:'whisper-1', formats:['mp3','m4a'], models:[],
     help:'任何兼容 OpenAI 转写接口（/audio/transcriptions）的服务：填接口地址（到 /v1 为止）和模型名。'},
   custom_chat:{name:'自定义（聊天模型听音频）', style:'chat', base:'', model:'', formats:['mp3'], models:[],
@@ -2930,9 +2930,24 @@ function reqAli(blob, fmt, signal){
     });
   }
   function step(name){ return function(err){ if(err && typeof err === 'object' && !err.cancelled && err.name !== 'AbortError') err.step = name; throw err; }; }
-  return aliFetch('upload', '&name=part.' + fmt, {method:'POST', body:blob, headers:{'Content-Type':fmt === 'm4a' ? 'audio/mp4' : 'audio/mpeg'}, signal:signal}).then(function(j){
-    if(!j.url) throw new Error('上传到百炼失败');
-    return j;
+  // 音频由手机直接传到百炼的临时存储（不经过 Cloudflare）。普通表单上传不会被跨域挡住，只是读不到回应，
+  // 所以传完不判断结果；文件没传上去的话，下一步提交任务会报「找不到文件」。
+  return aliFetch('policy', '', {signal:signal}).then(function(j){
+    var p = j.output || {}, host = '';
+    try{ var hu = new URL(p.upload_host); if(/^https?:$/.test(hu.protocol) && /(^|\.)aliyuncs\.com$/.test(hu.hostname)) host = p.upload_host; }catch(e){}
+    if(!host || !p.upload_dir) throw new Error('百炼没有给出上传地址');
+    var objKey = p.upload_dir + '/' + Date.now() + '_part.' + fmt, type = fmt === 'm4a' ? 'audio/mp4' : fmt === 'wav' ? 'audio/wav' : 'audio/mpeg';
+    var fd = new FormData();
+    fd.append('OSSAccessKeyId', p.oss_access_key_id);
+    fd.append('Signature', p.signature);
+    fd.append('policy', p.policy);
+    fd.append('key', objKey);
+    fd.append('x-oss-object-acl', p.x_oss_object_acl);
+    fd.append('x-oss-forbid-overwrite', p.x_oss_forbid_overwrite);
+    fd.append('success_action_status', '200');
+    fd.append('x-oss-content-type', type);
+    fd.append('file', new Blob([blob], {type:type}), 'part.' + fmt);
+    return fetch(host, {method:'POST', mode:'no-cors', body:fd, signal:signal}).then(function(){ return {url:'oss://' + objKey}; });
   }).catch(step('上传音频')).then(function(j){
     return aliFetch('submit', '', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:j.url, model:aiModel()}), signal:signal}).then(function(j){
       var id = j.output && j.output.task_id;

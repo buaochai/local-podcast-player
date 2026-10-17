@@ -1,7 +1,8 @@
 // Cloudflare Pages Functions：转发阿里云百炼（DashScope）的录音文件识别（Fun-ASR / Paraformer）。
 // 阿里云的接口不让网页直接访问，所以由这里代发；API Key 由网页放在 X-Ali-Key 请求头里带过来，这里不保存。
-// 流程：op=upload 把一段音频传到百炼的临时存储（得到 oss:// 地址，48 小时有效）→ op=submit 提交识别任务
-//      → op=task 查询任务，完成时顺便把识别结果文件读回来。op=policy 只用来测试 Key。
+// 这里只转发很小的文字请求，音频绝不经过 Cloudflare：
+//   op=policy 拿上传凭证（网页拿到后自己把音频直接传到百炼的临时存储，得到 oss:// 地址，48 小时有效）
+//   → op=submit 提交识别任务 → op=task 查询任务，完成时顺便把识别结果（文字）读回来。
 // 前面的 _middleware.js 已经检查过 Cloudflare Access 登录，不是谁都能用这个转发。
 var DEFAULT_BASE = 'https://dashscope.aliyuncs.com/api/v1';
 
@@ -35,45 +36,9 @@ export async function onRequest({request}){
   if(!key) return json({error: '缺少百炼的 API Key'}, 400);
   if(!base) return json({error: '接口地址不对：只能是阿里云的地址'}, 400);
   var model = url.searchParams.get('model') || 'fun-asr';
+  if(+(request.headers.get('Content-Length') || 0) > 65536) return json({error: '请求太大：音频不经过这里'}, 413);
 
   if(op === 'policy') return pass(await policy(base, key, model));
-
-  if(op === 'upload' && request.method === 'POST'){
-    var pr = await policy(base, key, model);
-    if(!pr.ok) return pass(pr);
-    var p = (await pr.json()).output || {};
-    var host = aliUrl(p.upload_host || '');
-    if(!host) return json({error: '百炼没有给出上传地址'}, 502);
-    var name = (url.searchParams.get('name') || 'part.mp3').replace(/[^\w.\-]/g, '_');
-    var objKey = p.upload_dir + '/' + Date.now() + '_' + name;
-    var type = request.headers.get('Content-Type') || 'application/octet-stream';
-    var fields = [['OSSAccessKeyId', p.oss_access_key_id], ['Signature', p.signature], ['policy', p.policy], ['key', objKey],
-      ['x-oss-object-acl', p.x_oss_object_acl], ['x-oss-forbid-overwrite', p.x_oss_forbid_overwrite],
-      ['success_action_status', '200'], ['x-oss-content-type', type]];
-    // 自己拼 multipart：音频边收边转发给阿里云，不在这里整段读进内存（大文件会超出 Cloudflare 免费版的限制）
-    var boundary = '----lpp' + crypto.randomUUID().replace(/-/g, '');
-    var enc = new TextEncoder();
-    var head = enc.encode(fields.map(function(f){ return '--' + boundary + '\r\nContent-Disposition: form-data; name="' + f[0] + '"\r\n\r\n' + f[1] + '\r\n'; }).join('')
-      + '--' + boundary + '\r\nContent-Disposition: form-data; name="file"; filename="' + name + '"\r\nContent-Type: ' + type + '\r\n\r\n');
-    var tail = enc.encode('\r\n--' + boundary + '--\r\n');
-    var len = +(request.headers.get('Content-Length') || 0), body;
-    if(len > 0 && typeof FixedLengthStream === 'function' && request.body){
-      var fl = new FixedLengthStream(head.length + len + tail.length);
-      body = fl.readable;
-      (async function(){
-        var w = fl.writable.getWriter();
-        await w.write(head); w.releaseLock();
-        await request.body.pipeTo(fl.writable, {preventClose: true});
-        w = fl.writable.getWriter();
-        await w.write(tail); await w.close();
-      })().catch(function(){});
-    }else{
-      body = new Blob([head, await request.arrayBuffer(), tail]);
-    }
-    var up = await fetch(host.toString(), {method: 'POST', body: body, headers: {'Content-Type': 'multipart/form-data; boundary=' + boundary}});
-    if(!up.ok) return json({error: '上传到百炼临时存储失败（' + up.status + '）：' + (await up.text()).slice(0, 300)}, 502);
-    return json({url: 'oss://' + objKey});
-  }
 
   if(op === 'submit' && request.method === 'POST'){
     var b = await request.json().catch(function(){ return null; });
