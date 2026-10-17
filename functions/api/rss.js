@@ -1,0 +1,39 @@
+// Cloudflare Pages Functions：替网页抓取播客的 RSS（只是一段文字的节目列表）。
+// 大多数播客平台不让网页直接读 RSS（跨域限制），所以由这里代读。音频绝不经过这里：超过 5MB 的内容直接拒绝。
+// 前面的 _middleware.js 已经检查过 Cloudflare Access 登录。
+var MAX = 5 * 1024 * 1024;
+
+function json(body, status){
+  return new Response(JSON.stringify(body), {status: status || 200, headers: {'Content-Type': 'application/json', 'Cache-Control': 'no-store'}});
+}
+
+export async function onRequestGet({request}){
+  var target = new URL(request.url).searchParams.get('url') || '', u;
+  try{ u = new URL(target); }catch(e){ return json({error: 'RSS 地址不对'}, 400); }
+  if(!/^https?:$/.test(u.protocol)) return json({error: 'RSS 地址要以 http 或 https 开头'}, 400);
+  var res;
+  try{
+    res = await fetch(u.toString(), {headers: {'User-Agent': 'Mozilla/5.0 (local-podcast-player RSS reader)', 'Accept': 'application/rss+xml, application/xml, text/xml, */*'}, redirect: 'follow'});
+  }catch(e){ return json({error: '连不上这个 RSS 地址'}, 502); }
+  if(!res.ok) return json({error: 'RSS 地址返回 ' + res.status}, 502);
+  var type = res.headers.get('Content-Type') || '';
+  if(/^(audio|video|image)\//i.test(type)) return json({error: '这不是 RSS 地址，是音频或图片'}, 400);
+  if(+(res.headers.get('Content-Length') || 0) > MAX) return json({error: 'RSS 内容太大（超过 5MB）'}, 413);
+  // 边读边数，超过 5MB 就停
+  var reader = res.body.getReader(), chunks = [], total = 0;
+  for(;;){
+    var r = await reader.read();
+    if(r.done) break;
+    total += r.value.length;
+    if(total > MAX){ reader.cancel(); return json({error: 'RSS 内容太大（超过 5MB）'}, 413); }
+    chunks.push(r.value);
+  }
+  var buf = new Uint8Array(total), off = 0;
+  chunks.forEach(function(c){ buf.set(c, off); off += c.length; });
+  // 按 RSS 里声明的编码解码（个别中文 RSS 用 GBK）
+  var head = new TextDecoder('latin1').decode(buf.subarray(0, 300));
+  var enc = (/encoding=["']([\w\-]+)["']/i.exec(head) || /charset=([\w\-]+)/i.exec(type) || [0, 'utf-8'])[1];
+  var text;
+  try{ text = new TextDecoder(enc).decode(buf); }catch(e){ text = new TextDecoder('utf-8').decode(buf); }
+  return new Response(text, {headers: {'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'X-Final-Url': res.url}});
+}

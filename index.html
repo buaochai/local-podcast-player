@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.27.0">
+<meta name="app-version" content="0.28.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -309,6 +309,7 @@ input[type=file]{display:none}
   <button class="txt-btn" id="bSel" hidden>选择</button>
   <button class="txt-btn" id="bSelAll" hidden>全选</button>
   <button class="txt-btn" id="bSelDone" hidden>完成</button>
+  <button class="icon-btn" id="bRss" aria-label="订阅播客" hidden><svg viewBox="0 0 24 24"><path d="M6.18 15.64a2.18 2.18 0 1 1 0 4.36 2.18 2.18 0 0 1 0-4.36zM4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27zm0 5.66A9.9 9.9 0 0 1 13.9 20h-2.83A7.07 7.07 0 0 0 4 12.93z"/></svg></button>
   <button class="icon-btn" id="bNewAlbum" aria-label="新建专辑" hidden><svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"/></svg></button>
   <button class="icon-btn add" id="bAdd" aria-label="添加音频"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg></button>
   <button class="icon-btn" id="bAbout" aria-label="关于"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-11h2V7h-2zm0 8h2v-6h-2z"/></svg></button>
@@ -552,6 +553,21 @@ input[type=file]{display:none}
   </div>
 </div>
 
+<!-- 订阅播客（RSS） -->
+<div class="sheet" id="rssSheet" hidden>
+  <div class="sheet-box" role="dialog" aria-label="订阅播客">
+    <div class="sheet-head"><h2>订阅播客</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
+    <div class="sheet-body">
+      <div class="sec">RSS 地址</div>
+      <input class="input" id="rssUrl" type="url" inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="https://…">
+      <button class="btn primary block" id="bRssAdd">订阅</button>
+      <div class="sec" id="rssListHead" hidden>已订阅</div>
+      <ul class="opts" id="rssList"></ul>
+      <button class="btn block" id="bRssRefresh" hidden>全部刷新</button>
+    </div>
+  </div>
+</div>
+
 <!-- 云同步 -->
 <div class="sheet" id="syncSheet" hidden>
   <div class="sheet-box" role="dialog" aria-label="云同步">
@@ -587,6 +603,7 @@ input[type=file]{display:none}
       <h3>功能</h3>
       <ul>
         <li>点右上角「＋」选音频文件（mp3、m4a 等），可以一次选多个；音频会保存在网页里，下次打开直接播放</li>
+        <li>首页右上角的 RSS 图标可以订阅播客：填 RSS 地址，节目列表自动抓取，在线播放；单集「!」里可以下载到本机离线听</li>
         <li>按音频文件里的「专辑」信息自动分成不同的播客节目，并显示节目封面</li>
         <li>点节目封面进入节目，看到每一集的进度；点每一集右边的「!」查看文件信息和更多操作</li>
         <li>长按某一集（或点右上角「选择」）可以多选，选好后一起移动到专辑或删除</li>
@@ -801,10 +818,17 @@ function onLongPress(node, fn, ignore){
 }
 
 /* ---------- 节目与每一集 ---------- */
+var epMap = {}, epMapLen = -1, epMapArr = null;
+function epDirty(){ epMapLen = -1; }
 function findEp(key){
-  for(var i = 0; i < episodes.length; i++) if(episodes[i].key === key) return episodes[i];
-  return null;
+  // episodes 增删后（长度变了、或整个换掉）重建索引；同长度替换元素的地方要调 epDirty()
+  if(epMapLen !== episodes.length || epMapArr !== episodes){
+    epMap = {}; episodes.forEach(function(ep){ epMap[ep.key] = ep; });
+    epMapLen = episodes.length; epMapArr = episodes;
+  }
+  return epMap[key] || null;
 }
+function hasFile(key){ var ep = findEp(key); return !!(ep && !ep.remote); }
 function showOf(key){
   var ep = findEp(key), r = records[key];
   return (ep && ep.show) || (r && r.show) || OTHER;
@@ -849,11 +873,12 @@ function fileNameOf(key){
 }
 // 所有节目：{name, keys:[...], loaded:已保存的集数, updated:最近收听时间}
 function allShows(){
-  var map = {};
+  var map = {}, seen = {};
   function add(key){
+    if(seen[key]) return;
+    seen[key] = true;
     var name = showOf(key);
     var s = map[name] || (map[name] = {name:name, keys:[], loaded:0, updated:0});
-    if(s.keys.indexOf(key) >= 0) return;
     s.keys.push(key);
     if(findEp(key)) s.loaded++;
     var r = records[key];
@@ -861,6 +886,8 @@ function allShows(){
   }
   episodes.forEach(function(ep){ add(ep.key); });
   Object.keys(records).forEach(add);
+  // 新订阅的播客排在前面（还没听过也是）
+  Object.keys(feeds).forEach(function(u){ var s = map[feeds[u].title]; if(s && (feeds[u].at || 0) > s.updated) s.updated = feeds[u].at; });
   // 自己建的专辑，没有内容也显示
   Object.keys(shows).forEach(function(name){
     if(shows[name].custom && !map[name]) map[name] = {name:name, keys:[], loaded:0, updated:0};
@@ -888,6 +915,7 @@ function coverInfo(show){
     if(episodes[i].show === show && episodes[i].art) return {src:episodes[i].art.url, type:episodes[i].art.type};
   }
   if(shows[show] && shows[show].cover) return {src:shows[show].cover, type:'image/jpeg'};
+  if(shows[show] && shows[show].coverUrl) return {src:shows[show].coverUrl, type:'image/jpeg'};   // 订阅的播客：RSS 里的封面
   for(var k in records){
     var r = records[k];
     if(r.show === show && r.tagShow && r.tagShow !== OTHER && shows[r.tagShow] && shows[r.tagShow].cover) return {src:shows[r.tagShow].cover, type:'image/jpeg'};
@@ -1292,7 +1320,7 @@ function showAlbumMenu(name){
   var keys = episodeKeys(name);
   $('epTitle').textContent = name;
   var facts = $('epFacts'); facts.innerHTML = '';
-  [['集数', keys.length + ' 集'], ['创作者', authorOf(name) || '（没有）'], ['类型', isCustom(name) ? '自己建的专辑' : '来自音频里的专辑信息']].forEach(function(f){
+  [['集数', keys.length + ' 集'], ['创作者', authorOf(name) || '（没有）'], ['类型', feedOfShow(name) ? 'RSS 订阅' : isCustom(name) ? '自己建的专辑' : '来自音频里的专辑信息']].forEach(function(f){
     var d = el('div'); d.appendChild(el('b', null, f[0])); d.appendChild(el('span', null, f[1]));
     facts.appendChild(d);
   });
@@ -1307,6 +1335,17 @@ function showAlbumMenu(name){
     closeSheet('epSheet');
     ask('新建专辑', '', '专辑名称', function(v){ createAlbum(v); render(); toast('已新建「' + v + '」'); });
   }}];
+  var fd = feedOfShow(name);
+  if(fd){
+    items.unshift({label:'刷新订阅', note:fd.fetched ? '上次更新：' + fmtDate(fd.fetched) : '', pick:function(){
+      closeSheet('epSheet'); toast('正在刷新…', 20000);
+      refreshFeed(fd.url).then(function(x){ toast(x.added ? '有 ' + x.added + ' 集新节目' : '没有新节目'); }, function(err){ toast('刷新失败：' + err.message, 5000); });
+    }});
+    items.push({label:'取消订阅', note:fd.url, danger:true, pick:function(){
+      closeSheet('epSheet');
+      if(unsubscribe(fd.url) && view.page === 'show' && view.show === name && !episodeKeys(name).length) goHome();
+    }});
+  }
   if(isCustom(name)) items.push({label:'删除专辑', note:'里面的集会回到原来的专辑', danger:true, pick:function(){
     if(!confirm('删除专辑「' + name + '」？里面的集不会删除。')) return;
     closeSheet('epSheet');
@@ -1813,10 +1852,11 @@ function readInfo(ep){
 // 启动时读文件库偶尔失败（识别占内存的时候），导致明明有文件却显示「文件缺失」：看到缺失时再按需补读一次
 var healTried = {};
 function healEp(key){
-  if(healTried[key] || findEp(key)) return;
+  if(healTried[key] || hasFile(key)) return;
   healTried[key] = true;
   fileGet(key).then(function(row){
-    if(!row || findEp(key)) return;
+    if(!row || hasFile(key)) return;
+    if(row.rss){ var re = findEp(key); if(re) episodes.splice(episodes.indexOf(re), 1); episodes.push(rssLocalEp(row)); render(); return; }
     var ep = makeEp(row.name, row.size, row.blob);
     episodes.push(ep);
     return readInfo(ep).then(function(){ saveRecords(); saveShows(); render(); });
@@ -1824,6 +1864,197 @@ function healEp(key){
 }
 function makeEp(name, size, blob){
   return {key:keyOf(name, size), name:name, size:size, blob:blob, url:URL.createObjectURL(blob), title:stripExt(name), show:OTHER, art:null, tags:null};
+}
+
+/* ======================== RSS 订阅 ======================== */
+// lpp.feeds.v1：{RSS 地址: {url, title, author, image, desc, serial, at:订阅时间, fetched:上次抓取, eps:[{id, t:标题, u:音频地址, len, dur, pub, d:简介}]}}
+// 订阅的每一集也放进 episodes（remote:true，url 是网上的音频地址，在线播放）；下载到本机后变成本地集（rss:true，存进 files 表）
+var FEEDS_KEY = 'lpp.feeds.v1';
+var feeds = load(FEEDS_KEY, {});
+var feedEpMap = {};   // 集的键 → {f, e}
+function saveFeeds(){ save(FEEDS_KEY, feeds); syncSoon(); }
+function rssKey(e){ return 'rss|' + (e.id || e.u); }
+function feedOfShow(name){
+  for(var u in feeds) if(feeds[u].title === name) return feeds[u];
+  return null;
+}
+function rssShow(f, key){ var r = records[key]; return (r && r.customShow) || f.title; }
+function feedEpObj(f, e, i){
+  var key = rssKey(e);
+  return {key:key, name:String(i).padStart(5, '0') + ' ' + e.t, size:e.len || 0, blob:null, url:e.u, title:e.t, show:rssShow(f, key),
+    art:null, tags:null, remote:true, rss:true, feed:f.url, dur:e.dur || 0, pub:e.pub || 0};
+}
+function rssLocalEp(row){
+  var fe = feedEpMap[row.key];
+  return {key:row.key, name:row.name, size:row.size, blob:row.blob, url:URL.createObjectURL(row.blob), title:row.title,
+    show:(records[row.key] && records[row.key].customShow) || row.show, art:null, tags:null, rss:true, feed:row.feed,
+    dur:fe ? fe.e.dur || 0 : 0, pub:fe ? fe.e.pub || 0 : 0};
+}
+// 让 episodes 里的在线集和订阅列表一致（下载过的不重复放）
+function syncFeedEps(){
+  feedEpMap = {};
+  Object.keys(feeds).forEach(function(u){ var f = feeds[u]; (f.eps || []).forEach(function(e, i){ var k = rssKey(e); if(!feedEpMap[k]) feedEpMap[k] = {f:f, e:e, i:i}; }); });
+  episodes = episodes.filter(function(ep){ return !ep.remote || feedEpMap[ep.key]; });
+  var have = {};
+  episodes.forEach(function(ep){ have[ep.key] = ep; });
+  Object.keys(feedEpMap).forEach(function(k){
+    var w = feedEpMap[k], ep = have[k];
+    if(!ep){ episodes.push(feedEpObj(w.f, w.e, w.i)); return; }
+    if(!ep.rss) return;
+    ep.title = w.e.t; ep.show = rssShow(w.f, k); ep.name = String(w.i).padStart(5, '0') + ' ' + w.e.t; ep.dur = w.e.dur || 0; ep.pub = w.e.pub || 0;
+    if(ep.remote) ep.url = w.e.u;
+  });
+  // 听过的集：记录里补上原专辑，「移动到专辑」后还能移回来
+  Object.keys(feedEpMap).forEach(function(k){ var r = records[k]; if(r) r.tagShow = feedEpMap[k].f.title; });
+  epDirty();
+}
+function xmlKid(node, names){
+  for(var c = node.firstElementChild; c; c = c.nextElementSibling) if(names.indexOf(c.nodeName) >= 0) return c;
+  return null;
+}
+function xmlText(node){ return node ? node.textContent.trim() : ''; }
+function htmlToText(h){
+  if(!h) return '';
+  try{ return clean(new DOMParser().parseFromString(h, 'text/html').body.textContent || ''); }catch(e){ return clean(h); }
+}
+function parseDur(t){
+  if(!t) return 0;
+  if(/^\d+(\.\d+)?$/.test(t)) return Math.round(+t);
+  var p = t.split(':').map(Number);
+  if(p.some(isNaN)) return 0;
+  return p.reduce(function(a, b){ return a * 60 + b; }, 0);
+}
+function parseFeed(xml, url){
+  var doc = new DOMParser().parseFromString(xml, 'text/xml');
+  if(doc.getElementsByTagName('parsererror').length) throw new Error('读不懂这个 RSS（不是有效的 XML）');
+  var ch = doc.getElementsByTagName('channel')[0];
+  if(!ch) throw new Error('这不是播客的 RSS 地址');
+  var f = {url:url, title:clean(xmlText(xmlKid(ch, ['title']))) || url, author:clean(xmlText(xmlKid(ch, ['itunes:author', 'author', 'managingEditor']))),
+    desc:htmlToText(xmlText(xmlKid(ch, ['description', 'itunes:summary']))).slice(0, 300), serial:/serial/i.test(xmlText(xmlKid(ch, ['itunes:type']))), eps:[]};
+  var im = xmlKid(ch, ['itunes:image']);
+  f.image = im ? im.getAttribute('href') || '' : '';
+  if(!f.image){ var im2 = xmlKid(ch, ['image']); if(im2) f.image = xmlText(xmlKid(im2, ['url'])); }
+  var items = ch.getElementsByTagName('item'), seen = {};
+  for(var i = 0; i < items.length; i++){
+    var it = items[i], enc = xmlKid(it, ['enclosure']), u = enc && enc.getAttribute('url');
+    if(!u) continue;   // 没有音频的条目（文章）跳过
+    var e = {id:xmlText(xmlKid(it, ['guid'])) || u, t:clean(xmlText(xmlKid(it, ['title']))) || '未命名', u:u, len:+enc.getAttribute('length') || 0,
+      dur:parseDur(xmlText(xmlKid(it, ['itunes:duration']))), pub:Date.parse(xmlText(xmlKid(it, ['pubDate']))) || 0,
+      d:htmlToText(xmlText(xmlKid(it, ['itunes:summary', 'description', 'content:encoded']))).slice(0, 200)};
+    if(seen[e.id]) continue;
+    seen[e.id] = true;
+    f.eps.push(e);
+  }
+  // 普通节目最新的在上面；连载（serial）按顺序从第一集开始
+  f.eps.forEach(function(e, n){ e.n = n; });
+  f.eps.sort(function(a, b){ return (a.pub && b.pub) ? (f.serial ? a.pub - b.pub : b.pub - a.pub) : a.n - b.n; });
+  f.eps = f.eps.slice(0, 1500).map(function(e){ delete e.n; return e; });
+  return f;
+}
+// 经自己的 Cloudflare 后台抓 RSS（只是文字）
+function fetchFeed(url){
+  return fetch('api/rss?url=' + encodeURIComponent(url), {cache:'no-store', redirect:'manual'}).then(function(r){
+    if(r.type === 'opaqueredirect' || (r.status >= 300 && r.status < 400)) throw new Error('登录已过期，请刷新网页重新登录');
+    return r.text().then(function(t){
+      if(r.ok) return parseFeed(t, url);
+      var msg = '';
+      try{ msg = JSON.parse(t).error || ''; }catch(e){}
+      throw new Error(msg || (r.status === 404 ? '这个网址没有 RSS 抓取接口：要在 Cloudflare 上的网址使用' : '抓取失败（' + r.status + '）'));
+    });
+  }, function(){ throw new Error('连不上网络'); });
+}
+var feedBusy = {};
+function refreshFeed(url){
+  if(feedBusy[url]) return feedBusy[url];
+  return feedBusy[url] = fetchFeed(url).then(function(f){
+    var old = feeds[url] || {};
+    f.at = old.at || Date.now(); f.fetched = Date.now();
+    var added = f.eps.filter(function(e){ return !(old.eps || []).some(function(o){ return o.id === e.id; }); }).length;
+    feeds[url] = f;
+    var sh = shows[f.title] = shows[f.title] || {};
+    if(f.image) sh.coverUrl = f.image;
+    if(f.author && !sh.author){ sh.author = f.author; sh.at = Date.now(); }
+    saveFeeds(); saveShows(); syncFeedEps(); saveRecords();
+    if(ready) render();
+    return {feed:f, added:old.eps ? added : f.eps.length};
+  }).then(function(x){ delete feedBusy[url]; return x; }, function(err){ delete feedBusy[url]; throw err; });
+}
+// 自动刷新：超过 3 小时没抓过的，一个一个刷新，失败也不打扰
+function refreshStale(maxAge){
+  var urls = Object.keys(feeds).filter(function(u){ return Date.now() - (feeds[u].fetched || 0) > (maxAge || 3 * 3600000); });
+  return urls.reduce(function(p, u){ return p.then(function(){ return refreshFeed(u).catch(function(){}); }); }, Promise.resolve());
+}
+function subscribe(url){
+  url = clean(url);
+  if(!url) return;
+  if(!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  if(feeds[url]){ closeSheet('rssSheet'); goShow(feeds[url].title); toast('已经订阅过了'); return; }
+  $('bRssAdd').disabled = true; $('bRssAdd').textContent = '正在抓取…';
+  refreshFeed(url).then(function(x){
+    $('rssUrl').value = '';
+    closeSheet('rssSheet');
+    goShow(x.feed.title);
+    toast('已订阅「' + x.feed.title + '」，共 ' + x.feed.eps.length + ' 集');
+  }, function(err){ toast('订阅失败：' + ((err && err.message) || '未知原因'), 5000); }).then(function(){
+    $('bRssAdd').disabled = false; $('bRssAdd').textContent = '订阅';
+  });
+}
+function unsubscribe(url){
+  var f = feeds[url];
+  if(!f || !confirm('取消订阅「' + f.title + '」？听过的记录和下载过的集会保留。')) return false;
+  delete feeds[url]; syncDel('f|' + url);
+  saveFeeds(); syncFeedEps(); render();
+  toast('已取消订阅');
+  return true;
+}
+function renderRssList(){
+  var urls = Object.keys(feeds).sort(function(a, b){ return (feeds[b].at || 0) - (feeds[a].at || 0); });
+  $('rssListHead').hidden = $('bRssRefresh').hidden = !urls.length;
+  renderOpts($('rssList'), urls.map(function(u){
+    var f = feeds[u];
+    return {label:f.title, note:(f.eps || []).length + ' 集' + (f.fetched ? ' · 更新于 ' + fmtDate(f.fetched) : ' · 还没抓取'), pick:function(){ closeSheet('rssSheet'); goShow(f.title); }};
+  }));
+}
+$('bRss').onclick = function(){ renderRssList(); openSheet('rssSheet'); };
+$('bRssAdd').onclick = function(){ subscribe($('rssUrl').value); };
+$('rssUrl').addEventListener('keydown', function(e){ if(e.key === 'Enter') subscribe(this.value); });
+$('bRssRefresh').onclick = function(){
+  var btn = this; btn.disabled = true; btn.textContent = '正在刷新…';
+  var n = 0, bad = 0;
+  Object.keys(feeds).reduce(function(p, u){ return p.then(function(){ return refreshFeed(u).then(function(x){ n += x.added; }, function(){ bad++; }); }); }, Promise.resolve()).then(function(){
+    btn.disabled = false; btn.textContent = '全部刷新'; renderRssList();
+    toast((n ? '有 ' + n + ' 集新节目' : '没有新节目') + (bad ? '（' + bad + ' 个刷新失败）' : ''));
+  });
+};
+// 下载到本机（离线听）：网页直接从播客平台下载，有的平台不允许网页下载，那就只能在线听
+function downloadEp(key){
+  var ep = findEp(key);
+  if(!ep || !ep.remote) return;
+  toast('正在下载…', 60000);
+  fetch(ep.url).then(function(r){
+    if(!r.ok) throw new Error('下载失败（' + r.status + '）');
+    var total = +(r.headers.get('Content-Length') || 0) || ep.size, got = 0, type = r.headers.get('Content-Type') || 'audio/mpeg', reader = r.body && r.body.getReader();
+    if(!reader) return r.blob();
+    var parts = [], last = 0;
+    function pump(){
+      return reader.read().then(function(x){
+        if(x.done) return new Blob(parts, {type:type});
+        parts.push(x.value); got += x.value.length;
+        if(total && Date.now() - last > 500){ last = Date.now(); toast('正在下载 ' + Math.min(99, Math.floor(got / total * 100)) + '%', 60000); }
+        return pump();
+      });
+    }
+    return pump();
+  }).then(function(blob){
+    var row = {key:key, name:ep.name, size:blob.size, type:blob.type, blob:blob, added:Date.now(), rss:true, title:ep.title, show:feedEpMap[key] ? feedEpMap[key].f.title : ep.show, feed:ep.feed};
+    return store('readwrite', function(st){ return st.put(row); }).then(function(){ return row; });
+  }).then(function(row){
+    var now = findEp(key), i = episodes.indexOf(now);
+    if(i >= 0 && now.remote){ episodes[i] = rssLocalEp(row); epDirty(); }   // 正在播放的话，这一遍还用在线地址播完
+    toast('已下载到本机'); render(); updateStorage();
+  }).catch(function(err){
+    toast(err && err.name === 'TypeError' ? '这个播客的平台不允许网页下载，只能在线听' : err && err.name === 'QuotaExceededError' ? '空间不够，下载失败' : (err && err.message) || '下载失败', 5000);
+  });
 }
 
 /* ---------- 添加文件（保存进网页） ---------- */
@@ -1891,12 +2122,12 @@ function openRecent(){
 // 只删网页里保存的音频文件，保留播放记录和信息（这一集会显示「文件缺失」）
 function deleteFile(key){
   var ep = findEp(key);
-  if(!ep) return Promise.resolve();
+  if(!ep || ep.remote) return Promise.resolve();
   if(ep === cur) stopPlayer();
   URL.revokeObjectURL(ep.url);
   if(ep.art) URL.revokeObjectURL(ep.art.url);
   episodes.splice(episodes.indexOf(ep), 1);
-  return fileDelete(key).catch(function(){});
+  return fileDelete(key).catch(function(){}).then(function(){ if(ep.rss) syncFeedEps(); });   // 订阅的集删了下载，改回在线
 }
 // 整集删除：音频文件、播放记录、信息都删掉
 function deleteEpisode(key){
@@ -1911,11 +2142,17 @@ function showEpMenu(key){
   var ep = findEp(key), r = records[key] || {};
   $('epTitle').textContent = titleOf(key);
   var facts = $('epFacts'); facts.innerHTML = '';
-  [['专辑', showOf(key) + (r.customShow ? '（原专辑：' + (r.tagShow || OTHER) + '）' : '')],
+  var fe = feedEpMap[key];
+  (fe ? [['专辑', showOf(key) + (r.customShow ? '（原专辑：' + fe.f.title + '）' : '')],
+   ['发布', fe.e.pub ? new Date(fe.e.pub).toLocaleDateString('zh-CN') : '—'],
+   ['时长', fe.e.dur ? fmt(fe.e.dur) : '—'],
+   ['状态', ep && !ep.remote ? '已下载到本机（' + fmtSize(ep.size) + '）' : '在线播放'],
+   ['简介', fe.e.d || '—']]
+  : [['专辑', showOf(key) + (r.customShow ? '（原专辑：' + (r.tagShow || OTHER) + '）' : '')],
    ['文件名', fileNameOf(key)],
    ['大小', fmtSize(ep ? ep.size : r.size || 0)],
    ['信息来源', ep ? (ep.tags && ep.tags.format ? ep.tags.format + (ep.tags.album ? '' : '（没有专辑）') : '没有读到标签') : '—'],
-   ['状态', ep ? '已保存在网页里' : '文件缺失']].forEach(function(f){
+   ['状态', ep ? '已保存在网页里' : '文件缺失']]).forEach(function(f){
     var d = el('div'); d.appendChild(el('b', null, f[0])); d.appendChild(el('span', null, f[1]));
     facts.appendChild(d);
   });
@@ -1923,15 +2160,16 @@ function showEpMenu(key){
   $('epMarksHead').hidden = !n;
   var items = [{label:'移动到专辑', note:'现在在「' + showOf(key) + '」', pick:function(){ closeSheet('epSheet'); showMoveMenu(key); }}];
   if(ep || hasTr[key]) items.push({label:'AI 转文字', note: hasTr[key] ? '已有文稿，点开查看；也可以重新识别' : '把这一集识别成文字（要用自己的 API Key）', pick:function(){ closeSheet('epSheet'); goEp(key); }});
-  if(ep) items.push({label:'查看标签详情', note:'看看文件里到底存了哪些信息', pick:function(){
+  if(ep && ep.remote) items.push({label:'下载到本机', note:'离线也能听；有的播客平台不允许网页下载', pick:function(){ closeSheet('epSheet'); downloadEp(key); }});
+  if(ep && ep.tags) items.push({label:'查看标签详情', note:'看看文件里到底存了哪些信息', pick:function(){
     $('tagText').textContent = describeTags(ep);
     closeSheet('epSheet'); openSheet('tagSheet');
   }});
-  if(ep) items.push({label:'删除本地音频文件', note:'释放空间，保留播放记录和信息', danger:true, pick:function(){
+  if(ep && !ep.remote) items.push({label:ep.rss ? '删除下载' : '删除本地音频文件', note:ep.rss ? '释放空间，改回在线播放' : '释放空间，保留播放记录和信息', danger:true, pick:function(){
     closeSheet('epSheet');
     deleteFile(key).then(function(){ toast('已删除音频文件，播放记录还在'); render(); updateStorage(); });
   }});
-  items.push({label:'删除这一集', note:'音频、播放记录和信息全部删除', danger:true, pick:function(){
+  if(!fe) items.push({label:'删除这一集', note:'音频、播放记录和信息全部删除', danger:true, pick:function(){
     if(!confirm('确定删除「' + titleOf(key) + '」的全部内容？')) return;
     closeSheet('epSheet');
     deleteEpisode(key).then(function(){ toast('已删除这一集'); render(); updateStorage(); });
@@ -1958,7 +2196,7 @@ $('bSelMove').onclick = function(){ var ks = Object.keys(selKeys); if(ks.length)
 $('bSelTr').onclick = function(){ var ks = Object.keys(selKeys); if(!ks.length) return; exitSel(); trBatch(ks); };
 $('bSelDel').onclick = function(){ var ks = Object.keys(selKeys); if(ks.length) showSelDelete(ks); };
 function showSelDelete(keys){
-  var withFile = keys.filter(findEp);
+  var withFile = keys.filter(hasFile);
   $('epTitle').textContent = '已选 ' + keys.length + ' 集';
   var facts = $('epFacts'); facts.innerHTML = '';
   [['集数', keys.length + ' 集'], ['有音频', withFile.length + ' 集'], ['文件缺失', (keys.length - withFile.length) + ' 集']].forEach(function(f){
@@ -1999,6 +2237,8 @@ function goShow(name){
   view = {page:'show', show:name};
   $('view').scrollTop = 0;
   render();
+  var f = feedOfShow(name);
+  if(f && Date.now() - (f.fetched || 0) > 1800000) refreshFeed(f.url).catch(function(){});
 }
 function goHome(){
   if(history.state && (history.state.show || history.state.ep)) history.back();
@@ -2040,7 +2280,7 @@ function render(){
   var selecting = selMode && !home && !isEp && nKeys > 0;
   if(!selecting && selMode){ selMode = false; selKeys = {}; }
   $('bBack').hidden = home || selecting;
-  $('bNewAlbum').hidden = !home;
+  $('bNewAlbum').hidden = !home; $('bRss').hidden = !home;
   $('bSearch').hidden = !home;
   if(!home && searchOpen) closeSearch(true);
   document.querySelector('header').classList.toggle('searching', searchOpen);
@@ -2295,10 +2535,11 @@ function renderShow(box){
     var main = el('div', 'item-main');
     main.appendChild(el('div', 'item-name clamp2', titleOf(k)));
     var mk = marksOf(k).length;
-    main.appendChild(el('div', 'item-meta line1', (mk ? '收藏 ' + mk + ' · ' : '') + (hasTr[k] ? '有文稿 · ' : '') + progressText(r) + (r && r.updated ? ' · ' + fmtDate(r.updated) : '')));
+    main.appendChild(el('div', 'item-meta line1', (mk ? '收藏 ' + mk + ' · ' : '') + (hasTr[k] ? '有文稿 · ' : '') + progressText(r) + (r && r.updated ? ' · ' + fmtDate(r.updated) : ep && ep.pub ? ' · ' + new Date(ep.pub).toLocaleDateString('zh-CN') : '')));
     main.appendChild(progressBar(r));
     li.appendChild(main);
     if(!ep) li.appendChild(el('span', 'tag', '文件缺失'));
+    else if(ep.rss && !ep.remote) li.appendChild(el('span', 'tag', '已下载'));
     li.appendChild(el('span', 'ep-seq', String(idx + 1)));   // 右下角：这一集在列表里的位置
     if(!selMode){
       var ib = el('button', 'info-btn');
@@ -2909,7 +3150,7 @@ function aliWait(ms, signal){
 }
 // 百炼说「这段没有可识别的人声」（纯音乐、静音）：当作这一段没有文字
 var ALI_EMPTY = /HAVE_NO_WORDS|NO_VALID_FRAGMENT|NO_VALID_AUDIO|SUCCESS_WITH_NO_VALID/i;
-function reqAli(blob, fmt, signal){
+function reqAli(blob, fmt, signal, srcUrl){
   var start = Date.now();
   function poll(id, n){
     if(Date.now() - start > 3600000) throw new Error('百炼一个小时都没识别完，请稍后重试');
@@ -2941,7 +3182,7 @@ function reqAli(blob, fmt, signal){
   function step(name){ return function(err){ if(err && typeof err === 'object' && !err.cancelled && err.name !== 'AbortError') err.step = name; throw err; }; }
   // 音频由手机直接传到百炼的临时存储（不经过 Cloudflare）。普通表单上传不会被跨域挡住，只是读不到回应，
   // 所以传完不判断结果；文件没传上去的话，下一步提交任务会报「找不到文件」。
-  return aliFetch('policy', '', {signal:signal}).then(function(j){
+  return (srcUrl ? Promise.resolve({url:srcUrl}) : aliFetch('policy', '', {signal:signal}).then(function(j){
     var p = j.data || j.output || j, host = '';   // 百炼把凭证放在 data 里（官方 SDK 两种都认）
     try{ var hu = new URL(p.upload_host); if(/^https?:$/.test(hu.protocol) && /(^|\.)aliyuncs\.com$/.test(hu.hostname)) host = p.upload_host; }catch(e){}
     if(!host || !p.upload_dir) throw new Error('百炼没有给出上传地址（收到：' + Object.keys(p).slice(0, 8).join(', ') + '）');
@@ -2957,7 +3198,7 @@ function reqAli(blob, fmt, signal){
     fd.append('x-oss-content-type', type);
     fd.append('file', new Blob([blob], {type:type}), 'part.' + fmt);
     return fetch(host, {method:'POST', mode:'no-cors', body:fd, signal:signal}).then(function(){ return {url:'oss://' + objKey}; });
-  }).catch(step('上传音频')).then(function(j){
+  })).catch(step('上传音频')).then(function(j){
     return aliFetch('submit', '', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:j.url, model:aiModel()}), signal:signal}).then(function(j){
       var id = (j.output || j.data || {}).task_id;
       if(!id) throw new Error('百炼没有返回任务编号' + (j.message ? '：' + j.message : ''));
@@ -3019,10 +3260,10 @@ function segmentsOf(resp, chunk, route){
   return spreadText(text.replace(/\[(?:\d{1,2}:)?\d{1,3}:\d{2}\]/g, ''), chunk.t0, chunk.dur);
 }
 function sendChunk(chunk, plan, route, signal){
-  var blob = chunk.blob();
-  var prep = plan.conv ? toWav(blob).then(function(w){ return {blob:w, fmt:'wav'}; }) : Promise.resolve({blob:blob, fmt:chunk.fmt});
+  var blob = chunk.url ? null : chunk.blob();   // 有 url 的是在线的集，百炼直接用地址
+  var prep = !blob ? Promise.resolve({fmt:chunk.fmt}) : plan.conv ? toWav(blob).then(function(w){ return {blob:w, fmt:'wav'}; }) : Promise.resolve({blob:blob, fmt:chunk.fmt});
   return prep.then(function(pp){
-    var call = route.ali ? reqAli(pp.blob, pp.fmt, signal) : route.chat ? reqChat(pp.blob, pp.fmt, chunk.dur, signal) : reqWhisper(pp.blob, pp.fmt, route, signal, route.timed);
+    var call = route.ali ? reqAli(pp.blob, pp.fmt, signal, chunk.url) : route.chat ? reqChat(pp.blob, pp.fmt, chunk.dur, signal) : reqWhisper(pp.blob, pp.fmt, route, signal, route.timed);
     return call.then(function(resp){
       var segs = segmentsOf(resp, chunk, route);
       if(ai.lang === 'zh' || !ai.lang) segs.forEach(function(x){ x.text = toSimp(x.text); });
@@ -3287,16 +3528,29 @@ function keepAwake(on){
   }catch(e){}
 }
 // 识别一集；batch 不为空表示在批量识别里（不再逐集确认）。结果是 {res:'done'|'cancelled'|'failed', err}
+// 在线的集（订阅的播客）：百炼直接用节目的音频地址识别，手机不用上传；别家服务商要先把音频下载到手机内存
+function planFor(ep, route){
+  if(!ep.remote) return planChunks(ep, route);
+  if(route.ali) return Promise.resolve({duration:ep.dur || 0, chunks:[{t0:0, dur:ep.dur || 0, url:ep.url, fmt:'mp3'}], conv:false});
+  return fetch(ep.url).then(function(r){
+    if(!r.ok) throw new Error('下载音频失败（' + r.status + '）');
+    return r.blob();
+  }, function(){
+    throw new Error('这个播客的平台不允许网页下载音频，用这家服务商识别不了。可以换成阿里云百炼（直接用节目的音频地址识别）');
+  }).then(function(blob){
+    return planChunks({blob:blob, name:ep.name + '.' + (/mp4|m4a|aac/i.test(blob.type) ? 'm4a' : 'mp3'), size:blob.size}, route);
+  });
+}
 function trRun(key, restart, batch){
   var ep = findEp(key), route = aiRoute();
   trJob = {key:key, abort:new AbortController(), msg:'正在分析音频…', done:0, total:0, batch:batch || null};
   trRender();
-  return planChunks(ep, route).then(function(plan){
+  return planFor(ep, route).then(function(plan){
     return trGet(key).then(function(old){
       var rec = !restart && old && old.status !== 'done' && old.total === plan.chunks.length && old.model === aiModel() ? old : null;
       var from = rec ? rec.done : 0;
       var gate = batch ? Promise.resolve(true) : trAsk('识别「' + titleOf(key) + '」',
-        '约 ' + fmt(plan.duration) + '，分 ' + plan.chunks.length + ' 段发给 ' + aiProv().name + '（' + aiModel() + '）' + (from ? '，从第 ' + (from + 1) + ' 段接着来' : '') + '。会用你自己的 API 额度。点「后台识别」后可以去做别的，进度看右上角图标。');
+        (plan.duration ? '约 ' + fmt(plan.duration) + '，' : '') + '分 ' + plan.chunks.length + ' 段发给 ' + aiProv().name + '（' + aiModel() + '）' + (from ? '，从第 ' + (from + 1) + ' 段接着来' : '') + '。会用你自己的 API 额度。点「后台识别」后可以去做别的，进度看右上角图标。');
       return gate.then(function(ok){
       if(!ok) throw {cancelled:true};
       var tr = rec || {key:key, provider:aiProv().name, model:aiModel(), lang:ai.lang, created:Date.now(), duration:plan.duration, total:plan.chunks.length, done:0, segments:[], status:'partial', simp:true};
@@ -3810,7 +4064,9 @@ function syncPayload(){
     var s = shows[n];
     if(s && (s.custom || s.author)) sh[n] = {custom:!!s.custom, author:s.author || '', at:s.at || 0};
   });
-  return {app:'local-podcast-player', records:records, shows:sh, ai:ai, del:syncCfg.del || {}};
+  var fs = {};
+  Object.keys(feeds).forEach(function(u){ fs[u] = {title:feeds[u].title, at:feeds[u].at || 0}; });
+  return {app:'local-podcast-player', records:records, shows:sh, ai:ai, feeds:fs, del:syncCfg.del || {}};
 }
 function syncMerge(R){
   var changed = false, del = syncCfg.del = syncCfg.del || {};
@@ -3847,6 +4103,15 @@ function syncMerge(R){
     a.at = b.at || 0;
     changed = true;
   });
+  // 订阅的播客：别的设备新订阅的加进来（之后自动抓取），取消订阅的删掉
+  var rf = R.feeds || {}, newFeeds = false;
+  Object.keys(rf).forEach(function(u){
+    if(feeds[u] || (del['f|' + u] || 0) >= (rf[u].at || 0)) return;
+    feeds[u] = {url:u, title:rf[u].title || u, at:rf[u].at || Date.now(), fetched:0, eps:[]};
+    newFeeds = changed = true;
+  });
+  Object.keys(feeds).forEach(function(u){ if((del['f|' + u] || 0) > (feeds[u].at || 0)){ delete feeds[u]; newFeeds = changed = true; } });
+  if(newFeeds){ save(FEEDS_KEY, feeds); syncFeedEps(); setTimeout(refreshStale, 500); }
   // 别的设备删掉的：本机没有音频文件、之后也没再动过的才删
   Object.keys(del).forEach(function(k){
     if(k.indexOf('s|') === 0){
@@ -4027,8 +4292,9 @@ window.addEventListener('online', function(){ syncNow(); });
 /* ---------- 关于 / 更新 ---------- */
 var VERSION = document.querySelector('meta[name="app-version"]').content;
 function updateStorage(){
-  var used = episodes.reduce(function(n, ep){ return n + ep.size; }, 0);
-  var text = '已保存 ' + episodes.length + ' 集音频，共 ' + fmtSize(used) + '。';
+  var local = episodes.filter(function(ep){ return !ep.remote; });
+  var used = local.reduce(function(n, ep){ return n + ep.size; }, 0);
+  var text = '已保存 ' + local.length + ' 集音频，共 ' + fmtSize(used) + '。';
   $('storageInfo').textContent = text;
   if(navigator.storage && navigator.storage.estimate){
     navigator.storage.estimate().then(function(est){
@@ -4044,10 +4310,11 @@ $('tidyChk').addEventListener('change', function(){
 });
 // 删掉网页里保存的所有音频；播放记录、收藏、文稿都保留
 $('bClearFiles').onclick = function(){
-  if(!episodes.length){ toast('没有保存的音频文件'); return; }
-  var used = episodes.reduce(function(n, ep){ return n + ep.size; }, 0);
-  if(!confirm('删除网页里保存的全部 ' + episodes.length + ' 集音频（' + fmtSize(used) + '）？\n播放记录、收藏和文稿会保留，之后重新添加同一个文件可以接着听。')) return;
-  var keys = episodes.map(function(ep){ return ep.key; });
+  var local = episodes.filter(function(ep){ return !ep.remote; });
+  if(!local.length){ toast('没有保存的音频文件'); return; }
+  var used = local.reduce(function(n, ep){ return n + ep.size; }, 0);
+  if(!confirm('删除网页里保存的全部 ' + local.length + ' 集音频（' + fmtSize(used) + '）？\n播放记录、收藏和文稿会保留，之后重新添加同一个文件可以接着听；订阅的节目改回在线播放。')) return;
+  var keys = local.map(function(ep){ return ep.key; });
   keys.reduce(function(p, k){ return p.then(function(){ return deleteFile(k); }); }, Promise.resolve()).then(function(){
     renderMini(); render(); updateStorage();
     toast('已删除 ' + keys.length + ' 集音频');
@@ -4158,13 +4425,15 @@ trKeys().catch(function(){ return []; }).then(function(ks){
   return fileAll().catch(function(){ return new Promise(function(r){ setTimeout(r, 400); }).then(fileAll); }).catch(function(){ return []; });
 }).then(function(rows){
   rows = rows || [];
-  episodes = rows.map(function(row){ return makeEp(row.name, row.size, row.blob); });
-  // 每次打开都重新读一遍标签，读法改进后旧文件也能分对节目
-  return Promise.all(episodes.map(readInfo));
+  episodes = rows.map(function(row){ return row.rss ? rssLocalEp(row) : makeEp(row.name, row.size, row.blob); });
+  // 每次打开都重新读一遍标签，读法改进后旧文件也能分对节目（订阅下载的集按 RSS 的信息，不读标签）
+  return Promise.all(episodes.filter(function(ep){ return !ep.rss; }).map(readInfo));
 }).then(function(){
+  syncFeedEps();
   saveRecords(); saveShows();
   ready = true;
   render();
+  setTimeout(refreshStale, 3000);   // 订阅的播客隔一阵自动刷新
   // 先等云同步一会儿（最多 2.5 秒），继续播放的位置用最新的
   if(!syncOn()){ openRecent(); return; }
   return Promise.race([syncNow(), new Promise(function(r){ setTimeout(r, 2500); })]).then(openRecent);
