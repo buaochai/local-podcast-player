@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.9.1">
+<meta name="app-version" content="0.10.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -160,6 +160,17 @@ body.selecting .list-scroll{padding-bottom:90px}
 .sec{font-size:13px;color:var(--muted);margin:16px 2px 6px}
 .opt .time{flex:none;font-variant-numeric:tabular-nums;font-weight:600;color:var(--accent);margin-right:12px}
 .opt .grow{flex:1;min-width:0}
+.slide-big{font-size:36px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums;margin:6px 0 0}
+.slide-sub{text-align:center;color:var(--muted);font-size:13px;min-height:20px;margin-bottom:4px}
+.slider{flex:1;min-width:0;width:100%;accent-color:var(--accent);height:30px;margin:2px 0}
+.slide-row{display:flex;align-items:center;gap:8px}
+.slide-row .btn{width:44px;min-height:40px;padding:0;font-size:22px;flex:none}
+.ticks{position:relative;height:18px;margin:0 52px 6px;font-size:11px;color:var(--muted)}
+.slide-row.single + .ticks{margin:0 14px 6px}
+.ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.pills{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 4px}
+.pill{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 14px;font-size:15px;font-variant-numeric:tabular-nums}
+.pill.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:600}
 .dump{font:12px/1.55 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0;max-height:48vh;overflow:auto;-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 .facts{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px 14px;margin-bottom:12px;font-size:13px}
 .facts div{display:flex;gap:10px;padding:3px 0}
@@ -231,7 +242,17 @@ input[type=file]{display:none}
 <div class="sheet" id="speedSheet" hidden>
   <div class="sheet-box" role="dialog" aria-label="播放速度">
     <div class="sheet-head"><h2>播放速度</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
-    <div class="sheet-body"><ul class="opts" id="speedOpts"></ul></div>
+    <div class="sheet-body">
+      <div class="slide-big" id="speedBig">1x</div>
+      <div class="slide-sub">左右滑动调节，松手就生效</div>
+      <div class="slide-row">
+        <button class="btn" id="speedMinus" aria-label="慢一点">−</button>
+        <input type="range" class="slider" id="speedRange" min="0.5" max="3" step="0.05" value="1">
+        <button class="btn" id="speedPlus" aria-label="快一点">＋</button>
+      </div>
+      <div class="ticks" id="speedTicks"></div>
+      <div class="pills" id="speedPills"></div>
+    </div>
   </div>
 </div>
 
@@ -239,7 +260,15 @@ input[type=file]{display:none}
 <div class="sheet" id="sleepSheet" hidden>
   <div class="sheet-box" role="dialog" aria-label="定时关闭">
     <div class="sheet-head"><h2>定时关闭</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
-    <div class="sheet-body"><ul class="opts" id="sleepOpts"></ul></div>
+    <div class="sheet-body">
+      <div class="slide-big" id="sleepBig">30 分钟</div>
+      <div class="slide-sub" id="sleepSub">左右滑动选择多久后暂停播放</div>
+      <div class="slide-row single"><input type="range" class="slider" id="sleepRange" min="5" max="180" step="5" value="30"></div>
+      <div class="ticks" id="sleepTicks"></div>
+      <button class="btn primary block" id="bSleepStart">开始定时</button>
+      <div class="sec">快捷</div>
+      <ul class="opts" id="sleepOpts"></ul>
+    </div>
   </div>
 </div>
 
@@ -378,6 +407,7 @@ var STORE_KEY = 'lpp.records.v1';
 var SHOWS_KEY = 'lpp.shows.v1';
 var SETTINGS_KEY = 'lpp.settings.v1';
 var SPEEDS = [0.8, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+var SPEED_MIN = 0.5, SPEED_MAX = 3;
 var SLEEPS = [0, 15, 30, 45, 60, 90, 'episode'];
 var SKIP = 15;
 var OTHER = '未分类';
@@ -786,7 +816,7 @@ function renderMini(){
   var mc = marksOf(cur.key).length;
   $('markCount').textContent = mc || '';
   $('bMark').classList.toggle('on', mc > 0);
-  $('bSpeed').textContent = settings.speed + 'x';
+  $('bSpeed').textContent = fmtSpeed(settings.speed);
   $('bSpeed').classList.toggle('on', settings.speed !== 1);
 }
 
@@ -971,15 +1001,36 @@ function showAlbumMenu(name){
 }
 
 /* ---------- 倍速 ---------- */
-$('bSpeed').onclick = function(){
-  renderOpts($('speedOpts'), SPEEDS.map(function(s){
-    return {label: s + 'x' + (s === 1 ? '（正常）' : ''), on: s === settings.speed, pick: function(){
-      settings.speed = s; saveSettings(); audio.playbackRate = s;
-      renderMini(); updateTimes(); closeSheet('speedSheet');
-    }};
-  }));
-  openSheet('speedSheet');
-};
+function fmtSpeed(v){ return (Math.round(v * 100) / 100) + 'x'; }
+function setSpeed(v, persist){
+  v = Math.min(SPEED_MAX, Math.max(SPEED_MIN, Math.round(v * 20) / 20));
+  settings.speed = v; audio.playbackRate = v;
+  $('speedRange').value = v;
+  $('speedBig').textContent = fmtSpeed(v);
+  Array.prototype.forEach.call($('speedPills').children, function(b){ b.classList.toggle('on', +b.dataset.v === v); });
+  renderMini(); updateTimes();
+  if(persist) saveSettings();
+}
+function buildTicks(box, values, min, max, label){
+  box.innerHTML = '';
+  values.forEach(function(v){
+    var s = el('span', null, label(v)); s.style.left = ((v - min) / (max - min) * 100) + '%';
+    box.appendChild(s);
+  });
+}
+(function(){
+  buildTicks($('speedTicks'), [0.5, 1, 1.5, 2, 2.5, 3], SPEED_MIN, SPEED_MAX, function(v){ return v + 'x'; });
+  SPEEDS.forEach(function(s){
+    var b = el('button', 'pill', fmtSpeed(s)); b.dataset.v = s;
+    b.onclick = function(){ setSpeed(s, true); };
+    $('speedPills').appendChild(b);
+  });
+  $('speedRange').addEventListener('input', function(){ setSpeed(+this.value, false); });
+  $('speedRange').addEventListener('change', function(){ saveSettings(); });
+  $('speedMinus').onclick = function(){ setSpeed(settings.speed - 0.05, true); };
+  $('speedPlus').onclick = function(){ setSpeed(settings.speed + 0.05, true); };
+})();
+$('bSpeed').onclick = function(){ setSpeed(settings.speed, false); openSheet('speedSheet'); };
 
 /* ---------- 定时关闭 ---------- */
 var sleepTimer = null;
@@ -1001,7 +1052,29 @@ function showSleep(){
   $('sleepText').textContent = t;
   $('bSleep').classList.toggle('on', !!sleep);
 }
+function fmtMin(m){
+  if(m < 60) return m + ' 分钟';
+  var h = Math.floor(m / 60), r = m % 60;
+  return h + ' 小时' + (r ? ' ' + r + ' 分钟' : '');
+}
+function showSleepPick(){ $('sleepBig').textContent = fmtMin(+$('sleepRange').value); }
+function showSleepSub(){
+  $('sleepSub').textContent = sleep && sleep.episode ? '现在：本集播完后暂停'
+    : sleep && sleep.end ? '现在：还剩 ' + fmt((sleep.end - Date.now()) / 1000) + ' 后暂停'
+    : '左右滑动选择多久后暂停播放';
+  $('bSleepStart').textContent = sleep ? '重新设置' : '开始定时';
+}
+buildTicks($('sleepTicks'), [5, 30, 60, 90, 120, 150, 180], 5, 180, function(v){ return v; });
+$('sleepRange').addEventListener('input', showSleepPick);
+$('bSleepStart').onclick = function(){
+  var m = +$('sleepRange').value;
+  settings.sleepMin = m; saveSettings();
+  setSleep(m); closeSheet('sleepSheet');
+  toast(fmtMin(m) + '后暂停');
+};
 $('bSleep').onclick = function(){
+  $('sleepRange').value = settings.sleepMin || 30;
+  showSleepPick(); showSleepSub();
   renderOpts($('sleepOpts'), SLEEPS.map(function(v){
     var on = v === 0 ? !sleep : v === 'episode' ? !!(sleep && sleep.episode) : false;
     var label = v === 0 ? '不定时' : v === 'episode' ? '播完本集' : v + ' 分钟';
