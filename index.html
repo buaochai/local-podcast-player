@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.5.0">
+<meta name="app-version" content="0.6.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -62,7 +62,7 @@ body.has-player .view{padding-bottom:170px}
 
 /* 首页：节目封面 */
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px 12px}
-.pod{border:none;background:transparent;padding:0;text-align:left;min-width:0}
+.pod{border:none;background:transparent;padding:0;text-align:left;min-width:0;align-self:start;display:block}
 .pod-cover{display:block;width:100%;aspect-ratio:1;object-fit:cover;border-radius:12px;background:var(--line);box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .pod-name{font-size:14px;font-weight:600;margin-top:6px;line-height:1.3}
 .pod-meta{font-size:12px;color:var(--muted)}
@@ -132,6 +132,12 @@ body.has-player .view{padding-bottom:170px}
 .opt.on::after{content:"✓"}
 .opt.danger{color:var(--danger)}
 .opt small{display:block;font-size:12px;color:var(--muted);font-weight:normal}
+.input{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text);-webkit-user-select:text;user-select:text;outline-color:var(--accent)}
+.btn.block{display:block;width:100%;margin-top:10px}
+.sec{font-size:13px;color:var(--muted);margin:16px 2px 6px}
+.opt .time{flex:none;font-variant-numeric:tabular-nums;font-weight:600;color:var(--accent);margin-right:12px}
+.opt .grow{flex:1;min-width:0}
+.pod-new{display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--muted);background:transparent;box-shadow:none;color:var(--muted);font-size:34px;font-weight:300;opacity:.7}
 .facts{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px 14px;margin-bottom:12px;font-size:13px}
 .facts div{display:flex;gap:10px;padding:3px 0}
 .facts b{flex:none;width:4em;color:var(--muted);font-weight:normal}
@@ -175,6 +181,7 @@ input[type=file]{display:none}
       <div class="mini-title line1" id="miniTitle"></div>
       <div class="mini-sub line1" id="miniSub">0:00 / 0:00</div>
     </button>
+    <button class="chip" id="bMark" aria-label="收藏时间点"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.2L6 21z"/></svg><span id="markCount"></span></button>
     <button class="chip" id="bSpeed" aria-label="播放速度">1x</button>
     <button class="chip" id="bSleep" aria-label="定时关闭"><svg viewBox="0 0 24 24"><path d="M12.3 2a10 10 0 1 0 9.7 12.4A8 8 0 0 1 12.3 2z"/></svg><span id="sleepText"></span></button>
   </div>
@@ -210,7 +217,42 @@ input[type=file]{display:none}
     <div class="sheet-head"><h2 class="clamp2" id="epTitle"></h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
     <div class="sheet-body">
       <div class="facts" id="epFacts"></div>
+      <div class="sec" id="epMarksHead" hidden>收藏的时间点 · 点一下跳过去，长按删除</div>
+      <ul class="opts" id="epMarks"></ul>
+      <div class="sec">操作</div>
       <ul class="opts" id="epOpts"></ul>
+    </div>
+  </div>
+</div>
+
+<!-- 收藏时间点 -->
+<div class="sheet" id="markSheet" hidden>
+  <div class="sheet-box" role="dialog" aria-label="收藏时间点">
+    <div class="sheet-head"><h2 class="line1" id="markHead">收藏</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
+    <div class="sheet-body">
+      <input class="input" id="markNote" maxlength="100" placeholder="收藏原因（可以不填）" enterkeyhint="done">
+      <button class="btn primary block" id="bMarkSave">收藏这个时间点</button>
+      <div class="sec" id="markListHead">这一集的收藏 · 点一下跳过去，长按删除</div>
+      <ul class="opts" id="markList"></ul>
+    </div>
+  </div>
+</div>
+
+<!-- 移动到专辑 -->
+<div class="sheet" id="moveSheet" hidden>
+  <div class="sheet-box" role="dialog" aria-label="移动到专辑">
+    <div class="sheet-head"><h2>移动到专辑</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
+    <div class="sheet-body"><ul class="opts" id="moveOpts"></ul></div>
+  </div>
+</div>
+
+<!-- 输入文字（新建 / 重命名专辑） -->
+<div class="sheet" id="askSheet" hidden>
+  <div class="sheet-box" role="dialog">
+    <div class="sheet-head"><h2 id="askTitle"></h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
+    <div class="sheet-body">
+      <input class="input" id="askInput" maxlength="40" enterkeyhint="done">
+      <button class="btn primary block" id="bAskOk">确定</button>
     </div>
   </div>
 </div>
@@ -235,6 +277,8 @@ input[type=file]{display:none}
         <li>点节目封面进入节目，看到每一集的进度；长按某一集可以查看文件信息或删除</li>
         <li>底部悬浮播放器：上一集 / 下一集、后退 / 快进 15 秒、拖动进度条</li>
         <li>点「1x」选播放速度，点月亮设置定时关闭（按时间或播完本集）</li>
+        <li>点书签按钮收藏当前时间点，可以写上收藏原因；之后点一下就能跳回那里</li>
+        <li>可以新建自己的专辑，长按某一集 →「移动到专辑」；长按专辑封面可以重命名或删除</li>
         <li>每一集自动记住听到的位置</li>
         <li>锁屏和通知栏显示节目封面，可以用锁屏和耳机按钮控制播放</li>
       </ul>
@@ -425,6 +469,10 @@ function allShows(){
   }
   episodes.forEach(function(ep){ add(ep.key); });
   Object.keys(records).forEach(add);
+  // 自己建的专辑，没有内容也显示
+  Object.keys(shows).forEach(function(name){
+    if(shows[name].custom && !map[name]) map[name] = {name:name, keys:[], loaded:0, updated:0};
+  });
   return Object.keys(map).map(function(k){ return map[k]; }).sort(function(a, b){
     if(a.name === OTHER) return 1;
     if(b.name === OTHER) return -1;
@@ -445,7 +493,53 @@ function coverOf(show){
   for(var i = 0; i < episodes.length; i++){
     if(episodes[i].show === show && episodes[i].art) return episodes[i].art.url;
   }
-  return (shows[show] && shows[show].cover) || DEFAULT_COVER;
+  if(shows[show] && shows[show].cover) return shows[show].cover;
+  // 自建专辑没有自己的封面：用里面某一集原来专辑的封面
+  for(var k in records){
+    var r = records[k];
+    if(r.show === show && r.tagShow && shows[r.tagShow] && shows[r.tagShow].cover) return shows[r.tagShow].cover;
+  }
+  return DEFAULT_COVER;
+}
+function isCustom(name){ return !!(shows[name] && shows[name].custom); }
+function albumNames(){ return allShows().map(function(s){ return s.name; }); }
+// 把一集移到某个专辑；移回原来的专辑时去掉自定义
+function moveTo(key, name){
+  var r = records[key], ep = findEp(key);
+  if(!r) return;
+  var tag = r.tagShow || OTHER;
+  if(name === tag) delete r.customShow; else r.customShow = name;
+  r.show = name;
+  if(ep) ep.show = name;
+  if(name !== tag && !shows[name]) shows[name] = {custom:true};
+  saveRecords(); saveShows();
+  if(cur && cur.key === key) setMediaSession();
+}
+function createAlbum(name){
+  name = clean(name);
+  if(!name) return '';
+  if(!shows[name] && albumNames().indexOf(name) < 0) shows[name] = {custom:true};
+  saveShows();
+  return name;
+}
+function renameAlbum(oldName, newName){
+  newName = clean(newName);
+  if(!newName || newName === oldName) return;
+  var keys = episodeKeys(oldName).slice();
+  var old = shows[oldName];
+  shows[newName] = shows[newName] || {custom:true};
+  shows[newName].custom = true;
+  if(old && old.cover && !shows[newName].cover) shows[newName].cover = old.cover;
+  keys.forEach(function(k){ moveTo(k, newName); });
+  if(old && old.custom) delete shows[oldName];
+  else if(old) delete old.custom;
+  saveShows();
+}
+// 删除自建专辑：里面的集回到各自原来的专辑
+function deleteAlbum(name){
+  episodeKeys(name).slice().forEach(function(k){ moveTo(k, records[k].tagShow || OTHER); });
+  delete shows[name];
+  saveShows();
 }
 
 /* ---------- 记录进度 ---------- */
@@ -468,15 +562,16 @@ function recordNow(force){
 }
 
 /* ---------- 播放 ---------- */
-function open(ep, autoplay){
+function open(ep, autoplay, at){
   if(!ep) return;
+  if(ep === cur && at != null){ audio.currentTime = at; if(autoplay) play(); recordNow(true); return; }
   if(cur && cur !== ep) recordNow(true);
   cur = ep;
   ep.loaded = false;
   audio.src = ep.url;
   audio.playbackRate = settings.speed;
   var r = records[ep.key];
-  var startAt = (r && !r.finished) ? r.position : 0;
+  var startAt = at != null ? at : (r && !r.finished) ? r.position : 0;
   audio.addEventListener('loadedmetadata', function onMeta(){
     audio.removeEventListener('loadedmetadata', onMeta);
     if(startAt > 0 && startAt < audio.duration - 2) audio.currentTime = startAt;
@@ -486,7 +581,7 @@ function open(ep, autoplay){
     if(autoplay) play();
   });
   audio.load();
-  if(startAt > 0 && autoplay) toast('从 ' + fmt(startAt) + ' 继续');
+  if(startAt > 0 && autoplay && at == null) toast('从 ' + fmt(startAt) + ' 继续');
   setMediaSession();
   render();
 }
@@ -580,6 +675,9 @@ function renderMini(){
   $('miniTitle').textContent = cur.title;
   var list = playlist(), i = list.indexOf(cur);
   $('bNext').disabled = i < 0 || i >= list.length - 1;
+  var mc = marksOf(cur.key).length;
+  $('markCount').textContent = mc || '';
+  $('bMark').classList.toggle('on', mc > 0);
   $('bSpeed').textContent = settings.speed + 'x';
   $('bSpeed').classList.toggle('on', settings.speed !== 1);
 }
@@ -600,6 +698,130 @@ function renderOpts(ul, items){
     b.onclick = it.pick;
     li.appendChild(b); ul.appendChild(li);
   });
+}
+
+/* ---------- 收藏时间点 ---------- */
+// records[key].marks = [{t:秒, note:'原因', created:时间}]
+var markAt = 0;
+function marksOf(key){ return (records[key] && records[key].marks) || []; }
+function renderMarkList(ul, key, after){
+  var list = marksOf(key).slice().sort(function(a, b){ return a.t - b.t; });
+  ul.innerHTML = '';
+  list.forEach(function(m){
+    var li = el('li'), b = el('button', 'opt');
+    b.appendChild(el('span', 'time', fmt(m.t)));
+    b.appendChild(el('span', 'grow clamp2', m.note || '（没有写原因）'));
+    b.onclick = function(){
+      var ep = findEp(key);
+      if(!ep){ toast('文件缺失，点「＋」重新添加这一集'); return; }
+      if(after) after();
+      open(ep, true, m.t);
+    };
+    onLongPress(b, function(){
+      if(!confirm('删除 ' + fmt(m.t) + ' 的收藏？')) return;
+      var arr = records[key].marks, i = arr.indexOf(m);
+      if(i >= 0) arr.splice(i, 1);
+      saveRecords(); renderMarkList(ul, key, after); renderMini(); render();
+    });
+    li.appendChild(b); ul.appendChild(li);
+  });
+  return list.length;
+}
+$('bMark').onclick = function(){
+  if(!cur) return;
+  markAt = audio.currentTime;
+  $('markHead').textContent = '收藏 ' + fmt(markAt);
+  $('markNote').value = '';
+  var n = renderMarkList($('markList'), cur.key, function(){ closeSheet('markSheet'); });
+  $('markListHead').hidden = !n;
+  openSheet('markSheet');
+};
+function saveMark(){
+  if(!cur) return;
+  var r = records[cur.key] || (records[cur.key] = {name:cur.name, size:cur.size, duration:0, position:0, updated:0, show:cur.show, title:cur.title});
+  (r.marks = r.marks || []).push({t:Math.floor(markAt), note:clean($('markNote').value), created:Date.now()});
+  saveRecords();
+  $('markNote').blur();
+  closeSheet('markSheet');
+  toast('已收藏 ' + fmt(markAt));
+  renderMini(); render();
+}
+$('bMarkSave').onclick = saveMark;
+$('markNote').addEventListener('keydown', function(e){ if(e.key === 'Enter') saveMark(); });
+
+/* ---------- 输入框面板 ---------- */
+var askDone = null;
+function ask(title, value, placeholder, cb){
+  $('askTitle').textContent = title;
+  $('askInput').value = value || '';
+  $('askInput').placeholder = placeholder || '';
+  askDone = cb;
+  openSheet('askSheet');
+  setTimeout(function(){ $('askInput').focus(); }, 50);
+}
+function askOk(){
+  var v = clean($('askInput').value);
+  if(!v){ toast('名字不能为空'); return; }
+  $('askInput').blur();
+  closeSheet('askSheet');
+  if(askDone) askDone(v);
+}
+$('bAskOk').onclick = askOk;
+$('askInput').addEventListener('keydown', function(e){ if(e.key === 'Enter') askOk(); });
+
+/* ---------- 移动到专辑 ---------- */
+function showMoveMenu(key){
+  var r = records[key], now = showOf(key), tag = (r && r.tagShow) || OTHER;
+  var items = [{label:'＋ 新建专辑…', pick:function(){
+    closeSheet('moveSheet');
+    ask('新建专辑', '', '专辑名称', function(name){
+      name = createAlbum(name);
+      moveTo(key, name); render(); toast('已移到「' + name + '」');
+    });
+  }}];
+  albumNames().forEach(function(name){
+    items.push({label:name, note: name === tag && now !== tag ? '原来的专辑' : '', on: name === now, pick:function(){
+      closeSheet('moveSheet');
+      if(name === now) return;
+      moveTo(key, name); render(); toast('已移到「' + name + '」');
+    }});
+  });
+  if(albumNames().indexOf(tag) < 0) items.push({label:tag, note:'原来的专辑', pick:function(){
+    closeSheet('moveSheet'); moveTo(key, tag); render(); toast('已移回「' + tag + '」');
+  }});
+  renderOpts($('moveOpts'), items);
+  openSheet('moveSheet');
+}
+function showAlbumMenu(name){
+  var keys = episodeKeys(name);
+  $('epTitle').textContent = name;
+  var facts = $('epFacts'); facts.innerHTML = '';
+  [['集数', keys.length + ' 集'], ['类型', isCustom(name) ? '自己建的专辑' : '来自音频里的专辑信息']].forEach(function(f){
+    var d = el('div'); d.appendChild(el('b', null, f[0])); d.appendChild(el('span', null, f[1]));
+    facts.appendChild(d);
+  });
+  $('epMarksHead').hidden = true; $('epMarks').innerHTML = '';
+  var items = [{label:'重命名专辑', note:'同名专辑会合并在一起', pick:function(){
+    closeSheet('epSheet');
+    ask('重命名专辑', name, '专辑名称', function(v){
+      if(v === name) return;
+      renameAlbum(name, v);
+      if(view.page === 'show' && view.show === name){ view.show = v; history.replaceState({show:v}, ''); }
+      render(); toast('已改名为「' + v + '」');
+    });
+  }}, {label:'新建专辑', pick:function(){
+    closeSheet('epSheet');
+    ask('新建专辑', '', '专辑名称', function(v){ createAlbum(v); render(); toast('已新建「' + v + '」'); });
+  }}];
+  if(isCustom(name)) items.push({label:'删除专辑', note:'里面的集会回到原来的专辑', danger:true, pick:function(){
+    if(!confirm('删除专辑「' + name + '」？里面的集不会删除。')) return;
+    closeSheet('epSheet');
+    deleteAlbum(name);
+    if(view.page === 'show' && view.show === name) goHome(); else render();
+    toast('已删除专辑');
+  }});
+  renderOpts($('epOpts'), items);
+  openSheet('epSheet');
 }
 
 /* ---------- 倍速 ---------- */
@@ -862,14 +1084,16 @@ function readInfo(ep){
   return readTags(ep.blob).catch(function(){ return {}; }).then(function(info){
     ep.tags = info;
     ep.title = info.title || stripExt(ep.name);
-    ep.show = info.album || info.albumArtist || info.artist || OTHER;
+    ep.tagShow = info.album || info.albumArtist || info.artist || OTHER;
     if(ep.art) URL.revokeObjectURL(ep.art.url);
     ep.art = info.cover ? {url:URL.createObjectURL(new Blob([info.cover.data], {type:info.cover.type})), type:info.cover.type} : null;
     // 每一集都留一条记录（没听过的 updated 为 0），文件删了以后节目里也能看到
     var r = records[ep.key] || (records[ep.key] = {name:ep.name, size:ep.size, duration:0, position:0, updated:0});
-    r.show = ep.show; r.title = ep.title;
-    if(ep.art && !(shows[ep.show] && shows[ep.show].cover)){
-      return thumb(ep.art.url).then(function(d){ if(d) shows[ep.show] = {cover:d}; });
+    ep.show = r.customShow || ep.tagShow;
+    r.tagShow = ep.tagShow; r.show = ep.show; r.title = ep.title;
+    // 封面存给原专辑（自建专辑会借用它）
+    if(ep.art && !(shows[ep.tagShow] && shows[ep.tagShow].cover)){
+      return thumb(ep.art.url).then(function(d){ if(d){ shows[ep.tagShow] = shows[ep.tagShow] || {}; shows[ep.tagShow].cover = d; } });
     }
   });
 }
@@ -955,14 +1179,14 @@ function deleteEpisode(key){
   return deleteFile(key).then(function(){
     delete records[key];
     saveRecords();
-    if(!episodeKeys(show).length && shows[show]){ delete shows[show]; saveShows(); }
+    if(!episodeKeys(show).length && shows[show] && !shows[show].custom){ delete shows[show]; saveShows(); }
   });
 }
 function showEpMenu(key){
   var ep = findEp(key), r = records[key] || {};
   $('epTitle').textContent = titleOf(key);
   var facts = $('epFacts'); facts.innerHTML = '';
-  [['节目', showOf(key)],
+  [['专辑', showOf(key) + (r.customShow ? '（原专辑：' + (r.tagShow || OTHER) + '）' : '')],
    ['文件名', fileNameOf(key)],
    ['大小', fmtSize(ep ? ep.size : r.size || 0)],
    ['信息来源', ep ? (ep.tags && ep.tags.format ? ep.tags.format + (ep.tags.album ? '' : '（没有专辑）') : '没有读到标签') : '—'],
@@ -970,7 +1194,9 @@ function showEpMenu(key){
     var d = el('div'); d.appendChild(el('b', null, f[0])); d.appendChild(el('span', null, f[1]));
     facts.appendChild(d);
   });
-  var items = [];
+  var n = renderMarkList($('epMarks'), key, function(){ closeSheet('epSheet'); });
+  $('epMarksHead').hidden = !n;
+  var items = [{label:'移动到专辑', note:'现在在「' + showOf(key) + '」', pick:function(){ closeSheet('epSheet'); showMoveMenu(key); }}];
   if(ep) items.push({label:'删除本地音频文件', note:'释放空间，保留播放记录和信息', danger:true, pick:function(){
     closeSheet('epSheet');
     deleteFile(key).then(function(){ toast('已删除音频文件，播放记录还在'); render(); updateStorage(); });
@@ -1034,13 +1260,23 @@ function renderHome(box){
     var missing = s.keys.length - s.loaded;
     card.appendChild(el('div', 'pod-meta line1', s.keys.length + ' 集' + (missing ? ' · ' + missing + ' 集缺失' : '')));
     card.onclick = function(){ goShow(s.name); };
+    onLongPress(card, function(){ showAlbumMenu(s.name); });
     grid.appendChild(card);
   });
+  var add = el('button', 'pod');
+  add.appendChild(el('div', 'pod-cover pod-new', '+'));
+  add.appendChild(el('div', 'pod-name clamp2', '新建专辑'));
+  add.onclick = function(){ ask('新建专辑', '', '专辑名称', function(v){ createAlbum(v); render(); toast('已新建「' + v + '」，长按某一集可以移进来'); }); };
+  grid.appendChild(add);
   box.appendChild(grid);
 }
 function renderShow(box){
   var keys = episodeKeys(view.show);
-  if(!keys.length){ view = {page:'home'}; history.replaceState(null, ''); render(); return; }
+  if(!keys.length && !isCustom(view.show)){ view = {page:'home'}; history.replaceState(null, ''); render(); return; }
+  if(!keys.length){
+    box.appendChild(el('div', 'empty', '这个专辑还没有内容。到其他专辑里长按某一集 →「移动到专辑」，就能移到这里。'));
+    return;
+  }
   var head = el('div', 'pod-head');
   var img = el('img'); img.src = coverOf(view.show); img.alt = '';
   var info = el('div');
@@ -1065,7 +1301,8 @@ function renderShow(box){
     var li = el('li', 'item' + (ep && ep === cur ? ' cur' : '') + (ep ? '' : ' missing'));
     var main = el('div', 'item-main');
     main.appendChild(el('div', 'item-name clamp2', titleOf(k)));
-    main.appendChild(el('div', 'item-meta line1', progressText(r) + (r && r.updated ? ' · ' + fmtDate(r.updated) : '')));
+    var mk = marksOf(k).length;
+    main.appendChild(el('div', 'item-meta line1', (mk ? '收藏 ' + mk + ' · ' : '') + progressText(r) + (r && r.updated ? ' · ' + fmtDate(r.updated) : '')));
     main.appendChild(progressBar(r));
     li.appendChild(main);
     if(!ep) li.appendChild(el('span', 'tag', '文件缺失'));
@@ -1074,7 +1311,7 @@ function renderShow(box){
     ul.appendChild(li);
   });
   box.appendChild(ul);
-  box.appendChild(el('p', 'hint', '长按某一集可以查看信息或删除'));
+  box.appendChild(el('p', 'hint', '长按某一集：收藏的时间点、移动到专辑、删除'));
 }
 
 /* ---------- 关于 / 更新 ---------- */
