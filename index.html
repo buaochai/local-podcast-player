@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.8.0">
+<meta name="app-version" content="0.9.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -85,6 +85,7 @@ body.has-player .list-scroll{padding-bottom:170px}
 .pod-head .t{font-size:18px;font-weight:700;line-height:1.3}
 .pod-head .m{font-size:13px;color:var(--muted);margin:2px 0 8px}
 .pod-head .btn{min-height:34px;padding:4px 14px;font-size:14px}
+.pod-actions{display:flex;gap:8px;flex-wrap:wrap}
 .list{list-style:none;margin:0;padding:0;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
 .item{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--line)}
 .item:first-child{border-top:none}
@@ -256,6 +257,21 @@ input[type=file]{display:none}
   </div>
 </div>
 
+<!-- 专辑信息 -->
+<div class="sheet" id="albumSheet" hidden>
+  <div class="sheet-box" role="dialog" aria-label="专辑信息">
+    <div class="sheet-head"><h2>专辑信息</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
+    <div class="sheet-body">
+      <div class="sec">专辑名称</div>
+      <input class="input" id="albumName" maxlength="40" placeholder="专辑名称" enterkeyhint="next">
+      <div class="sec">创作者</div>
+      <input class="input" id="albumAuthor" maxlength="40" placeholder="主播或制作人（可以不填）" enterkeyhint="done">
+      <p>创作者会显示在手机锁屏和通知栏的播放信息里；不填就用音频文件里的艺术家。</p>
+      <button class="btn primary block" id="bAlbumSave">保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- 标签详情 -->
 <div class="sheet" id="tagSheet" hidden>
   <div class="sheet-box" role="dialog" aria-label="标签详情">
@@ -322,9 +338,20 @@ input[type=file]{display:none}
         <li>点「1x」选播放速度，点月亮设置定时关闭（按时间或播完本集）</li>
         <li>点书签按钮收藏当前时间点，可以写上收藏原因；之后点一下就能跳回那里</li>
         <li>首页右上角的文件夹按钮可以新建专辑；选中集后点「移动到专辑」；长按专辑封面可以重命名或删除</li>
+        <li>专辑页的「编辑」可以改专辑名称和创作者，创作者显示在锁屏和通知栏的播放信息里</li>
         <li>每一集自动记住听到的位置</li>
         <li>锁屏和通知栏显示节目封面，可以用锁屏和耳机按钮控制播放</li>
       </ul>
+
+      <h3>锁屏和耳机按键</h3>
+      <p>网页没办法在锁屏上新增按钮。可以把「下一首」键（耳机双击一般也是这个键）改成收藏当前时间点，收藏时锁屏标题会闪一下「已收藏」。</p>
+      <div class="ver-row">
+        <div class="ver-text">
+          <div class="ver-num">「下一首」键收藏时间点</div>
+          <div class="ver-status" id="keyStatus"></div>
+        </div>
+        <button class="btn" id="bKeyMark">开启</button>
+      </div>
 
       <h3>存储空间</h3>
       <p id="storageInfo">正在计算…</p>
@@ -545,17 +572,39 @@ function playlist(){
   if(!cur) return [];
   return episodeKeys(cur.show).map(findEp).filter(Boolean);
 }
-function coverOf(show){
+// 专辑封面：先找这一专辑里有封面的那一集，再用存下来的小图，最后借用原专辑的封面
+function coverInfo(show){
   for(var i = 0; i < episodes.length; i++){
-    if(episodes[i].show === show && episodes[i].art) return episodes[i].art.url;
+    if(episodes[i].show === show && episodes[i].art) return {src:episodes[i].art.url, type:episodes[i].art.type};
   }
-  if(shows[show] && shows[show].cover) return shows[show].cover;
-  // 自建专辑没有自己的封面：用里面某一集原来专辑的封面
+  if(shows[show] && shows[show].cover) return {src:shows[show].cover, type:'image/jpeg'};
   for(var k in records){
     var r = records[k];
-    if(r.show === show && r.tagShow && shows[r.tagShow] && shows[r.tagShow].cover) return shows[r.tagShow].cover;
+    if(r.show === show && r.tagShow && shows[r.tagShow] && shows[r.tagShow].cover) return {src:shows[r.tagShow].cover, type:'image/jpeg'};
   }
-  return DEFAULT_COVER;
+  return null;
+}
+function coverOf(show){ var c = coverInfo(show); return c ? c.src : DEFAULT_COVER; }
+// 锁屏封面用 blob 链接（data 链接在有的手机上不显示）
+var dataBlobCache = {};
+function blobUrlOf(dataUrl){
+  if(dataBlobCache[dataUrl]) return dataBlobCache[dataUrl];
+  try{
+    var m = /^data:([^;]+);base64,(.*)$/.exec(dataUrl), raw = atob(m[2]), u8 = new Uint8Array(raw.length);
+    for(var i = 0; i < raw.length; i++) u8[i] = raw.charCodeAt(i);
+    return dataBlobCache[dataUrl] = URL.createObjectURL(new Blob([u8], {type:m[1]}));
+  }catch(e){ return dataUrl; }
+}
+// 创作者：自己填的 > 这一集标签里的艺术家 > 这个专辑里别的集的艺术家
+function authorOf(show, ep){
+  if(shows[show] && shows[show].author) return shows[show].author;
+  if(ep && ep.tags && (ep.tags.artist || ep.tags.albumArtist)) return ep.tags.artist || ep.tags.albumArtist;
+  for(var i = 0; i < episodes.length; i++){
+    var tg = episodes[i].tags;
+    if(episodes[i].show === show && tg && (tg.artist || tg.albumArtist)) return tg.artist || tg.albumArtist;
+  }
+  for(var k in records){ if(records[k].show === show && records[k].artist) return records[k].artist; }
+  return '';
 }
 function isCustom(name){ return !!(shows[name] && shows[name].custom); }
 function albumNames(){ return allShows().map(function(s){ return s.name; }); }
@@ -586,6 +635,7 @@ function renameAlbum(oldName, newName){
   shows[newName] = shows[newName] || {custom:true};
   shows[newName].custom = true;
   if(old && old.cover && !shows[newName].cover) shows[newName].cover = old.cover;
+  if(old && old.author && !shows[newName].author) shows[newName].author = old.author;
   keys.forEach(function(k){ moveTo(k, newName); });
   if(old && old.custom) delete shows[oldName];
   else if(old) delete old.custom;
@@ -792,15 +842,30 @@ $('bMark').onclick = function(){
   $('markListHead').hidden = !n;
   openSheet('markSheet');
 };
+function addMark(sec, note){
+  var r = records[cur.key] || (records[cur.key] = {name:cur.name, size:cur.size, duration:0, position:0, updated:0, show:cur.show, title:cur.title});
+  (r.marks = r.marks || []).push({t:Math.floor(sec), note:note || '', created:Date.now()});
+  saveRecords();
+  renderMini(); render();
+}
 function saveMark(){
   if(!cur) return;
-  var r = records[cur.key] || (records[cur.key] = {name:cur.name, size:cur.size, duration:0, position:0, updated:0, show:cur.show, title:cur.title});
-  (r.marks = r.marks || []).push({t:Math.floor(markAt), note:clean($('markNote').value), created:Date.now()});
-  saveRecords();
+  addMark(markAt, clean($('markNote').value));
   $('markNote').blur();
   closeSheet('markSheet');
   toast('已收藏 ' + fmt(markAt));
-  renderMini(); render();
+}
+// 锁屏 / 耳机的「下一首」键：不填原因直接收藏当前时间点
+var flashTimer = null;
+function quickMark(){
+  if(!cur || !cur.loaded) return;
+  var sec = audio.currentTime;
+  addMark(sec, '');
+  if(navigator.vibrate) navigator.vibrate(30);
+  toast('已收藏 ' + fmt(sec));
+  setMediaSession('★ 已收藏 ' + fmt(sec));
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(function(){ setMediaSession(); }, 2500);
 }
 $('bMarkSave').onclick = saveMark;
 $('markNote').addEventListener('keydown', function(e){ if(e.key === 'Enter') saveMark(); });
@@ -852,23 +917,42 @@ function showMoveMenu(keys, done){
   renderOpts($('moveOpts'), items);
   openSheet('moveSheet');
 }
+var editingAlbum = '';
+function editAlbum(name){
+  editingAlbum = name;
+  $('albumName').value = name;
+  $('albumAuthor').value = authorOf(name);
+  openSheet('albumSheet');
+}
+function saveAlbum(){
+  var old = editingAlbum, nm = clean($('albumName').value), au = clean($('albumAuthor').value);
+  if(!nm){ toast('专辑名称不能为空'); return; }
+  $('albumName').blur(); $('albumAuthor').blur();
+  closeSheet('albumSheet');
+  if(nm !== old) renameAlbum(old, nm);
+  shows[nm] = shows[nm] || {};
+  if(au) shows[nm].author = au; else delete shows[nm].author;
+  saveShows();
+  if(view.page === 'show' && view.show === old){ view.show = nm; history.replaceState({show:nm}, ''); }
+  if(cur) setMediaSession();
+  render();
+  toast(nm !== old ? '已保存，专辑改名为「' + nm + '」' : '已保存');
+}
+$('bAlbumSave').onclick = saveAlbum;
+$('albumName').addEventListener('keydown', function(e){ if(e.key === 'Enter') $('albumAuthor').focus(); });
+$('albumAuthor').addEventListener('keydown', function(e){ if(e.key === 'Enter') saveAlbum(); });
 function showAlbumMenu(name){
   var keys = episodeKeys(name);
   $('epTitle').textContent = name;
   var facts = $('epFacts'); facts.innerHTML = '';
-  [['集数', keys.length + ' 集'], ['类型', isCustom(name) ? '自己建的专辑' : '来自音频里的专辑信息']].forEach(function(f){
+  [['集数', keys.length + ' 集'], ['创作者', authorOf(name) || '（没有）'], ['类型', isCustom(name) ? '自己建的专辑' : '来自音频里的专辑信息']].forEach(function(f){
     var d = el('div'); d.appendChild(el('b', null, f[0])); d.appendChild(el('span', null, f[1]));
     facts.appendChild(d);
   });
   $('epMarksHead').hidden = true; $('epMarks').innerHTML = '';
-  var items = [{label:'重命名专辑', note:'同名专辑会合并在一起', pick:function(){
+  var items = [{label:'编辑专辑信息', note:'名称、创作者（名称和别的专辑相同会合并）', pick:function(){
     closeSheet('epSheet');
-    ask('重命名专辑', name, '专辑名称', function(v){
-      if(v === name) return;
-      renameAlbum(name, v);
-      if(view.page === 'show' && view.show === name){ view.show = v; history.replaceState({show:v}, ''); }
-      render(); toast('已改名为「' + v + '」');
-    });
+    editAlbum(name);
   }}, {label:'新建专辑', pick:function(){
     closeSheet('epSheet');
     ask('新建专辑', '', '专辑名称', function(v){ createAlbum(v); render(); toast('已新建「' + v + '」'); });
@@ -934,13 +1018,18 @@ var DEFAULT_ART = [
   {src:'cover-192.png', sizes:'192x192', type:'image/png'},
   {src:'cover-512.png', sizes:'512x512', type:'image/png'}
 ];
-function setMediaSession(){
+function artFor(ep){
+  var c = ep.art ? {src:ep.art.url, type:ep.art.type} : coverInfo(ep.show);
+  if(!c) return DEFAULT_ART;
+  return [{src:/^data:/.test(c.src) ? blobUrlOf(c.src) : c.src, type:c.type}];
+}
+function setMediaSession(titleOverride){
   if(!cur || !('mediaSession' in navigator)) return;
-  var art = cur.art ? [{src:cur.art.url, type:cur.art.type}]
-          : shows[cur.show] && shows[cur.show].cover ? [{src:shows[cur.show].cover, type:'image/jpeg'}]
-          : DEFAULT_ART;
   navigator.mediaSession.metadata = new MediaMetadata({
-    title: cur.title, artist: cur.show === OTHER ? '本地播客' : cur.show, album: cur.show, artwork: art
+    title: typeof titleOverride === 'string' ? titleOverride : cur.title,
+    artist: authorOf(cur.show, cur) || (cur.show === OTHER ? '本地播客' : cur.show),
+    album: cur.show,
+    artwork: artFor(cur)
   });
 }
 if('mediaSession' in navigator){
@@ -951,7 +1040,7 @@ if('mediaSession' in navigator){
   h('seekbackward', function(){ skip(-SKIP); });
   h('seekforward', function(){ skip(SKIP); });
   h('previoustrack', prev);
-  h('nexttrack', next);
+  h('nexttrack', function(){ if(settings.nextMark) quickMark(); else next(); });
   h('seekto', function(d){ if(d.seekTime != null){ audio.currentTime = d.seekTime; recordNow(true); } });
 }
 
@@ -1321,7 +1410,7 @@ function readInfo(ep){
     // 每一集都留一条记录（没听过的 updated 为 0），文件删了以后节目里也能看到
     var r = records[ep.key] || (records[ep.key] = {name:ep.name, size:ep.size, duration:0, position:0, updated:0});
     ep.show = r.customShow || ep.tagShow;
-    r.tagShow = ep.tagShow; r.show = ep.show; r.title = ep.title;
+    r.tagShow = ep.tagShow; r.show = ep.show; r.title = ep.title; r.artist = info.artist || info.albumArtist || r.artist || '';
     // 封面存给原专辑（自建专辑会借用它）
     if(ep.art && !(shows[ep.tagShow] && shows[ep.tagShow].cover)){
       return thumb(ep.art.url).then(function(d){ if(d){ shows[ep.tagShow] = shows[ep.tagShow] || {}; shows[ep.tagShow].cover = d; } });
@@ -1584,16 +1673,22 @@ function renderShow(box){
   var info = el('div');
   info.appendChild(el('div', 't clamp2', view.show));
   var missing = keys.length - keys.filter(findEp).length;
-  info.appendChild(el('div', 'm line1', keys.length + ' 集' + (missing ? ' · ' + missing + ' 集文件缺失' : '')));
+  var au = authorOf(view.show);
+  info.appendChild(el('div', 'm line1', (au ? au + ' · ' : '') + keys.length + ' 集' + (missing ? ' · ' + missing + ' 集文件缺失' : '')));
   // 「继续播放」：这个节目里最近听过、没听完、有文件的一集；没有就从第一集没听完的开始
   var resume = null, t = 0;
   keys.forEach(function(k){ var r = records[k], ep = findEp(k); if(ep && r && !r.finished && r.updated > t){ resume = ep; t = r.updated; } });
   if(!resume) resume = keys.map(findEp).filter(function(ep){ return ep && !(records[ep.key] && records[ep.key].finished); })[0];
+  var acts = el('div', 'pod-actions');
   if(resume && !(cur && cur.show === view.show)){ // 这个节目已经在播时不显示
     var b = el('button', 'btn primary', records[resume.key] && records[resume.key].updated ? '▶ 继续播放' : '▶ 开始播放');
     b.onclick = function(){ open(resume, true); };
-    info.appendChild(b);
+    acts.appendChild(b);
   }
+  var eb = el('button', 'btn', '编辑');
+  eb.onclick = function(){ editAlbum(view.show); };
+  acts.appendChild(eb);
+  info.appendChild(acts);
   head.appendChild(img); head.appendChild(info);
   box.classList.add('fixed');
   box.appendChild(head);
@@ -1738,6 +1833,15 @@ window.addEventListener('pagehide', function(){ recordNow(true); });
 document.addEventListener('touchmove', function(e){ if(e.touches.length > 1) e.preventDefault(); }, {passive:false});
 
 /* ---------- 启动：读出保存在网页里的音频 ---------- */
+function showKeyMode(){
+  $('keyStatus').textContent = '现在：' + (settings.nextMark ? '收藏当前时间点' : '切换到下一集');
+  $('bKeyMark').textContent = settings.nextMark ? '关闭' : '开启';
+}
+$('bKeyMark').onclick = function(){
+  settings.nextMark = !settings.nextMark; saveSettings(); showKeyMode();
+  toast(settings.nextMark ? '「下一首」键现在会收藏时间点' : '「下一首」键恢复为切换下一集');
+};
+showKeyMode();
 $('ver').textContent = VERSION;
 if(history.state && history.state.show) history.replaceState(null, '');
 fileAll().catch(function(){ return []; }).then(function(rows){

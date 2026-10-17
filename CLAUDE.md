@@ -9,3 +9,4 @@
 - 顶部提示、标题等文字最多两行（`.clamp2`），信息行一行（`.line1`）。
 - 使用者已授权：每次改完测试通过后，直接推送并合并到 `main` 发布，不用再问。
 - 专辑页：单集右边的「!」打开详情菜单 `showEpMenu`；长按或「选择」进入多选（`selMode` / `selKeys`），底部 `.selbar` 操作。
+- 锁屏信息（`setMediaSession`）：封面用 `artFor`（本集封面 > 专辑封面，data 链接要转 blob），创作者用 `authorOf`（`shows[专辑].author` > 标签艺术家）。网页无法在锁屏加自定义按钮，只能给 `nexttrack` 换功能（设置 `nextMark`）。
