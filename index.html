@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.7.2">
+<meta name="app-version" content="0.8.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -48,6 +48,9 @@ button{font:inherit;color:inherit;cursor:pointer}
 .icon-btn{border:none;background:transparent;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none}
 .icon-btn svg{width:24px;height:24px;fill:currentColor}
 .icon-btn[hidden]{display:none}
+.txt-btn{border:none;background:transparent;color:var(--accent);font-size:16px;padding:0 8px;height:40px;flex:none;white-space:nowrap}
+.txt-btn[hidden]{display:none}
+.btn.danger{color:var(--danger)}
 
 /* 顶栏 */
 header{flex:none;display:flex;align-items:center;gap:4px;padding:calc(10px + env(safe-area-inset-top)) 0 8px}
@@ -93,6 +96,18 @@ body.has-player .list-scroll{padding-bottom:170px}
 .item.missing .item-name{color:var(--muted)}
 .prog{height:3px;background:var(--line);border-radius:2px;margin-top:6px;overflow:hidden}
 .prog i{display:block;height:100%;background:var(--accent)}
+.info-btn{border:none;background:transparent;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none;margin-right:-8px}
+.info-btn svg{width:22px;height:22px;fill:currentColor}
+.chk{flex:none;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--muted);display:flex;align-items:center;justify-content:center}
+.chk.on{background:var(--accent);border-color:var(--accent)}
+.chk.on::after{content:"";width:6px;height:11px;border:solid var(--on-accent);border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.item.sel{background:var(--accent-soft)}
+.selbar{position:absolute;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:6;display:flex;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:10px}
+.selbar[hidden]{display:none}
+.selbar .btn{flex:1}
+.selbar .btn:disabled{opacity:.4}
+body.selecting .mini{display:none}
+body.selecting .list-scroll{padding-bottom:90px}
 .tag{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:0 6px;white-space:nowrap;flex:none}
 .hint{font-size:12px;color:var(--muted);text-align:center;margin:10px 0 0}
 
@@ -132,6 +147,7 @@ body.has-player .list-scroll{padding-bottom:170px}
 .sheet-body p{margin:6px 0;color:var(--muted)}
 .opts{list-style:none;margin:0;padding:0 !important;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
 .opts li{margin:0 !important}
+.opts:empty{display:none}
 .opt{display:flex;align-items:center;justify-content:space-between;width:100%;border:none;border-top:1px solid var(--line);background:transparent;padding:13px 16px;text-align:left;font-size:16px}
 .opts li:first-child .opt{border-top:none}
 .opt.on{color:var(--accent);font-weight:600}
@@ -170,6 +186,9 @@ input[type=file]{display:none}
 <header>
   <button class="icon-btn" id="bBack" aria-label="返回" hidden><svg viewBox="0 0 24 24"><path d="M15.4 5.4 14 4l-8 8 8 8 1.4-1.4L8.8 12z"/></svg></button>
   <h1 id="title" class="line1">播客节目</h1>
+  <button class="txt-btn" id="bSel" hidden>选择</button>
+  <button class="txt-btn" id="bSelAll" hidden>全选</button>
+  <button class="txt-btn" id="bSelDone" hidden>完成</button>
   <button class="icon-btn" id="bNewAlbum" aria-label="新建专辑" hidden><svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"/></svg></button>
   <button class="icon-btn add" id="bAdd" aria-label="添加音频"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg></button>
   <button class="icon-btn" id="bAbout" aria-label="关于"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-11h2V7h-2zm0 8h2v-6h-2z"/></svg></button>
@@ -181,6 +200,11 @@ input[type=file]{display:none}
 <main class="view" id="view"><div class="loading">正在读取…</div></main>
 
 <!-- 悬浮播放器 -->
+<div class="selbar" id="selBar" hidden>
+  <button class="btn" id="bSelMove" disabled>移动到专辑</button>
+  <button class="btn danger" id="bSelDel" disabled>删除</button>
+</div>
+
 <section class="mini" id="mini" hidden>
   <div class="mini-top">
     <img class="mini-cover" id="miniCover" src="cover-192.png" alt="">
@@ -259,7 +283,7 @@ input[type=file]{display:none}
 <!-- 移动到专辑 -->
 <div class="sheet" id="moveSheet" hidden>
   <div class="sheet-box" role="dialog" aria-label="移动到专辑">
-    <div class="sheet-head"><h2>移动到专辑</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
+    <div class="sheet-head"><h2 id="moveHead">移动到专辑</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
     <div class="sheet-body"><ul class="opts" id="moveOpts"></ul></div>
   </div>
 </div>
@@ -292,18 +316,19 @@ input[type=file]{display:none}
       <ul>
         <li>点右上角「＋」选音频文件（mp3、m4a 等），可以一次选多个；音频会保存在网页里，下次打开直接播放</li>
         <li>按音频文件里的「专辑」信息自动分成不同的播客节目，并显示节目封面</li>
-        <li>点节目封面进入节目，看到每一集的进度；长按某一集可以查看文件信息或删除</li>
+        <li>点节目封面进入节目，看到每一集的进度；点每一集右边的「!」查看文件信息和更多操作</li>
+        <li>长按某一集（或点右上角「选择」）可以多选，选好后一起移动到专辑或删除</li>
         <li>底部悬浮播放器：上一集 / 下一集、后退 / 快进 15 秒、拖动进度条</li>
         <li>点「1x」选播放速度，点月亮设置定时关闭（按时间或播完本集）</li>
         <li>点书签按钮收藏当前时间点，可以写上收藏原因；之后点一下就能跳回那里</li>
-        <li>首页右上角的文件夹按钮可以新建专辑；长按某一集 →「移动到专辑」；长按专辑封面可以重命名或删除</li>
+        <li>首页右上角的文件夹按钮可以新建专辑；选中集后点「移动到专辑」；长按专辑封面可以重命名或删除</li>
         <li>每一集自动记住听到的位置</li>
         <li>锁屏和通知栏显示节目封面，可以用锁屏和耳机按钮控制播放</li>
       </ul>
 
       <h3>存储空间</h3>
       <p id="storageInfo">正在计算…</p>
-      <p>听完的集可以长按 →「删除本地音频文件」释放空间，播放记录会保留。</p>
+      <p>听完的集可以点「!」→「删除本地音频文件」释放空间，播放记录会保留。</p>
 
       <h3>备份播放记录</h3>
       <p>音频和播放记录都存在浏览器里，清除 Safari 的网站数据会被删除。请时常导出播放记录，需要时再导入恢复。</p>
@@ -328,7 +353,8 @@ var SETTINGS_KEY = 'lpp.settings.v1';
 var SPEEDS = [0.8, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 var SLEEPS = [0, 15, 30, 45, 60, 90, 'episode'];
 var SKIP = 15;
-var OTHER = '其他音频';
+var OTHER = '未分类';
+var OLD_OTHER = '其他音频';   // 旧版本的名字，读取旧数据时改过来
 var DEFAULT_COVER = 'cover-192.png';
 var AUDIO_EXT = /\.(mp3|m4a|m4b|mp4|aac|wav|ogg|oga|opus|flac|caf|aif|aiff)$/i;
 
@@ -353,6 +379,16 @@ var settings = load(SETTINGS_KEY, {speed:1});
 function saveRecords(){ save(STORE_KEY, records); }
 function saveShows(){ save(SHOWS_KEY, shows); }
 function saveSettings(){ save(SETTINGS_KEY, settings); }
+function migrateOther(){
+  var changed = false;
+  Object.keys(records).forEach(function(k){
+    var r = records[k];
+    ['show','tagShow','customShow'].forEach(function(f){ if(r[f] === OLD_OTHER){ r[f] = OTHER; changed = true; } });
+  });
+  if(shows[OLD_OTHER]){ shows[OTHER] = shows[OTHER] || shows[OLD_OTHER]; delete shows[OLD_OTHER]; changed = true; }
+  return changed;
+}
+if(migrateOther()){ saveRecords(); saveShows(); }
 
 /* ---------- 存储：音频文件本身（IndexedDB） ---------- */
 var dbOpen = null;
@@ -437,13 +473,15 @@ function progressBar(r){
   return p;
 }
 // 长按（手机）或右键（电脑）
-function onLongPress(node, fn){
+function onLongPress(node, fn, ignore){
   var timer = null, sx = 0, sy = 0, fired = false;
   function cancel(){ clearTimeout(timer); timer = null; }
   function fire(){ if(fired) return; fired = true; cancel(); if(navigator.vibrate) navigator.vibrate(10); fn(); }
   node.addEventListener('touchstart', function(e){
-    fired = false; var t = e.touches[0]; sx = t.clientX; sy = t.clientY;
-    cancel(); timer = setTimeout(fire, 500);
+    fired = false; cancel();
+    if(ignore && ignore(e.target)) return;
+    var t = e.touches[0]; sx = t.clientX; sy = t.clientY;
+    timer = setTimeout(fire, 500);
   }, {passive:true});
   node.addEventListener('touchmove', function(e){
     var t = e.touches[0];
@@ -451,7 +489,7 @@ function onLongPress(node, fn){
   }, {passive:true});
   node.addEventListener('touchend', function(e){ cancel(); if(fired) e.preventDefault(); });
   node.addEventListener('touchcancel', cancel);
-  node.addEventListener('contextmenu', function(e){ e.preventDefault(); fire(); });
+  node.addEventListener('contextmenu', function(e){ e.preventDefault(); if(ignore && ignore(e.target)) return; fire(); });
   // 长按之后松手不要再当成点击
   node.addEventListener('click', function(e){ if(fired){ e.stopImmediatePropagation(); e.preventDefault(); fired = false; } }, true);
 }
@@ -788,25 +826,29 @@ $('bAskOk').onclick = askOk;
 $('askInput').addEventListener('keydown', function(e){ if(e.key === 'Enter') askOk(); });
 
 /* ---------- 移动到专辑 ---------- */
-function showMoveMenu(key){
-  var r = records[key], now = showOf(key), tag = (r && r.tagShow) || OTHER;
+function showMoveMenu(keys, done){
+  if(!Array.isArray(keys)) keys = [keys];
+  var nows = keys.map(showOf), now = nows.every(function(n){ return n === nows[0]; }) ? nows[0] : null;
+  var single = keys.length === 1;
+  var tag = single ? ((records[keys[0]] && records[keys[0]].tagShow) || OTHER) : null;
+  $('moveHead').textContent = single ? '移动到专辑' : '移动 ' + keys.length + ' 集到专辑';
+  function go(name, msg){
+    closeSheet('moveSheet');
+    keys.forEach(function(k){ moveTo(k, name); });
+    if(done) done(); else render();
+    toast(msg || ('已移到「' + name + '」'));
+  }
   var items = [{label:'＋ 新建专辑…', pick:function(){
     closeSheet('moveSheet');
-    ask('新建专辑', '', '专辑名称', function(name){
-      name = createAlbum(name);
-      moveTo(key, name); render(); toast('已移到「' + name + '」');
-    });
+    ask('新建专辑', '', '专辑名称', function(name){ go(createAlbum(name)); });
   }}];
   albumNames().forEach(function(name){
-    items.push({label:name, note: name === tag && now !== tag ? '原来的专辑' : '', on: name === now, pick:function(){
-      closeSheet('moveSheet');
-      if(name === now) return;
-      moveTo(key, name); render(); toast('已移到「' + name + '」');
+    items.push({label:name, note: single && name === tag && now !== tag ? '原来的专辑' : '', on: name === now, pick:function(){
+      if(name === now){ closeSheet('moveSheet'); return; }
+      go(name);
     }});
   });
-  if(albumNames().indexOf(tag) < 0) items.push({label:tag, note:'原来的专辑', pick:function(){
-    closeSheet('moveSheet'); moveTo(key, tag); render(); toast('已移回「' + tag + '」');
-  }});
+  if(single && albumNames().indexOf(tag) < 0) items.push({label:tag, note:'原来的专辑', pick:function(){ go(tag, '已移回「' + tag + '」'); }});
   renderOpts($('moveOpts'), items);
   openSheet('moveSheet');
 }
@@ -1403,6 +1445,45 @@ function showEpMenu(key){
   openSheet('epSheet');
 }
 
+/* ---------- 多选 ---------- */
+var selMode = false, selKeys = {}, selStamp = 0;
+function selCount(){ return Object.keys(selKeys).length; }
+function enterSel(key){ selMode = true; selKeys = {}; if(key) selKeys[key] = true; selStamp = key ? Date.now() : 0; render(); }   // 长按进入时，松手那一下不算点击
+function exitSel(){ selMode = false; selKeys = {}; render(); }
+function toggleSel(key){ if(selKeys[key]) delete selKeys[key]; else selKeys[key] = true; render(); }
+function chain(list, fn){ return list.reduce(function(p, k){ return p.then(function(){ return fn(k); }); }, Promise.resolve()); }
+$('bSel').onclick = function(){ enterSel(null); };
+$('bSelDone').onclick = exitSel;
+$('bSelAll').onclick = function(){
+  var keys = episodeKeys(view.show);
+  if(selCount() >= keys.length) selKeys = {}; else keys.forEach(function(k){ selKeys[k] = true; });
+  render();
+};
+$('bSelMove').onclick = function(){ var ks = Object.keys(selKeys); if(ks.length) showMoveMenu(ks, exitSel); };
+$('bSelDel').onclick = function(){ var ks = Object.keys(selKeys); if(ks.length) showSelDelete(ks); };
+function showSelDelete(keys){
+  var withFile = keys.filter(findEp);
+  $('epTitle').textContent = '已选 ' + keys.length + ' 集';
+  var facts = $('epFacts'); facts.innerHTML = '';
+  [['集数', keys.length + ' 集'], ['有音频', withFile.length + ' 集'], ['文件缺失', (keys.length - withFile.length) + ' 集']].forEach(function(f){
+    var d = el('div'); d.appendChild(el('b', null, f[0])); d.appendChild(el('span', null, f[1]));
+    facts.appendChild(d);
+  });
+  $('epMarksHead').hidden = true; $('epMarks').innerHTML = '';
+  var items = [];
+  if(withFile.length) items.push({label:'删除本地音频文件（' + withFile.length + ' 集）', note:'释放空间，保留播放记录和信息', danger:true, pick:function(){
+    closeSheet('epSheet');
+    chain(withFile, deleteFile).then(function(){ toast('已删除 ' + withFile.length + ' 个音频文件'); exitSel(); updateStorage(); });
+  }});
+  items.push({label:'删除所选的 ' + keys.length + ' 集', note:'音频、播放记录和信息全部删除', danger:true, pick:function(){
+    if(!confirm('确定删除所选 ' + keys.length + ' 集的全部内容？')) return;
+    closeSheet('epSheet');
+    chain(keys, deleteEpisode).then(function(){ toast('已删除 ' + keys.length + ' 集'); exitSel(); updateStorage(); });
+  }});
+  renderOpts($('epOpts'), items);
+  openSheet('epSheet');
+}
+
 $('bTagCopy').onclick = function(){
   var text = $('tagText').textContent;
   function pickText(){
@@ -1433,7 +1514,7 @@ window.addEventListener('popstate', function(e){
 });
 $('bBack').onclick = goHome;
 $('bNewAlbum').onclick = function(){
-  ask('新建专辑', '', '专辑名称', function(v){ createAlbum(v); render(); toast('已新建「' + v + '」，长按某一集可以移进来'); });
+  ask('新建专辑', '', '专辑名称', function(v){ createAlbum(v); render(); toast('已新建「' + v + '」，到别的专辑里选中后移进来'); });
 };
 
 var renderedKey = '';
@@ -1443,11 +1524,22 @@ function render(){
   var home = view.page === 'home';
   var pageKey = home ? 'home' : 'show:' + view.show;
   // 重画时保持滚动位置；换了页面就回到顶部
+  if(pageKey !== renderedKey){ selMode = false; selKeys = {}; }   // 换了页面就退出多选
   var top = pageKey !== renderedKey ? 0 : sc ? sc.scrollTop : box.scrollTop;
   renderedKey = pageKey;
-  $('bBack').hidden = home;
+  var nKeys = home ? 0 : episodeKeys(view.show).length;
+  var selecting = selMode && !home && nKeys > 0;
+  if(!selecting && selMode){ selMode = false; selKeys = {}; }
+  $('bBack').hidden = home || selecting;
   $('bNewAlbum').hidden = !home;
-  $('title').textContent = home ? '播客节目' : view.show;
+  $('bSel').hidden = home || selecting || !nKeys;
+  $('bSelAll').hidden = !selecting; $('bSelDone').hidden = !selecting;
+  $('bAdd').hidden = selecting; $('bAbout').hidden = selecting;
+  $('selBar').hidden = !selecting;
+  document.body.classList.toggle('selecting', selecting);
+  $('bSelMove').disabled = $('bSelDel').disabled = !selCount();
+  $('bSelAll').textContent = selCount() >= nKeys ? '取消全选' : '全选';
+  $('title').textContent = home ? '播客节目' : selecting ? '已选 ' + selCount() + ' 集' : view.show;
   box.innerHTML = '';
   box.classList.remove('fixed');
   if(home) renderHome(box); else renderShow(box);
@@ -1484,7 +1576,7 @@ function renderShow(box){
   var keys = episodeKeys(view.show);
   if(!keys.length && !isCustom(view.show)){ view = {page:'home'}; history.replaceState(null, ''); render(); return; }
   if(!keys.length){
-    box.appendChild(el('div', 'empty', '这个专辑还没有内容。到其他专辑里长按某一集 →「移动到专辑」，就能移到这里。'));
+    box.appendChild(el('div', 'empty', '这个专辑还没有内容。到其他专辑里选中几集，点「移动到专辑」，就能移到这里。'));
     return;
   }
   var head = el('div', 'pod-head');
@@ -1510,7 +1602,8 @@ function renderShow(box){
   var ul = el('ul', 'list');
   keys.forEach(function(k){
     var ep = findEp(k), r = records[k];
-    var li = el('li', 'item' + (ep && ep === cur ? ' cur' : '') + (ep ? '' : ' missing'));
+    var li = el('li', 'item' + (ep && ep === cur ? ' cur' : '') + (ep ? '' : ' missing') + (selMode && selKeys[k] ? ' sel' : ''));
+    if(selMode) li.appendChild(el('span', 'chk' + (selKeys[k] ? ' on' : '')));
     var main = el('div', 'item-main');
     main.appendChild(el('div', 'item-name clamp2', titleOf(k)));
     var mk = marksOf(k).length;
@@ -1518,12 +1611,20 @@ function renderShow(box){
     main.appendChild(progressBar(r));
     li.appendChild(main);
     if(!ep) li.appendChild(el('span', 'tag', '文件缺失'));
-    li.onclick = ep ? function(){ playEp(ep); } : function(){ toast('文件缺失，点「＋」重新添加这一集'); };
-    onLongPress(li, function(){ showEpMenu(k); });
+    if(!selMode){
+      var ib = el('button', 'info-btn');
+      ib.setAttribute('aria-label', '详情');
+      ib.innerHTML = '<svg viewBox="0 0 24 24"><path d="M11 15h2v2h-2zm0-8h2v6h-2zm.99-5C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/></svg>';
+      ib.onclick = function(e){ e.stopPropagation(); showEpMenu(k); };
+      li.appendChild(ib);
+    }
+    li.onclick = selMode ? function(){ if(Date.now() - selStamp > 600) toggleSel(k); }
+               : ep ? function(){ playEp(ep); } : function(){ toast('文件缺失，点「＋」重新添加这一集'); };
+    onLongPress(li, function(){ if(!selMode) enterSel(k); }, function(target){ return target.closest && target.closest('.info-btn'); });
     ul.appendChild(li);
   });
   scroll.appendChild(ul);
-  scroll.appendChild(el('p', 'hint', '长按某一集：收藏的时间点、移动到专辑、删除'));
+  scroll.appendChild(el('p', 'hint', selMode ? '点一下选中或取消选中' : '长按可以多选；点右边的「!」查看信息和更多操作'));
   box.appendChild(scroll);
 }
 
@@ -1618,6 +1719,7 @@ $('importInput').addEventListener('change', function(e){
       });
       saveShows();
     }
+    migrateOther();
     saveRecords(); render();
     toast('导入完成：新增 ' + added + ' 条，更新 ' + updated + ' 条');
   };
