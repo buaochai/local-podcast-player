@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.26.2">
+<meta name="app-version" content="0.26.3">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -2841,6 +2841,7 @@ function apiError(status, text){
 }
 function aiErrMsg(err){
   if(err && err.cancelled) return '已停止';
+  if(err && err.step) return err.step + '：' + aiErrMsg({status:err.status, msg:err.msg, message:err.message, name:err.name});
   var s = err && err.status;
   if(s === 401 || s === 403) return 'API Key 不对或没有权限（' + s + '）' + (err.msg ? '：' + err.msg.slice(0, 80) : '');
   if(s === 404) return '接口地址或模型名不对（404）';
@@ -2892,6 +2893,7 @@ function aliFetch(op, query, opt, key, base, model){
     return r.text().then(function(t){
       if(r.ok){ try{ return JSON.parse(t); }catch(e){} }
       if(r.status === 404 && !/^\s*\{/.test(t)) throw new Error('这个网址没有百炼的转发接口：要在 Cloudflare 上的网址使用');
+      if(/^\s*</.test(t)) throw {status:r.status, msg:'Cloudflare 后台出错，返回的是网页而不是数据' + (/1102|exceeded/i.test(t) ? '（超出了免费版的运行限制）' : '')};
       throw apiError(r.status, t);
     });
   });
@@ -2927,14 +2929,17 @@ function reqAli(blob, fmt, signal){
       return poll(id, n + 1);
     });
   }
+  function step(name){ return function(err){ if(err && typeof err === 'object' && !err.cancelled && err.name !== 'AbortError') err.step = name; throw err; }; }
   return aliFetch('upload', '&name=part.' + fmt, {method:'POST', body:blob, headers:{'Content-Type':fmt === 'm4a' ? 'audio/mp4' : 'audio/mpeg'}, signal:signal}).then(function(j){
     if(!j.url) throw new Error('上传到百炼失败');
-    return aliFetch('submit', '', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:j.url, model:aiModel()}), signal:signal});
-  }).then(function(j){
-    var id = j.output && j.output.task_id;
-    if(!id) throw new Error('百炼没有返回任务编号' + (j.message ? '：' + j.message : ''));
-    return poll(id, 0);
-  });
+    return j;
+  }).catch(step('上传音频')).then(function(j){
+    return aliFetch('submit', '', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:j.url, model:aiModel()}), signal:signal}).then(function(j){
+      var id = j.output && j.output.task_id;
+      if(!id) throw new Error('百炼没有返回任务编号' + (j.message ? '：' + j.message : ''));
+      return id;
+    }).catch(step('提交识别任务'));
+  }).then(function(id){ return poll(id, 0).catch(step('等待识别结果')); });
 }
 function chatPrompt(dur){
   var zh = ai.lang === 'zh';
@@ -3204,8 +3209,12 @@ function trRun(key, restart, batch){
       return trLoop(plan, route, tr).then(function(){ return autoChapters(key); });
       });
     });
-  }).then(function(x){ x = x || {}; return {res:'done', noLlm:x.noLlm, chapterErr:x.chapterErr}; }, function(err){ return {res:err && err.cancelled ? 'cancelled' : 'failed', err:err}; });
+  }).then(function(x){ x = x || {}; delete trErr[key]; return {res:'done', noLlm:x.noLlm, chapterErr:x.chapterErr}; }, function(err){
+    if(!(err && err.cancelled)) trErr[key] = aiErrMsg(err);
+    return {res:err && err.cancelled ? 'cancelled' : 'failed', err:err};
+  });
 }
+var trErr = {};   // 每集最后一次识别失败的原因（文稿页上显示）
 function trFinish(){ keepAwake(false); trJob = null; trRender(); render(); }
 function trGuard(){
   if(trJob){ toast('正在识别，请稍等'); return false; }
@@ -3223,7 +3232,7 @@ function trStart(key, restart){
   trRun(key, restart, null).then(function(r){
     var msg = '文稿识别完成：' + titleOf(key);
     if(r.res === 'done') msg += r.noLlm ? '（还没设置文本模型，没分章节）' : r.chapterErr ? '。分章节失败：' + aiErrMsg(r.chapterErr) + '，可在文稿页重试' : '，已分好章节';
-    toast(r.res === 'done' ? msg : r.res === 'cancelled' ? '已停止识别' : aiErrMsg(r.err), r.res === 'done' ? 4500 : 4000);
+    toast(r.res === 'done' ? msg : r.res === 'cancelled' ? '已停止识别' : aiErrMsg(r.err), r.res === 'done' ? 4500 : 8000);
     trFinish();
   });
 }
@@ -3397,6 +3406,7 @@ function renderEp(box){
     : tr && tr.status === 'done' ? (ep ? '' : '文件缺失，只能看文稿')
     : other ? (trJob.batch ? '正在批量识别（第 ' + trJob.batch.i + ' / ' + trJob.batch.n + ' 集），结束后再来。' : '正在识别另一集，等它结束后再来。')
     : tr ? '已识别 ' + tr.done + ' / ' + tr.total + ' 段（还没识别完）'
+    : trErr[key] ? '上次识别失败：' + trErr[key]
     : !ep ? '文件缺失'
     : aiReady() ? '还没有识别。将使用：' + aiProv().name + ' · ' + aiModel() : '还没有设置 AI 服务商。';
   var st = el('div', 'tr-status'); st.id = 'trStatus'; st.textContent = stText; st.hidden = !stText;

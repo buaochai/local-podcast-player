@@ -46,18 +46,31 @@ export async function onRequest({request}){
     if(!host) return json({error: '百炼没有给出上传地址'}, 502);
     var name = (url.searchParams.get('name') || 'part.mp3').replace(/[^\w.\-]/g, '_');
     var objKey = p.upload_dir + '/' + Date.now() + '_' + name;
-    var fd = new FormData();
-    fd.append('OSSAccessKeyId', p.oss_access_key_id);
-    fd.append('Signature', p.signature);
-    fd.append('policy', p.policy);
-    fd.append('key', objKey);
-    fd.append('x-oss-object-acl', p.x_oss_object_acl);
-    fd.append('x-oss-forbid-overwrite', p.x_oss_forbid_overwrite);
-    fd.append('success_action_status', '200');
     var type = request.headers.get('Content-Type') || 'application/octet-stream';
-    fd.append('x-oss-content-type', type);
-    fd.append('file', new Blob([await request.arrayBuffer()], {type: type}), name);
-    var up = await fetch(host.toString(), {method: 'POST', body: fd});
+    var fields = [['OSSAccessKeyId', p.oss_access_key_id], ['Signature', p.signature], ['policy', p.policy], ['key', objKey],
+      ['x-oss-object-acl', p.x_oss_object_acl], ['x-oss-forbid-overwrite', p.x_oss_forbid_overwrite],
+      ['success_action_status', '200'], ['x-oss-content-type', type]];
+    // 自己拼 multipart：音频边收边转发给阿里云，不在这里整段读进内存（大文件会超出 Cloudflare 免费版的限制）
+    var boundary = '----lpp' + crypto.randomUUID().replace(/-/g, '');
+    var enc = new TextEncoder();
+    var head = enc.encode(fields.map(function(f){ return '--' + boundary + '\r\nContent-Disposition: form-data; name="' + f[0] + '"\r\n\r\n' + f[1] + '\r\n'; }).join('')
+      + '--' + boundary + '\r\nContent-Disposition: form-data; name="file"; filename="' + name + '"\r\nContent-Type: ' + type + '\r\n\r\n');
+    var tail = enc.encode('\r\n--' + boundary + '--\r\n');
+    var len = +(request.headers.get('Content-Length') || 0), body;
+    if(len > 0 && typeof FixedLengthStream === 'function' && request.body){
+      var fl = new FixedLengthStream(head.length + len + tail.length);
+      body = fl.readable;
+      (async function(){
+        var w = fl.writable.getWriter();
+        await w.write(head); w.releaseLock();
+        await request.body.pipeTo(fl.writable, {preventClose: true});
+        w = fl.writable.getWriter();
+        await w.write(tail); await w.close();
+      })().catch(function(){});
+    }else{
+      body = new Blob([head, await request.arrayBuffer(), tail]);
+    }
+    var up = await fetch(host.toString(), {method: 'POST', body: body, headers: {'Content-Type': 'multipart/form-data; boundary=' + boundary}});
     if(!up.ok) return json({error: '上传到百炼临时存储失败（' + up.status + '）：' + (await up.text()).slice(0, 300)}, 502);
     return json({url: 'oss://' + objKey});
   }
