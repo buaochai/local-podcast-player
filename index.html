@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.35.0">
+<meta name="app-version" content="0.35.1">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -132,7 +132,7 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .item.missing .item-name{color:var(--muted)}
 .prog{height:3px;background:var(--line);border-radius:2px;margin-top:6px;overflow:hidden}
 .prog i{display:block;height:100%;background:var(--accent)}
-.info-btn{border:none;background:transparent;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none;margin-right:-8px}
+.info-btn{border:none;background:transparent;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none;margin-right:-8px;margin-left:-4px}
 .info-btn svg{width:22px;height:22px;fill:currentColor}
 .chk{flex:none;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--muted);display:flex;align-items:center;justify-content:center}
 .chk.on{background:var(--accent);border-color:var(--accent)}
@@ -291,13 +291,13 @@ select.input{appearance:auto;-webkit-appearance:menulist}
 .sheet-box{width:calc(100% - 12px);margin:0 6px calc(6px + env(safe-area-inset-bottom));padding-bottom:0;max-height:84%;border-radius:22px;
   background:var(--pop);-webkit-backdrop-filter:blur(24px) saturate(1.8);backdrop-filter:blur(24px) saturate(1.8);border:1px solid var(--pop-line);box-shadow:0 12px 40px rgba(0,0,0,.28)}
 /* 列表里的上传 / 下载图标：灰色 = 还没做，转动 = 正在做（带进度圈），彩色 = 已经有了 */
-.cl-btn{position:relative;border:none;background:transparent;width:30px;height:36px;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none;padding:0}
+.cl-btn{position:relative;border:none;background:transparent;width:26px;height:36px;margin-right:-2px;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none;padding:0}
 .cl-btn svg{width:20px;height:20px;fill:currentColor}
 .cl-btn.done{color:var(--accent)}
 .cl-btn.busy{color:#e09a10}
 .cl-btn.busy svg{animation:clup .95s ease-in-out infinite}
 .cl-btn.busy.down svg{animation-name:cldown}
-.cl-btn.busy::after{content:'';position:absolute;left:1px;top:4px;width:28px;height:28px;border-radius:50%;pointer-events:none;
+.cl-btn.busy::after{content:'';position:absolute;left:-1px;top:4px;width:28px;height:28px;border-radius:50%;pointer-events:none;
   background:conic-gradient(currentColor calc(var(--p, 0) * 1%), rgba(127,127,127,.25) 0);
   -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px));mask:radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px))}
 @keyframes clup{0%{transform:translateY(5px);opacity:.15}50%{opacity:1}100%{transform:translateY(-5px);opacity:.15}}
@@ -408,10 +408,10 @@ input[type=file]{display:none}
       <div class="mini-sub line1" id="miniSub">0:00 / 0:00</div>
     </button>
     <button class="chip" id="bTrEdit" aria-label="修改文稿"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
-    <button class="chip" id="bMark" aria-label="收藏时间点"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.2L6 21z"/></svg><span id="markCount"></span></button>
     <button class="chip" id="bSpeed" aria-label="播放速度">1x</button>
-    <button class="chip" id="bQueue" aria-label="播放列表"><svg viewBox="0 0 24 24"><path d="M3 6h12v2H3zm0 4h12v2H3zm0 4h8v2H3zm13-4v6.18A3 3 0 1 0 18 19v-7h3v-2z"/></svg><span id="queueCount"></span></button>
     <button class="chip" id="bSleep" aria-label="定时关闭"><svg viewBox="0 0 24 24"><path d="M12.3 2a10 10 0 1 0 9.7 12.4A8 8 0 0 1 12.3 2z"/></svg><span id="sleepText"></span></button>
+    <button class="chip" id="bMark" aria-label="收藏时间点"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.2L6 21z"/></svg><span id="markCount"></span></button>
+    <button class="chip" id="bQueue" aria-label="播放列表"><svg viewBox="0 0 24 24"><path d="M3 6h12v2H3zm0 4h12v2H3zm0 4h8v2H3zm13-4v6.18A3 3 0 1 0 18 19v-7h3v-2z"/></svg><span id="queueCount"></span></button>
   </div>
   <input type="range" class="seek" id="seek" min="0" max="0" step="1" value="0">
   <div class="mini-ctl">
