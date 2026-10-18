@@ -41,3 +41,4 @@
 - 播放顺序：`playlist()` 按专辑列表现在的顺序（`settings.rev[专辑]` 倒序时反过来），上一集 / 下一集 / 自动播放都用它。播放列表（队列）`queue`（`lpp.queue.v1`，只在本机）：`qAdd(键, 是否排最前)`、`takeQueued()`；`next()` 和 `ended` 先取队列再取专辑里的下一集；播放器上 `#bQueue` 有内容才显示，`#queueSheet` 管理。
 - 单集「!」是悬浮半透明浮窗 `#epPop`（`showEpPop(键, 按钮)`：毛玻璃 `--pop`，贴着按钮定位，点 `#epPopBack` 或滑动关闭），常用操作在浮窗里，「详情与更多…」才打开原来的 `#epSheet`（`showEpMenu`）。订阅（RSS）的集不能上传云端（`cloudUploadAll` 过滤，`#bSelUp` 在订阅专辑里隐藏）。
 - 搜索框展开后，点输入框、搜索按钮、搜索结果以外的地方自动收回（`document` 的 click 监听）。
+- 列表里的上传 / 下载图标：`clBtn(键, 'up'|'down')` 生成 `.cl-btn`（灰 `todo` / 橙 `busy` 带 `--p` 进度圈 / 主题色 `done`），放在 `.info-btn` 左边；`clBusy[键]` 记录进行中，用 `clSet(键, op, 百分比|null)` 更新（直接改按钮 class，不重画列表）；`cloudUploadAll`、`downloadEp`、`cloudDownload` 的进度都要调它。不要再在行里加「已上传 / 云端 / 已下载」文字标记。播放列表按钮 `#bQueue` 固定在 `#bSleep` 左边，`renderQueue` 里有工具（`qAddAlbum`/`qShuffle`/倒序/清空）和每项的 `qMove` 上移下移。新加坡百炼 Key 要用工作空间专属地址（见 `AI_PROVIDERS.aliyun.help`）。

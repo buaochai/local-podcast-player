@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.33.0">
+<meta name="app-version" content="0.34.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -286,9 +286,29 @@ select.input{appearance:auto;-webkit-appearance:menulist}
 .pop-list li:first-child .pop-item{border-top:none}
 .pop-item:active{background:rgba(127,127,127,.18)}
 .pop-item.danger{color:var(--danger)}
+/* 列表里的上传 / 下载图标：灰色 = 还没做，转动 = 正在做（带进度圈），彩色 = 已经有了 */
+.cl-btn{position:relative;border:none;background:transparent;width:30px;height:36px;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none;padding:0}
+.cl-btn svg{width:20px;height:20px;fill:currentColor}
+.cl-btn.done{color:var(--accent)}
+.cl-btn.busy{color:#e09a10}
+.cl-btn.busy svg{animation:clup .95s ease-in-out infinite}
+.cl-btn.busy.down svg{animation-name:cldown}
+.cl-btn.busy::after{content:'';position:absolute;left:1px;top:4px;width:28px;height:28px;border-radius:50%;pointer-events:none;
+  background:conic-gradient(currentColor calc(var(--p, 0) * 1%), rgba(127,127,127,.25) 0);
+  -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px));mask:radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px))}
+@keyframes clup{0%{transform:translateY(5px);opacity:.15}50%{opacity:1}100%{transform:translateY(-5px);opacity:.15}}
+@keyframes cldown{0%{transform:translateY(-5px);opacity:.15}50%{opacity:1}100%{transform:translateY(5px);opacity:.15}}
 /* 播放列表 */
-.opt.q{padding-right:54px}
-#bQueue[hidden]{display:none}
+.opt.q{padding-right:116px}
+.q-acts{position:absolute;right:4px;top:50%;transform:translateY(-50%);display:flex}
+.q-acts button{border:none;background:transparent;width:36px;height:40px;display:flex;align-items:center;justify-content:center;color:var(--muted);border-radius:50%}
+.q-acts button svg{width:20px;height:20px;fill:currentColor}
+.q-acts button:disabled{opacity:.25}
+.q-now{margin:2px 2px 6px;font-size:13px;color:var(--muted)}
+.q-now b{color:var(--accent);font-weight:600}
+#queueTools{grid-template-columns:1.9fr 1fr 1fr 1fr;gap:6px}
+#queueTools .pill{font-size:14px;padding:8px 0;white-space:nowrap;text-align:center}
+#queueCount:empty{display:none}
 /* 收藏：专辑 → 集 → 时间点 */
 .fav-cover{width:48px;height:48px;border-radius:8px;object-fit:cover;flex:none;background:var(--line)}
 .fav-chev{flex:none;display:flex;color:var(--muted)}
@@ -383,10 +403,10 @@ input[type=file]{display:none}
       <div class="mini-title line1" id="miniTitle"></div>
       <div class="mini-sub line1" id="miniSub">0:00 / 0:00</div>
     </button>
-    <button class="chip" id="bQueue" aria-label="播放列表" hidden><svg viewBox="0 0 24 24"><path d="M3 6h12v2H3zm0 4h12v2H3zm0 4h8v2H3zm13-4v6.18A3 3 0 1 0 18 19v-7h3v-2z"/></svg><span id="queueCount"></span></button>
     <button class="chip" id="bTrEdit" aria-label="修改文稿"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
     <button class="chip" id="bMark" aria-label="收藏时间点"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.2L6 21z"/></svg><span id="markCount"></span></button>
     <button class="chip" id="bSpeed" aria-label="播放速度">1x</button>
+    <button class="chip" id="bQueue" aria-label="播放列表"><svg viewBox="0 0 24 24"><path d="M3 6h12v2H3zm0 4h12v2H3zm0 4h8v2H3zm13-4v6.18A3 3 0 1 0 18 19v-7h3v-2z"/></svg><span id="queueCount"></span></button>
     <button class="chip" id="bSleep" aria-label="定时关闭"><svg viewBox="0 0 24 24"><path d="M12.3 2a10 10 0 1 0 9.7 12.4A8 8 0 0 1 12.3 2z"/></svg><span id="sleepText"></span></button>
   </div>
   <input type="range" class="seek" id="seek" min="0" max="0" step="1" value="0">
@@ -612,8 +632,10 @@ input[type=file]{display:none}
   <div class="sheet-box" role="dialog" aria-label="播放列表">
     <div class="sheet-head"><h2>播放列表</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
     <div class="sheet-body">
+      <div class="q-now" id="queueNow"></div>
+      <div class="pills g4" id="queueTools"></div>
       <ul class="opts" id="queueList"></ul>
-      <button class="btn danger block" id="bQueueClear">清空播放列表</button>
+      <div class="empty" id="queueEmpty">播放列表是空的</div>
     </div>
   </div>
 </div>
@@ -1009,8 +1031,26 @@ function takeQueued(){
   saveQueue();
   return ep;
 }
+var ICO_UP = '<svg viewBox="0 0 24 24"><path d="M7.4 15.4 12 10.8l4.6 4.6L18 14l-6-6-6 6z"/></svg>', ICO_DOWN = '<svg viewBox="0 0 24 24"><path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg>', ICO_X = '<svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>';
+function qMove(i, d){ var j = i + d; if(j < 0 || j >= queue.length) return; var t = queue[i]; queue[i] = queue[j]; queue[j] = t; saveQueue(); renderQueue(); }
+function qShuffle(){ for(var i = queue.length - 1; i > 0; i--){ var j = Math.floor(Math.random() * (i + 1)), t = queue[i]; queue[i] = queue[j]; queue[j] = t; } saveQueue(); renderQueue(); toast('已打乱'); }
+// 把当前专辑里排在这一集后面的集（按列表现在的顺序）都加进来
+function qAddAlbum(){
+  var list = playlist(), i = list.indexOf(cur), n = 0;
+  if(i < 0) return;
+  list.slice(i + 1).forEach(function(e){ if(queue.indexOf(e.key) < 0){ queue.push(e.key); n++; } });
+  saveQueue(); renderQueue(); renderMini();
+  toast(n ? '已加入 ' + n + ' 集' : '后面没有别的集了，或者都已经在播放列表里');
+}
 function renderQueue(){
   queue = queue.filter(function(k){ return findEp(k); });
+  $('queueNow').innerHTML = '';
+  if(cur){ $('queueNow').appendChild(document.createTextNode('正在播放：')); $('queueNow').appendChild(el('b', null, titleOf(cur.key))); }
+  var tools = $('queueTools'); tools.innerHTML = '';
+  [['加入当前专辑', qAddAlbum, !cur], ['打乱', qShuffle, queue.length < 2], ['倒序', function(){ queue.reverse(); saveQueue(); renderQueue(); }, queue.length < 2],
+   ['清空', function(){ queue = []; saveQueue(); renderQueue(); renderMini(); toast('已清空播放列表'); }, !queue.length]].forEach(function(t){
+    var b = el('button', 'pill', t[0]); b.disabled = !!t[2]; b.style.opacity = t[2] ? '.4' : ''; b.onclick = t[1]; tools.appendChild(b);
+  });
   var ul = $('queueList'); ul.innerHTML = '';
   queue.forEach(function(k, i){
     var li = el('li', 'has-edit'), b = el('button', 'opt q'), g = el('span', 'grow');
@@ -1018,13 +1058,16 @@ function renderQueue(){
     g.appendChild(el('small', 'line1', showLabel(showOf(k))));
     b.appendChild(g);
     b.onclick = function(){ queue.splice(i, 1); saveQueue(); closeSheet('queueSheet'); open(findEp(k), true); renderMini(); };
-    var x = el('button', 'opt-edit'); x.setAttribute('aria-label', '移出播放列表');
-    x.innerHTML = '<svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>';
-    x.onclick = function(e){ e.stopPropagation(); queue.splice(i, 1); saveQueue(); renderQueue(); renderMini(); };
-    li.appendChild(b); li.appendChild(x); ul.appendChild(li);
+    var acts = el('span', 'q-acts');
+    [[ICO_UP, '上移', i === 0, function(){ qMove(i, -1); }], [ICO_DOWN, '下移', i === queue.length - 1, function(){ qMove(i, 1); }],
+     [ICO_X, '移出播放列表', false, function(){ queue.splice(i, 1); saveQueue(); renderQueue(); renderMini(); }]].forEach(function(a){
+      var x = el('button'); x.innerHTML = a[0]; x.setAttribute('aria-label', a[1]); x.disabled = a[2];
+      x.onclick = function(e){ e.stopPropagation(); a[3](); };
+      acts.appendChild(x);
+    });
+    li.appendChild(b); li.appendChild(acts); ul.appendChild(li);
   });
-  $('bQueueClear').hidden = !queue.length;
-  if(!queue.length) closeSheet('queueSheet');
+  $('queueEmpty').hidden = !!queue.length; ul.hidden = !queue.length;
 }
 // 专辑封面：先找这一专辑里有封面的那一集，再用存下来的小图，最后借用原专辑的封面
 function coverInfo(show){
@@ -1241,8 +1284,7 @@ $('bRew').onclick = function(){ skip(-SKIP); };
 $('bFwd').onclick = function(){ skip(SKIP); };
 $('bPrev').onclick = prev;
 $('bNext').onclick = next;
-$('bQueue').onclick = function(){ renderQueue(); if(queue.length) openSheet('queueSheet'); };
-$('bQueueClear').onclick = function(){ queue = []; saveQueue(); renderQueue(); renderMini(); toast('已清空播放列表'); };
+$('bQueue').onclick = function(){ renderQueue(); openSheet('queueSheet'); };
 $('miniInfo').onclick = function(){ if(cur && view.page !== 'ep') goEp(cur.key); };
 $('miniCover').onclick = function(){ if(cur) goEp(cur.key); };
 
@@ -1255,7 +1297,7 @@ function renderMini(){
   $('miniTitle').textContent = titleOf(cur.key);
   var list = playlist(), i = list.indexOf(cur);
   $('bNext').disabled = !queue.length && (i < 0 || i >= list.length - 1);
-  $('bQueue').hidden = !queue.length; $('queueCount').textContent = queue.length || '';
+  $('bQueue').classList.toggle('on', queue.length > 0); $('queueCount').textContent = queue.length || '';
   var mc = marksOf(cur.key).length;
   $('markCount').textContent = mc || '';
   $('bMark').classList.toggle('on', mc > 0);
@@ -2215,7 +2257,7 @@ $('bRssRefresh').onclick = function(){
   });
 };
 // 下载到本机（离线听）：网页直接从播客平台下载，有的平台不允许网页下载，那就只能在线听
-function fetchBlobProgress(url, size){
+function fetchBlobProgress(url, size, onP){
   return fetch(url).then(function(r){
     if(!r.ok) throw new Error('下载失败（' + r.status + '）');
     var total = +(r.headers.get('Content-Length') || 0) || size, got = 0, type = r.headers.get('Content-Type') || 'audio/mpeg', reader = r.body && r.body.getReader();
@@ -2225,7 +2267,7 @@ function fetchBlobProgress(url, size){
       return reader.read().then(function(x){
         if(x.done) return new Blob(parts, {type:type});
         parts.push(x.value); got += x.value.length;
-        if(total && Date.now() - last > 500){ last = Date.now(); toast('正在下载 ' + Math.min(99, Math.floor(got / total * 100)) + '%', 60000); }
+        if(total && Date.now() - last > 300){ last = Date.now(); var pc = Math.min(99, Math.floor(got / total * 100)); toast('正在下载 ' + pc + '%', 60000); if(onP) onP(pc); }
         return pump();
       });
     }
@@ -2237,14 +2279,16 @@ function downloadEp(key){
   if(!ep || !ep.remote) return;
   if(ep.cloud) return cloudDownload(key);
   toast('正在下载…', 60000);
-  fetchBlobProgress(ep.url, ep.size).then(function(blob){
+  clSet(key, 'down', 0);
+  fetchBlobProgress(ep.url, ep.size, function(pc){ clSet(key, 'down', pc); }).then(function(blob){
     var row = {key:key, name:ep.name, size:blob.size, type:blob.type, blob:blob, added:Date.now(), rss:true, title:ep.title, show:feedEpMap[key] ? feedEpMap[key].f.title : ep.show, feed:ep.feed};
     return store('readwrite', function(st){ return st.put(row); }).then(function(){ return row; });
   }).then(function(row){
     var now = findEp(key), i = episodes.indexOf(now);
     if(i >= 0 && now.remote){ episodes[i] = rssLocalEp(row); epDirty(); }   // 正在播放的话，这一遍还用在线地址播完
-    toast('已下载到本机'); render(); updateStorage();
+    clSet(key, 'down', null); toast('已下载到本机'); render(); updateStorage();
   }).catch(function(err){
+    clSet(key, 'down', null);
     toast(err && err.name === 'TypeError' ? '这个播客的平台不允许网页下载，只能在线听' : err && err.name === 'QuotaExceededError' ? '空间不够，下载失败' : (err && err.message) || '下载失败', 5000);
   });
 }
@@ -2348,6 +2392,44 @@ function cloudUploadOne(key, onProgress){
     return cloudCover(ep.show).catch(function(){});
   });
 }
+// 列表里每一集的上传 / 下载图标。clBusy[键] = {op:'up'|'down', p:0-100}
+var clBusy = {};
+var ICO_ARR_UP = '<svg viewBox="0 0 24 24"><path d="M11 19V8.8l-4.6 4.6L5 12l7-7 7 7-1.4 1.4L13 8.8V19z"/></svg>', ICO_ARR_DOWN = '<svg viewBox="0 0 24 24"><path d="M11 5v10.2l-4.6-4.6L5 12l7 7 7-7-1.4-1.4L13 15.2V5z"/></svg>';
+// 不适用的返回空：订阅的播客不能上传；没有这一集的文件也没有云端的，什么都做不了
+function clState(k, op){
+  var ep = findEp(k), r = records[k] || {}, b = clBusy[k];
+  if(!ep) return '';
+  if(b && b.op === op) return 'busy';
+  if(op === 'up') return feedEpMap[k] || ep.rss ? '' : r.cloud ? 'done' : ep.remote ? '' : 'todo';
+  return hasFile(k) ? 'done' : 'todo';   // down：本机已经有文件 = 已下载
+}
+function clBtn(k, op){
+  var st = clState(k, op);
+  if(!st) return null;
+  var b = el('button', 'cl-btn ' + op + ' ' + st);
+  b.dataset.k = k; b.dataset.op = op;
+  b.setAttribute('aria-label', op === 'up' ? '上传到云端' : '下载到本机');
+  b.innerHTML = op === 'up' ? ICO_ARR_UP : ICO_ARR_DOWN;
+  if(st === 'busy') b.style.setProperty('--p', clBusy[k].p || 0);
+  b.onclick = function(e){
+    e.stopPropagation();
+    var now = clState(k, op);
+    if(now === 'busy') return;
+    if(now === 'done'){ toast(op === 'up' ? '已经在云端了' : '已经在本机了'); return; }
+    if(op === 'up') cloudUploadAll([k]); else downloadEp(k);
+  };
+  return b;
+}
+// 开始 / 更新 / 结束（p 为 null）一个集的上传或下载，并直接刷新列表里对应的图标（不用整页重画）
+function clSet(k, op, p){
+  if(p == null) delete clBusy[k]; else clBusy[k] = {op:op, p:Math.max(0, Math.min(100, p))};
+  Array.prototype.forEach.call(document.querySelectorAll('.cl-btn'), function(b){
+    if(b.dataset.k !== k) return;
+    var st = clState(k, b.dataset.op);
+    b.className = 'cl-btn ' + b.dataset.op + ' ' + st;
+    if(st === 'busy') b.style.setProperty('--p', clBusy[k].p); else b.style.removeProperty('--p');
+  });
+}
 var cloudBusy = false;
 // 一集一集上传；配置不对这类问题会停下，网络出错的跳过继续
 function cloudUploadAll(keys){
@@ -2357,10 +2439,12 @@ function cloudUploadAll(keys){
   cloudBusy = true;
   var ok = 0, bad = 0, err1 = null, stop = false, i = 0, lastPct = -1;
   if(!trJob) keepAwake(true);
+  keys.forEach(function(k){ clSet(k, 'up', 0); });   // 排队中的也先转起来
   function show(p){
     var pct = Math.floor((p || 0) * 100);
     if(pct === lastPct) return;
     lastPct = pct;
+    clSet(keys[i], 'up', pct);
     toast('正在上传 ' + (i + 1) + ' / ' + keys.length + '（' + pct + '%）', 60000);
   }
   return keys.reduce(function(chain, k){
@@ -2370,10 +2454,11 @@ function cloudUploadAll(keys){
       return cloudUploadOne(k, show).then(function(){ ok++; }, function(err){
         bad++; err1 = err1 || err;
         if(err && (err.status === 501 || err.status === 401 || err.status === 403 || err.status === 413)) stop = true;
-      }).then(function(){ i++; });
+      }).then(function(){ clSet(k, 'up', null); i++; });
     });
   }, Promise.resolve()).then(function(){
     cloudBusy = false; if(!trJob) keepAwake(false);
+    keys.forEach(function(k){ clSet(k, 'up', null); });   // 没轮到的（中途停了）也恢复
     toast(bad ? '已上传 ' + ok + ' 集，' + bad + ' 集失败：' + (err1 && err1.message) : '已上传 ' + ok + ' 集到云端', bad ? 7000 : 3500);
     render(); cloudInfoRefresh();
   });
@@ -2383,7 +2468,8 @@ function cloudDownload(key){
   var ep = findEp(key), r = records[key];
   if(!ep || !ep.cloud || !r) return;
   toast('正在连接云端…', 60000);
-  cloudResolve(ep).then(function(url){ return fetchBlobProgress(url, ep.size); }).then(function(blob){
+  clSet(key, 'down', 0);
+  cloudResolve(ep).then(function(url){ return fetchBlobProgress(url, ep.size, function(pc){ clSet(key, 'down', pc); }); }).then(function(blob){
     var row = {key:key, name:r.name, size:blob.size, type:blob.type, blob:blob, added:Date.now()};
     return store('readwrite', function(st){ return st.put(row); }).then(function(){ return row; });
   }).then(function(row){
@@ -2391,8 +2477,9 @@ function cloudDownload(key){
     le.key = key;
     if(i >= 0) episodes[i] = le; else episodes.push(le);
     epDirty();
-    return readInfo(le).then(function(){ saveRecords(); saveShows(); toast('已下载到本机'); render(); updateStorage(); });
+    return readInfo(le).then(function(){ clSet(key, 'down', null); saveRecords(); saveShows(); toast('已下载到本机'); render(); updateStorage(); });
   }).catch(function(err){
+    clSet(key, 'down', null);
     toast(err && err.name === 'QuotaExceededError' ? '空间不够，下载失败' : (err && err.message) || '下载失败', 5000);
   });
 }
@@ -3076,11 +3163,12 @@ function renderShow(box){
     main.appendChild(progressBar(r));
     li.appendChild(main);
     if(!ep) li.appendChild(el('span', 'tag', '文件缺失'));
-    else if(ep.cloud) li.appendChild(el('span', 'tag', '云端'));
-    else if(ep.rss && !ep.remote) li.appendChild(el('span', 'tag', '已下载'));
-    else if(r && r.cloud) li.appendChild(el('span', 'tag', '已上传'));
+
     if(!isFeed) li.appendChild(el('span', 'ep-seq', String(idx + 1)));   // 右下角：这一集在列表里的位置（订阅的播客不显示）
     if(!selMode){
+      var cu = clBtn(k, 'up'), cd = clBtn(k, 'down');   // 上传 / 下载图标，和「!」在一起
+      if(cu) li.appendChild(cu);
+      if(cd) li.appendChild(cd);
       var ib = el('button', 'info-btn');
       ib.setAttribute('aria-label', '详情');
       ib.innerHTML = '<svg viewBox="0 0 24 24"><path d="M11 15h2v2h-2zm0-8h2v6h-2zm.99-5C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/></svg>';
@@ -3089,7 +3177,7 @@ function renderShow(box){
     }
     li.onclick = selMode ? function(){ if(Date.now() - selStamp > 600) toggleSel(k); }
                : function(){ openEpPage(k); };
-    onLongPress(li, function(){ if(!selMode) enterSel(k); }, function(target){ return target.closest && target.closest('.info-btn'); });
+    onLongPress(li, function(){ if(!selMode) enterSel(k); }, function(target){ return target.closest && (target.closest('.info-btn') || target.closest('.cl-btn')); });
     ul.appendChild(li);
   });
   scroll.appendChild(ul);
@@ -3119,7 +3207,7 @@ var AI_PROVIDERS = {
     help:'OpenRouter 的语音转写接口，和上面的 OpenRouter（聊天）用同一个 Key。模型名要带「openai/」前缀，如 openai/whisper-1。OpenRouter 对每段的处理时间有限制，所以这里每段切得短一些。'},
   aliyun:{name:'阿里云百炼 Fun-ASR（中文推荐）', style:'ali', base:'https://dashscope.aliyuncs.com/api/v1', model:'fun-asr', formats:['mp3','m4a'],
     models:['fun-asr','paraformer-v2'],
-    help:'阿里的中文语音识别（FunASR 系列），中文准、自带标点和逐句时间，音乐处不容易乱编。在阿里云百炼控制台创建 API Key。音频由手机直接传到百炼的临时存储（48 小时后自动失效）再识别，不经过 Cloudflare；Cloudflare 后台只转发几条文字请求（阿里云不让网页直接访问），所以要在 Cloudflare 上的网址使用。新加坡地域的 Key 要把接口地址改成 https://dashscope-intl.aliyuncs.com/api/v1。'},
+    help:'阿里的中文语音识别（FunASR 系列），中文准、自带标点和逐句时间，音乐处不容易乱编。在阿里云百炼控制台创建 API Key。音频由手机直接传到百炼的临时存储（48 小时后自动失效）再识别，不经过 Cloudflare；Cloudflare 后台只转发几条文字请求（阿里云不让网页直接访问），所以要在 Cloudflare 上的网址使用。新加坡地域的 Key：接口地址要填你的工作空间专属地址 https://工作空间ID.ap-southeast-1.maas.aliyuncs.com/api/v1（工作空间 ID 在百炼控制台的「工作空间详情」页，不要带花括号）；老的 https://dashscope-intl.aliyuncs.com/api/v1 只有早期创建的 Key 才能用，新建的会提示 401。'},
   custom_whisper:{name:'自定义（OpenAI 转写接口）', style:'whisper', base:'', model:'whisper-1', formats:['mp3','m4a'], models:[],
     help:'任何兼容 OpenAI 转写接口（/audio/transcriptions）的服务：填接口地址（到 /v1 为止）和模型名。'},
   custom_chat:{name:'自定义（聊天模型听音频）', style:'chat', base:'', model:'', formats:['mp3'], models:[],
@@ -3686,7 +3774,7 @@ function reqWhisper(blob, fmt, route, signal, verbose){
 }
 /* ---- 阿里云百炼（Fun-ASR / Paraformer）：经自己的 Cloudflare 后台 functions/api/ali.js 转发 ---- */
 var ALI_CN = 'https://dashscope.aliyuncs.com/api/v1', ALI_INTL = 'https://dashscope-intl.aliyuncs.com/api/v1';
-var ALI_REGION_HINT = '国内版 Key 用 ' + ALI_CN + '，国际版（新加坡）Key 用 ' + ALI_INTL + '，两边的 Key 不通用；点「测试语音服务连接」会帮你查';
+var ALI_REGION_HINT = '国内版 Key 用 ' + ALI_CN + '，国际版（新加坡）Key 用 ' + ALI_INTL + '（新建的 Key 要用 https://工作空间ID.ap-southeast-1.maas.aliyuncs.com/api/v1，工作空间 ID 见百炼控制台「工作空间详情」），两边的 Key 不通用；点「测试语音服务连接」会帮你查';
 function aliFetch(op, query, opt, key, base, model){
   opt = opt || {};
   opt.headers = Object.assign({'X-Ali-Key':key || ai.key}, opt.headers || {});
