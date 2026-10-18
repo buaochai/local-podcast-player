@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.35.1">
+<meta name="app-version" content="0.35.2">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -952,7 +952,7 @@ function rawTitleOf(key){
   var ep = findEp(key), r = records[key];
   return (ep && ep.title) || (r && r.title) || stripExt(ep ? ep.name : r.name);
 }
-function titleOf(key){ return stripBar(tidyTitle(rawTitleOf(key), dblAlbum(showOf(key)))).replace(/\s*[｜|]\s*/g, ' '); }   // 「｜」任何地方都不显示
+function titleOf(key){ return stripBar(tidyTitle(rawTitleOf(key), dblAlbum(showOf(key)))).replace(/\s*[｜|│┃∣︱¦ǀ丨‖∥⏐ǁ]\s*/g, ' '); }   // 「｜」任何地方都不显示
 /* ---------- 集名优化（只改显示；列表顺序仍按文件名排）---------- */
 // 序号 = 名字最前面、后面紧跟「.」的数字（「12个故事」「12 个故事」里的 12 不算序号）
 // 名字前有两个序号（第一个是为了排序加的）→ 去掉第一个；「0.」开头 →「发刊词：」；带「番外」的 →「番外：」开头
@@ -3126,19 +3126,19 @@ function cnToInt(t){
 }
 // 「西方艺术三万年第一季：永恒的古典」→ ['永恒的古典', '西方艺术三万年·第1季']
 // 「西方艺术三万年第一季：永恒的古典」→ {base:'西方艺术三万年', season:1, sub:'永恒的古典'}；没有「第X季」就返回 null
-// 命名规则：专辑名里的「｜」（也可能是半角 |）只是我用来隔开名称和季数的，不属于名字，任何地方都不显示
-function stripBar(t){ return String(t || '').replace(/^[｜|\s]+|[｜|\s]+$/g, ''); }
-function showLabel(name){ return stripBar(name).replace(/\s*[｜|]\s*/g, ' '); }   // 显示用的专辑名
+// 命名规则：专辑名里的「｜」（也可能是半角 |、│ 之类各种竖线）只是我用来隔开名称和季数的，不属于名字，任何地方都不显示
+function stripBar(t){ return String(t || '').replace(/^[｜|│┃∣︱¦ǀ丨‖∥⏐ǁ\s]+|[｜|│┃∣︱¦ǀ丨‖∥⏐ǁ\s]+$/g, ''); }
+function showLabel(name){ return stripBar(name).replace(/\s*[｜|│┃∣︱¦ǀ丨‖∥⏐ǁ]\s*/g, ' '); }   // 显示用的专辑名
 function parseSeason(name){
   var m = /^(.+?)\s*[：:]\s*(.+)$/.exec(name), main = m ? m[1] : name, sub = m ? m[2].trim() : '';
-  var q = /^(.*?)\s*[·・｜|]*\s*第\s*([一二三四五六七八九十百零两\d]+)\s*季\s*$/.exec(main);
+  var q = /^(.*?)\s*[·・｜|│┃∣︱¦ǀ丨‖∥⏐ǁ]*\s*第\s*([一二三四五六七八九十百零两\d]+)\s*季\s*$/.exec(main);
   var base = q ? stripBar(q[1]) : '';
   if(!q || !base) return null;
   return {base:base, season:cnToInt(q[2]), sub:sub};
 }
 function showNameLines(name){
   var m = /^(.+?)\s*[：:]\s*(.+)$/.exec(name), main = m ? m[1] : name, sub = m ? m[2] : '';
-  main = main.replace(/\s*[·・｜|]*\s*第\s*([一二三四五六七八九十百零两\d]+)\s*季\s*$/, function(x, n){ return '·第' + cnToInt(n) + '季'; });
+  main = main.replace(/\s*[·・｜|│┃∣︱¦ǀ丨‖∥⏐ǁ]*\s*第\s*([一二三四五六七八九十百零两\d]+)\s*季\s*$/, function(x, n){ return '·第' + cnToInt(n) + '季'; });
   main = showLabel(main);
   return sub ? [showLabel(sub), main.trim()] : [main.trim()];
 }
