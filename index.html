@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.19">
+<meta name="app-version" content="0.46.20">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -195,6 +195,7 @@ body.show-page .list-scroll{padding-bottom:16px}
 .mini-sub{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .chip{border:1px solid var(--line);background:transparent;border-radius:999px;height:30px;padding:0 9px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:3px;flex:none;font-variant-numeric:tabular-nums}
 .chip svg{width:16px;height:16px;fill:currentColor}
+.chip span:empty{display:none}   /* 没有数字 / 文字时不占位（不然图标会往左偏） */
 .chip.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 .seek{width:100%;margin:8px 0 0;height:20px;-webkit-appearance:none;appearance:none;background:transparent;display:block}
 .seek::-webkit-slider-runnable-track{height:4px;border-radius:2px;border:none;background:linear-gradient(to right,var(--accent) var(--pct,0%),var(--line) var(--pct,0%))}
