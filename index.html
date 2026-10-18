@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.39.4">
+<meta name="app-version" content="0.39.5">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -1288,7 +1288,23 @@ function playEp(ep){
   if(ep === cur) togglePlay(); else open(ep, true);
 }
 
+// 专辑页：正在播的这一集，进度文字和进度条每秒跟着走（不用等 5 秒一次的重画）
+var liveSec = -1;
+function liveRow(){
+  if(view.page !== 'show' || !cur || !cur.loaded) return;
+  var sec = Math.floor(audio.currentTime);
+  if(sec === liveSec) return;
+  liveSec = sec;
+  var li = $('view').querySelector('li[data-k="' + cur.key.replace(/(["\\])/g, '\\$1') + '"]');
+  if(!li) return;
+  var r = records[cur.key]; if(!r) return;
+  var d = isFinite(audio.duration) ? audio.duration : r.duration || 0;
+  var live = {updated:r.updated || Date.now(), finished:false, position:audio.currentTime, duration:d};
+  var pg = li.querySelector('.pg'); if(pg) pg.textContent = progressText(live);
+  var bar = li.querySelector('.prog i'); if(bar) bar.style.width = Math.min(100, d ? audio.currentTime / d * 100 : 0) + '%';
+}
 function updateTimes(){
+  liveRow();
   var d = isFinite(audio.duration) ? audio.duration : 0;
   if(!seeking){
     $('seek').max = Math.floor(d) || 0;
@@ -3537,7 +3553,7 @@ function renderShow(box){
     // 信息分成几段，放不下就整段换行，不再用省略号把后面的挤掉
     var mp = [mk ? '收藏 ' + mk : '', hasTr[k] ? '有文稿' : '', progressText(r), r && r.updated ? fmtDate(r.updated) : ep && ep.pub ? new Date(ep.pub).toLocaleDateString('zh-CN') : ''];
     var mel = el('div', 'item-meta wrap');
-    mp.forEach(function(t, i){ if(t) mel.appendChild(el('span', i === 0 || i === 1 ? 'hl' : null, t)); });
+    mp.forEach(function(t, i){ if(t) mel.appendChild(el('span', i === 0 || i === 1 ? 'hl' : i === 2 ? 'pg' : null, t)); });
     main.appendChild(mel);
     main.appendChild(progressBar(r));
     li.appendChild(main);
