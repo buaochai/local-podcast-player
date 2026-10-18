@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.34.0">
+<meta name="app-version" content="0.34.1">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -286,6 +286,10 @@ select.input{appearance:auto;-webkit-appearance:menulist}
 .pop-list li:first-child .pop-item{border-top:none}
 .pop-item:active{background:rgba(127,127,127,.18)}
 .pop-item.danger{color:var(--danger)}
+/* 所有弹出的菜单面板：悬浮、半透明毛玻璃，四周留边（和「!」浮窗一致） */
+.sheet{background:rgba(0,0,0,.22)}
+.sheet-box{width:calc(100% - 20px);margin:0 10px calc(10px + env(safe-area-inset-bottom));padding-bottom:0;max-height:84%;border-radius:22px;
+  background:var(--pop);-webkit-backdrop-filter:blur(24px) saturate(1.8);backdrop-filter:blur(24px) saturate(1.8);border:1px solid var(--pop-line);box-shadow:0 12px 40px rgba(0,0,0,.28)}
 /* 列表里的上传 / 下载图标：灰色 = 还没做，转动 = 正在做（带进度圈），彩色 = 已经有了 */
 .cl-btn{position:relative;border:none;background:transparent;width:30px;height:36px;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none;padding:0}
 .cl-btn svg{width:20px;height:20px;fill:currentColor}
