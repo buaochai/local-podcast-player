@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.37.5">
+<meta name="app-version" content="0.37.6">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -5009,6 +5009,9 @@ function showTrMore(key){
     items.push({label:'整理文稿', note:'不用重新识别，按最新规则重新整理：繁体转简体、去掉乱编的套话和重复句' + (llmReady() && !ai.termsOff ? '、重新标注外文（用 ' + lc.name + '）' : ''), pick:function(){
       closeSheet('trMoreSheet'); tidyRun(key);
     }});
+  }
+  if(ep && trJob){
+    items.push({label:tr ? '重新识别' : '开始识别', note:'正在识别「' + titleOf(trJob.key) + '」，等识别结束（或在右上角进度里取消）后才能操作', pick:function(){ toast('正在识别中，请等当前识别结束'); }});
   }
   if(ep && !trJob){
     if(tr && tr.status !== 'done') items.push({label:'继续识别', pick:function(){ closeSheet('trMoreSheet'); trStart(key, false); }});
