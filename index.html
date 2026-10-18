@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.9">
+<meta name="app-version" content="0.46.10">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -3305,7 +3305,7 @@ window.addEventListener('popstate', function(e){
   if(view.page === 'ep') loadTr(view.key);
   render();
 });
-$('bBack').onclick = goHome;
+$('bBack').onclick = function(){ if(view.page === 'home' && searchOpen && searchFromPeople) leaveSearch(); else goHome(); };
 $('bFav').onclick = function(){ goFav('albums'); };
 // 首页：一路退回最底下（文稿页可能是从专辑页进来的，也可能是从首页搜索直接进来的）
 $('bHome').onclick = function(){
@@ -3341,18 +3341,19 @@ function render(){
   $('bSearch').hidden = selecting;
   if(pendingSearch && home){   // 从人物资料库来：直接在首页搜这个人
     var ps = pendingSearch; pendingSearch = null;
-    openSearch(); searchQ = ps.q; searchAlts = ps.alts; $('searchIn').value = ps.q; $('searchIn').blur(); samePage = true;
+    openSearch(); searchFromPeople = true; searchQ = ps.q; searchAlts = ps.alts; $('searchIn').value = ps.q; $('searchIn').blur(); samePage = true;
   }
   if(searchResume){
     if(pageKey !== searchResume.key) searchResume.left = true;
     else if(searchResume.left && !searchOpen){   // 退回到搜索前的页面：恢复搜索词和结果（不弹键盘）
-      searchOpen = true; searchQ = searchResume.q; resumeTop = searchResume.top; searchResume = null;
+      searchOpen = true; searchQ = searchResume.q; searchAlts = searchResume.alts || null; searchFromPeople = !!searchResume.fp; resumeTop = searchResume.top; searchResume = null;
       $('searchIn').hidden = false; $('searchIn').value = searchQ; $('bSearch').classList.add('on');
       samePage = true;
     }
   }
   if(searchOpen && !samePage) closeSearch(true);
   document.querySelector('header').classList.toggle('searching', searchOpen);
+  $('bBack').hidden = (home && !(searchOpen && searchFromPeople)) || selecting;
   $('searchIn').placeholder = home ? '搜索全部节目、单集、文稿' : isEp ? '搜索这一集的文稿' : isFav ? '搜索收藏' : '搜索这个专辑';
   $('bSel').hidden = home || isEp || isFav || selecting || !nKeys;
   $('bEpMore').hidden = !isEp; if(!isEp) $('bMusic').hidden = true; $('bHome').hidden = home || selecting;
@@ -3469,9 +3470,11 @@ var resumeTop = null;
 function stashSearch(){
   if(!(searchOpen && searchQ.trim())) return;
   var sc0 = $('view').querySelector('.list-scroll');
-  searchResume = {q:searchQ, key:renderedKey, left:false, top:sc0 ? sc0.scrollTop : $('view').scrollTop};
+  searchResume = {q:searchQ, alts:searchAlts, fp:searchFromPeople, key:renderedKey, left:false, top:sc0 ? sc0.scrollTop : $('view').scrollTop};
 }
-var searchAlts = null, pendingSearch = null;   // searchAlts：文稿内容搜索时，几个写法任一命中都算（人物的中文名 / 原名）
+var searchAlts = null, pendingSearch = null, searchFromPeople = false;   // searchFromPeople：从人物资料库跳来的搜索，返回键回到资料库
+function openPeople(){ renderPeople(); openSheet('peopleSheet'); }
+function leaveSearch(){ var f = searchFromPeople; closeSearch(); if(f) openPeople(); }   // searchAlts：文稿内容搜索时，几个写法任一命中都算（人物的中文名 / 原名）
 var searchOpen = false, searchQ = '', searchTimer = null, trAllReady = false, trAllLoading = false;
 function openSearch(){
   searchOpen = true; $('searchIn').hidden = false; $('bSearch').classList.add('on');
@@ -3485,12 +3488,12 @@ function openSearch(){
   }
 }
 function closeSearch(quiet){
-  searchOpen = false; searchQ = ''; searchAlts = null; $('searchIn').value = ''; $('searchIn').hidden = true; $('searchIn').blur();
+  searchOpen = false; searchQ = ''; searchAlts = null; searchFromPeople = false; $('searchIn').value = ''; $('searchIn').hidden = true; $('searchIn').blur();
   $('bSearch').classList.remove('on');
   document.querySelector('header').classList.remove('searching');
   if(!quiet) render();
 }
-$('bSearch').onclick = function(){ if(searchOpen) closeSearch(); else openSearch(); };
+$('bSearch').onclick = function(){ if(searchOpen) leaveSearch(); else openSearch(); };
 // 搜索框展开后，点别的地方（不是输入框、搜索按钮、搜索结果）就自动收回
 document.addEventListener('scroll', function(e){
   var t = e.target; if(t && t.classList && t.classList.contains('list-scroll')) t.classList.toggle('scrolled', t.scrollTop > 2);
@@ -5012,14 +5015,14 @@ function renderPeople(){
     var e = list[id], row = el('div', 'opt mu pp'), g = el('span', 'grow');
     var pp = nameParts(e.name, e.orig);
     g.appendChild(el('span', 'mk-note clamp2', pp.main));
-    if(pp.zh) g.appendChild(el('span', 'mu-zh line1', pp.zh));
-    g.appendChild(el('small', 'line1', (e.role || (peopleTab === 'm' ? '音乐人' : '非音乐人')) + ' · 提到 ' + e.mentions.length + ' 次' + (e.works.length ? ' · ' + e.works.slice(0, 2).join('、') : '')));
+    g.appendChild(el('small', 'mu-meta', (e.role || (peopleTab === 'm' ? '音乐人' : '非音乐人')) + ' · 提到 ' + e.mentions.length + ' 次' + (e.works.length ? ' · ' + e.works.slice(0, 2).join('、') : '')));
     var main;
     main = el('div', 'mu-main'); main.onclick = function(){ peopleSearch(e); };   // 点一下：回首页搜这个人，看哪些地方提到
     if(peopleTab === 'm'){
       main.appendChild(muIcon('artist')); main.appendChild(g);
       var go = el('a', 'mu-go', '↗'); go.href = 'https://music.apple.com/search?term=' + encodeURIComponent(e.orig || e.name); go.target = '_blank'; go.rel = 'noopener';
-      go.setAttribute('aria-label', '在 Apple Music 打开'); go.onclick = function(ev){ ev.stopPropagation(); }; main.appendChild(go);
+      go.setAttribute('aria-label', '在 Apple Music 打开');
+      musicLink({kind:'artist', title:e.name, orig:e.orig || e.name}).then(function(u){ if(u) go.href = u; }); go.onclick = function(ev){ ev.stopPropagation(); }; main.appendChild(go);
     }else main.appendChild(g);   // 非音乐人不放图标
     var mv = el('button', 'mu-t', peopleTab === 'm' ? '不是音乐人' : '是音乐人');
     mv.onclick = function(){ peopleMove(peopleTab, id); };
