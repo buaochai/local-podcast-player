@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.1">
+<meta name="app-version" content="0.46.2">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -6036,7 +6036,7 @@ function updateStorage(){
     }).catch(function(){});
   }
 }
-$('bAbout').onclick = function(){ updateStorage(); $('tidyChk').checked = !settings.tidyOff; $('cloudAutoChk').checked = !!settings.cloudAuto; $('mergeChk').checked = !settings.noMerge; openSheet('about'); var ab = document.querySelector('#about .sheet-body'); if(ab) ab.scrollTop = 0; };   // 每次打开都回到顶部
+$('bAbout').onclick = function(){ updateStorage(); showAiStatus(); $('tidyChk').checked = !settings.tidyOff; $('cloudAutoChk').checked = !!settings.cloudAuto; $('mergeChk').checked = !settings.noMerge; openSheet('about'); var ab = document.querySelector('#about .sheet-body'); if(ab) ab.scrollTop = 0; };   // 每次打开都回到顶部
 $('cloudAutoChk').addEventListener('change', function(){ if(this.checked) settings.cloudAuto = true; else delete settings.cloudAuto; saveSettings(); });
 // 检查云端：连得上不，存了多少，大概每月多少钱（R2：前 10GB 免费，之后每 GB 每月 0.015 美元）
 $('bCloudTest').onclick = function(){
