@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.43.0">
+<meta name="app-version" content="0.43.1">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -265,12 +265,10 @@ li.has-edit{position:relative}
 /* 文稿页：标题、嵌在页面里的播放器、章节条，下面是文稿 */
 .ep-name{font-size:19px;font-weight:700;line-height:1.35;margin:0 2px}
 .ep-album{font-size:13px;color:var(--muted);margin:2px 2px 0}
-.ep-albrow{display:flex;align-items:center;gap:8px}
-.ep-albrow .ep-album{flex:1;min-width:0}
-.music-btn{flex:none;display:flex;align-items:center;gap:3px;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:999px;padding:3px 10px;opacity:.55}
-.music-btn svg{width:16px;height:16px;fill:currentColor}
-.music-btn b{font-size:12px;font-weight:700}
-.music-btn.on{opacity:1;background:var(--accent);border-color:var(--accent);color:var(--on-accent)}   /* 提到了音乐：亮起来 */
+#bMusic{position:relative;opacity:.45}
+#bMusic.on{opacity:1;color:var(--accent)}   /* 提到了音乐：亮起来 */
+#bMusic b{position:absolute;top:3px;right:1px;min-width:15px;height:15px;padding:0 3px;border-radius:8px;background:var(--accent);color:var(--on-accent);font-size:10px;line-height:15px;font-weight:700;text-align:center}
+#bMusic b:empty{display:none}
 a.opt{text-decoration:none;color:var(--text)}
 .opt.mu .mu-go{flex:none;font-size:13px;color:var(--accent);margin-left:10px;white-space:nowrap}
 .ep-name,.ep-album{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
@@ -281,9 +279,10 @@ body.ep-page .mini-top{gap:6px}
 body.ep-page .mini-title{display:none}   /* 集名已经在页面上面了 */
 body.ep-page .seek{margin:2px 0 0;height:16px}
 /* 文稿页右上角：搜索在前，首页在后（搜索框始终紧挨在搜索按钮左边） */
-body.ep-page #bHome{order:1}
-body.ep-page #bEpMore{order:2}
-body.ep-page #bAbout{order:3}
+body.ep-page #bMusic{order:1}
+body.ep-page #bHome{order:2}
+body.ep-page #bEpMore{order:3}
+body.ep-page #bAbout{order:4}
 body.ep-page .ctl{width:40px;height:38px}
 body.ep-page .ctl.play{width:42px;height:42px}
 body.ep-page .ctl.play svg{width:26px;height:26px}
@@ -431,6 +430,7 @@ input[type=file]{display:none}
   <button class="icon-btn" id="bHome" aria-label="首页" hidden><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg></button>
   <input class="search-in" id="searchIn" type="search" placeholder="搜索全部节目、单集、文稿" enterkeyhint="search" autocomplete="off" hidden>
   <button class="icon-btn" id="bSearch" aria-label="搜索" hidden><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15 15l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+  <button class="icon-btn" id="bMusic" aria-label="提到的音乐" hidden><svg viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/></svg><b id="musicCount"></b></button>
   <button class="icon-btn" id="bEpMore" aria-label="更多" hidden><svg viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg></button>
   <button class="icon-btn" id="bAbout" aria-label="关于"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-11h2V7h-2zm0 8h2v-6h-2z"/></svg></button>
 </header>
@@ -3275,7 +3275,7 @@ function render(){
   document.querySelector('header').classList.toggle('searching', searchOpen);
   $('searchIn').placeholder = home ? '搜索全部节目、单集、文稿' : isEp ? '搜索这一集的文稿' : isFav ? '搜索收藏' : '搜索这个专辑';
   $('bSel').hidden = home || isEp || isFav || selecting || !nKeys;
-  $('bEpMore').hidden = !isEp; $('bHome').hidden = home || selecting;
+  $('bEpMore').hidden = !isEp; if(!isEp) $('bMusic').hidden = true; $('bHome').hidden = home || selecting;
   $('bSelAll').hidden = !selecting; $('bSelDone').hidden = !selecting;
   $('bAdd').hidden = selecting || isEp || isFav; $('bAbout').hidden = selecting || isEp || isFav;
   $('selBar').hidden = !selecting;
@@ -5065,18 +5065,16 @@ function renderEp(box){
   $('bTrEdit').classList.toggle('on', trEdit);
   var top = el('div', 'ep-top'), au = authorOf(showOf(key), ep);
   top.appendChild(el('div', 'ep-name clamp2', titleOf(key)));
-  var albRow = el('div', 'ep-albrow');
-  albRow.appendChild(el('div', 'ep-album line1', showLabel(showOf(key)) + (au ? ' · ' + au : '')));
-  var nMusic = tr && tr.music ? tr.music.length : 0;
-  var mb = el('button', 'music-btn' + (nMusic ? ' on' : '')); mb.id = 'bMusic';
+  top.appendChild(el('div', 'ep-album line1', showLabel(showOf(key)) + (au ? ' · ' + au : '')));
+  // 顶部栏的音乐按钮（在搜索右边）：文稿里提到了音乐就亮起来，带数量
+  var nMusic = tr && tr.music ? tr.music.length : 0, mb = $('bMusic');
+  mb.hidden = !(tr && tr.segments.length);
+  mb.classList.toggle('on', !!nMusic); $('musicCount').textContent = nMusic || '';
   mb.setAttribute('aria-label', nMusic ? '提到的音乐' : '没有提到音乐');
-  mb.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/></svg>' + (nMusic ? '<b>' + nMusic + '</b>' : '');
   mb.onclick = function(){
     if(nMusic){ openMusicSheet(key); return; }
     toast(!tr || tr.status !== 'done' ? '识别完文稿后，会自动找提到的音乐' : tr.musicAt ? '这一集的文稿里没有提到音乐（「⋯」里可以重新找）' : '还没找过：点右上角「⋯」→「找提到的音乐」');
   };
-  if(tr && tr.segments.length) albRow.appendChild(mb);
-  top.appendChild(albRow);
   if(ep && !(cur && cur.key === key)){
     var pb = el('button', 'btn primary block ep-play', '▶ 播放这一集');
     pb.onclick = function(){ open(ep, true); render(); };
