@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.41.1">
+<meta name="app-version" content="0.41.2">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -136,7 +136,7 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .item-main{flex:1;min-width:0}
 .item-name{line-height:1.4}
 .item.cur .item-name{color:var(--accent);font-weight:600}
-.item-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.item-meta{font-size:12px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
 .item-meta.wrap{display:flex;flex-wrap:wrap;gap:1px 10px}
 .item-meta.wrap span{white-space:nowrap}
 .item-meta .hl{color:var(--accent)}
@@ -950,7 +950,10 @@ function progressText(r){
   if(r && r.finished) return '已听完';
   if(!r || !r.updated) return '未播放';
   if(!r.duration) return '已听 ' + fmt(r.position);
-  return '已听 ' + fmt(r.position) + ' / ' + fmt(r.duration) + '（' + Math.floor(r.position / r.duration * 100) + '%）';
+  // 位置的写法和总时长一样宽（补零），百分比补到三位宽，数字等宽：播放时这一段的宽度不会变，不会一下换行一下又回来
+  var full = fmt(r.duration), pos = fmt(Math.min(r.position, r.duration)), pct = String(Math.min(100, Math.floor(r.position / r.duration * 100)));
+  while(pos.length < full.length) pos = '0' + pos;
+  return '已听 ' + pos + ' / ' + full + '（' + pct.padStart(3, '\u2007') + '%）';
 }
 function progressBar(r){
   var p = el('div', 'prog'), i = el('i');
