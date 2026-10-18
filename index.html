@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.44.0">
+<meta name="app-version" content="0.45.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -669,6 +669,7 @@ input[type=file]{display:none}
       <div id="tpMsg" class="tp-msg clamp2"></div>
       <div class="tr-prog"><i id="tpBar"></i></div>
       <div id="tpBatch" class="tp-msg line1"></div>
+      <div id="tpQueue" class="tp-msg clamp2"></div>
       <p>关掉这个窗口，识别会继续在后台进行。</p>
       <div class="row2"><button class="btn" id="bTpStop">停止识别</button><button class="btn primary" id="bTpBg">后台继续</button></div>
       <button class="btn block" id="bTpOpen">查看这一集文稿</button>
@@ -5012,7 +5013,7 @@ function trRun(key, restart, batch){
   });
 }
 var trErr = {};   // 每集最后一次识别失败的原因（文稿页上显示）
-function trFinish(){ keepAwake(false); trJob = null; trRender(); render(); }
+function trFinish(){ keepAwake(false); trJob = null; trRender(); render(); setTimeout(trQueueNext, 400); }
 function trGuard(){
   if(trJob){ toast('正在识别，请稍等'); return false; }
   if(aiProv().style === 'chat' && /whisper|transcribe|sensevoice|speech|asr/i.test(aiModel())){
@@ -5038,16 +5039,39 @@ function fmtLong(sec){
   return h ? h + ' 小时' + (m ? ' ' + m + ' 分钟' : '') : Math.max(1, m) + ' 分钟';
 }
 // 批量：依次识别；已经识别完的跳过，识别到一半的接着来
-function trBatch(keys){
+/* ---- 识别列表：正在识别时，可以把别的集加进来排队，当前这个识别完就自动接着识别 ---- */
+var trQueue = [], trStopFlag = false;
+function trEnqueue(keys){
+  var seen = {};
+  var cand = keys.filter(function(k){ if(seen[k] || !findEp(k) || (trJob && trJob.key === k) || trQueue.indexOf(k) >= 0) return false; return seen[k] = true; });
+  if(!cand.length){ toast('这些集已经在识别或排队了'); return; }
+  Promise.all(cand.map(function(k){ return trGet(k).then(function(r){ return {k:k, done:!!(r && r.status === 'done')}; }); })).then(function(rows){
+    var add = rows.filter(function(r){ return !r.done; }).map(function(r){ return r.k; });
+    if(!add.length){ toast('这些集都已经识别过了'); return; }
+    add.forEach(function(k){ trQueue.push(k); });
+    toast('已加入识别列表：' + add.length + ' 集（前面还有 ' + (trQueue.length - add.length + (trJob ? 1 : 0)) + ' 集）', 3500);
+    trSheetFill(); render();
+  });
+}
+function trDequeue(key){ var i = trQueue.indexOf(key); if(i >= 0) trQueue.splice(i, 1); trSheetFill(); render(); }
+// 当前识别结束后，接着识别排队的（用户停止识别时不接着做，并清空列表）
+function trQueueNext(){
+  if(trStopFlag){ trStopFlag = false; if(trQueue.length){ trQueue = []; toast('已停止识别，识别列表也清空了'); } return; }
+  if(!trQueue.length || trJob) return;
+  var keys = trQueue.splice(0);
+  trBatch(keys, {fromQueue:true});
+}
+function trBatch(keys, opts){
   var todo = keys.filter(findEp);
   if(!todo.length){ toast('没有可识别的音频（文件缺失或没有内容）'); return; }
+  if(trJob && !(opts && opts.fromQueue)){ trEnqueue(todo); return; }   // 正在识别：加入识别列表，等它结束后接着做
   if(!trGuard()) return;
   Promise.all(todo.map(function(k){ return trGet(k).then(function(r){ return {k:k, done:!!(r && r.status === 'done')}; }); })).then(function(rows){
     var run = rows.filter(function(r){ return !r.done; }).map(function(r){ return r.k; }), skipped = rows.length - run.length;
     if(!run.length){ toast('这些集都已经识别过了'); return; }
     return Promise.all(run.map(function(k){ var e0 = findEp(k); return records[k] && records[k].duration ? records[k].duration : e0.dur ? e0.dur : e0.blob ? blobDuration(e0.blob) : 0; })).then(function(ds){
       var dur = ds.reduce(function(n, d){ return n + (d || 0); }, 0);
-      return trAsk('依次识别 ' + run.length + ' 集', (dur ? '共约 ' + fmtLong(dur) + '，' : '') + (skipped ? '另有 ' + skipped + ' 集已识别过，跳过。' : '') + '使用 ' + aiProv().name + '（' + aiModel() + '），会用较多 API 额度。点「后台识别」后可以去做别的，进度看右上角图标。').then(function(ok){
+      return (opts && opts.fromQueue ? Promise.resolve(true) : trAsk('依次识别 ' + run.length + ' 集', (dur ? '共约 ' + fmtLong(dur) + '，' : '') + (skipped ? '另有 ' + skipped + ' 集已识别过，跳过。' : '') + '使用 ' + aiProv().name + '（' + aiModel() + '），会用较多 API 额度。点「后台识别」后可以去做别的，进度看右上角图标。')).then(function(ok){
       if(!ok) return;
       var bs = {i:0, n:run.length, ok:0, fail:0, chFail:0, noLlm:false, stop:false, error:null};
       keepAwake(true);
@@ -5108,11 +5132,12 @@ function trSheetFill(){
   $('tpMsg').textContent = trJob.msg;
   $('tpBar').style.width = (trJob.total ? trJob.done / trJob.total * 100 : 0) + '%';
   $('tpBatch').textContent = trJob.batch ? '批量：第 ' + trJob.batch.i + ' / ' + trJob.batch.n + ' 集' : '';
+  $('tpQueue').textContent = trQueue.length ? '识别列表：还有 ' + trQueue.length + ' 集排队 — ' + trQueue.slice(0, 3).map(titleOf).join('、') + (trQueue.length > 3 ? '…' : '') : '';
 }
 $('bTrJob').onclick = function(){ if(trJob){ openSheet('trProgSheet'); trSheetFill(); } };
 $('bTpBg').onclick = function(){ closeSheet('trProgSheet'); };
 $('bTpOpen').onclick = function(){ if(trJob){ closeSheet('trProgSheet'); goEp(trJob.key); } };
-$('bTpStop').onclick = function(){ if(!trJob) return; if(trJob.batch) trJob.batch.stop = true; trJob.abort.abort(); trJob.msg = '正在停止…'; trRender(); };
+$('bTpStop').onclick = function(){ if(!trJob) return; trStopFlag = true; if(trJob.batch) trJob.batch.stop = true; trJob.abort.abort(); trJob.msg = '正在停止…'; trRender(); };
 function trLoop(plan, route, tr){
   var n = plan.chunks.length, signal = trJob.abort.signal;
   function next(){
@@ -5215,7 +5240,7 @@ function renderEp(box){
   // 识别完了就不显示「已识别几段」这类文字
   var stText = !loaded ? '正在读取文稿…' : running ? trJob.msg
     : tr && tr.status === 'done' ? (ep ? '' : '文件缺失，只能看文稿')
-    : other ? (trJob.batch ? '正在批量识别（第 ' + trJob.batch.i + ' / ' + trJob.batch.n + ' 集），结束后再来。' : '正在识别另一集，等它结束后再来。')
+    : other ? (trQueue.indexOf(key) >= 0 ? '已加入识别列表，前面的识别完就轮到这一集。' : trJob.batch ? '正在批量识别（第 ' + trJob.batch.i + ' / ' + trJob.batch.n + ' 集）。可以把这一集加入识别列表。' : '正在识别另一集。可以把这一集加入识别列表。')
     : tr ? '已识别 ' + tr.done + ' / ' + tr.total + ' 段（还没识别完）'
     : trErr[key] ? '上次识别失败：' + trErr[key]
     : !ep ? '文件缺失'
@@ -5227,7 +5252,11 @@ function renderEp(box){
   prog.appendChild(bar); top.appendChild(prog);
   var acts = el('div', 'tr-actions'); acts.id = 'trActions';
   function btn(label, cls, fn){ var b = el('button', 'btn' + (cls ? ' ' + cls : ''), label); b.onclick = fn; acts.appendChild(b); }
-  if(running) btn(trJob.batch ? '停止（整批都停）' : '停止识别', '', function(){ if(trJob.batch) trJob.batch.stop = true; trJob.abort.abort(); trJob.msg = '正在停止…'; trRender(); });
+  if(running) btn(trJob.batch ? '停止（整批都停）' : '停止识别', '', function(){ trStopFlag = true; if(trJob.batch) trJob.batch.stop = true; trJob.abort.abort(); trJob.msg = '正在停止…'; trRender(); });
+  else if(loaded && other && ep && !(tr && tr.status === 'done')){
+    var queued = trQueue.indexOf(key) >= 0;
+    btn(queued ? '已在识别列表里（点一下移出）' : '加入识别列表（排在后面）', queued ? '' : 'primary', function(){ if(queued) trDequeue(key); else trEnqueue([key]); });
+  }
   else if(loaded && !other && ep){
     if(!tr) btn(aiReady() ? '开始识别' : '去设置 AI 服务商', 'primary', function(){ if(aiReady()) trStart(key, false); else openAiSettings(); });
     else if(tr.status !== 'done'){ btn('继续识别', 'primary', function(){ trStart(key, false); }); btn('重新开始', '', function(){ if(confirm('丢掉已识别的内容，从头再来？')) trStart(key, true); }); }
