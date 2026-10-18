@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.36.3">
+<meta name="app-version" content="0.36.4">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -2543,24 +2543,42 @@ function cloudRemoveAsk(key){
 }
 // 导入存储桶里自己拖进去的文件夹：每个音频文件变成一集（专辑 = 文件夹名，集名 = 文件名），播放时在线取
 var IMP_EXT = /\.(mp3|m4a|m4b|aac|wav|ogg|oga|opus|flac|mp4)$/i;
+// 同一专辑、同名的集算一集：去掉开头的序号（可能有两个）、标点、空格再比
+function normName(t){ return String(t || '').replace(/^(\s*\d{1,4}\s*[.．、]\s*)+/, '').replace(/[\s\u3000｜|·・:：,，.。!！?？_\-—"'“”‘’《》()（）\[\]【】]/g, '').toLowerCase(); }
+function normShow(t){ return String(t || '').replace(/[\s\u3000｜|·・]/g, '').toLowerCase(); }
 function cloudImport(dir){
   return cloudApi({op:'list', prefix:dir}).then(function(j){
     var folder = dir.replace(/\/+$/, ''), show = folder.split('/').pop(), have = {}, n = 0, now = Date.now();
     Object.keys(records).forEach(function(k){ if(records[k].cloud) have[records[k].cloud.k] = 1; });
+    // 这个专辑里已有的集（可能有文稿、没有音频）：按名字对上，把云端音频接到原来的记录上
+    var mine = {}, nsh = normShow(show), merged = 0;
+    Object.keys(records).forEach(function(k){
+      var r0 = records[k], al = r0.customShow || r0.tagShow || r0.show || '';
+      if(!r0 || normShow(al) !== nsh) return;
+      var nk = normName(r0.title || stripExt(r0.name || ''));
+      if(!nk) return;
+      if(!mine[nk] || (mine[nk].cloud && !r0.cloud)) mine[nk] = {key:k, r:r0};   // 优先接到还没有云端音频的那条
+    });
     (j.files || []).filter(function(f){ return IMP_EXT.test(f.key) && f.size > 0; }).sort(function(a, b){ return a.key < b.key ? -1 : 1; }).forEach(function(f){
       if(have[f.key]) return;
       var name = f.key.split('/').pop(), key = name + '|' + f.size;
       if(records[key] && records[key].cloud) return;
+      var old = mine[normName(stripExt(name))];
+      if(old && !records[key]){
+        if(old.r.cloud) return;   // 已经有云端音频了：同一集，不重复
+        old.r.cloud = {k:f.key, size:f.size, type:mimeOf(name), imp:true}; old.r.cat = now;
+        merged++; return;
+      }
       var r = records[key] || (records[key] = {name:name, size:f.size, duration:0, position:0, updated:0, added:now});
       r.title = r.title || stripExt(name); r.show = r.show || show; r.customShow = r.customShow || show; r.ct = now;   // 专辑固定为文件夹名，下载后读到音频标签也不改
       r.cloud = {k:f.key, size:f.size, type:mimeOf(name), imp:true}; r.cat = now;
       n++;
     });
-    if(n){ saveRecords(); syncCloudEps(); }
+    if(n || merged){ saveRecords(); syncCloudEps(); }
     // 文件夹里的封面图（cover / folder / front 等），没有就用文件夹里唯一的一张图
     var imgs = (j.files || []).filter(function(f){ return /\.(jpe?g|png|webp)$/i.test(f.key) && f.size > 0 && f.size < 12e6; });
     var pick = imgs.filter(function(f){ return /^(cover|folder|front|albumart|poster|封面)\.[a-z]+$/i.test(f.key.split('/').pop()); })[0] || (imgs.length === 1 ? imgs[0] : null);
-    var res = {n:n, total:(j.files || []).length};
+    var res = {n:n, merged:merged, total:(j.files || []).length};
     if(!pick || (shows[show] && (shows[show].cover || shows[show].coverUrl))) return res;
     return cloudApi({op:'get', keys:[pick.key]}).then(function(g){
       var url = g.urls && g.urls[pick.key];
@@ -2602,12 +2620,12 @@ $('bCloudImp').onclick = function(){
 };
 $('bImpGo').onclick = function(){
   var dirs = Object.keys(impPick); if(!dirs.length) return;
-  var btn = $('bImpGo'), total = 0, covers = 0; btn.disabled = true; btn.textContent = '正在导入…';
-  dirs.reduce(function(p, d){ return p.then(function(){ return cloudImport(d).then(function(r){ total += r.n; if(r.cover) covers++; }); }); }, Promise.resolve()).then(function(){
+  var btn = $('bImpGo'), total = 0, covers = 0, merged = 0; btn.disabled = true; btn.textContent = '正在导入…';
+  dirs.reduce(function(p, d){ return p.then(function(){ return cloudImport(d).then(function(r){ total += r.n; merged += r.merged; if(r.cover) covers++; }); }); }, Promise.resolve()).then(function(){
     btn.textContent = '导入所选'; closeSheet('impSheet');
-    var msg = total ? '导入了 ' + total + ' 集' + (covers ? '，并设置了封面' : '') : covers ? '没有新的音频，已补上封面' : '没有新的音频（可能已经导入过）';
-    $('cloudImpStatus').textContent = msg; toast(msg);
-    if(total || covers){ render(); cloudInfoRefresh(); }
+    var msg = (total || merged) ? '导入了 ' + (total + merged) + ' 集' + (merged ? '（其中 ' + merged + ' 集和原来的合并了，文稿和进度保留）' : '') + (covers ? '，并设置了封面' : '') : covers ? '没有新的音频，已补上封面' : '没有新的音频（可能已经导入过）';
+    $('cloudImpStatus').textContent = msg; toast(msg, 5000);
+    if(total || merged || covers){ render(); cloudInfoRefresh(); }
   }, function(err){ btn.textContent = '导入所选'; btn.disabled = false; toast('导入失败：' + err.message, 5000); });
 };
 function cloudInfoRefresh(){ if(!$('about').hidden) $('bCloudTest').onclick(); }
