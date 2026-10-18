@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.42.1">
+<meta name="app-version" content="0.43.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -265,6 +265,14 @@ li.has-edit{position:relative}
 /* 文稿页：标题、嵌在页面里的播放器、章节条，下面是文稿 */
 .ep-name{font-size:19px;font-weight:700;line-height:1.35;margin:0 2px}
 .ep-album{font-size:13px;color:var(--muted);margin:2px 2px 0}
+.ep-albrow{display:flex;align-items:center;gap:8px}
+.ep-albrow .ep-album{flex:1;min-width:0}
+.music-btn{flex:none;display:flex;align-items:center;gap:3px;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:999px;padding:3px 10px;opacity:.55}
+.music-btn svg{width:16px;height:16px;fill:currentColor}
+.music-btn b{font-size:12px;font-weight:700}
+.music-btn.on{opacity:1;background:var(--accent);border-color:var(--accent);color:var(--on-accent)}   /* 提到了音乐：亮起来 */
+a.opt{text-decoration:none;color:var(--text)}
+.opt.mu .mu-go{flex:none;font-size:13px;color:var(--accent);margin-left:10px;white-space:nowrap}
 .ep-name,.ep-album{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 /* 文稿页的播放器：还在底部，但矮一点、没有封面 */
 body.ep-page .mini{padding:6px 10px 4px}
@@ -571,6 +579,7 @@ input[type=file]{display:none}
         <datalist id="llmModels"></datalist>
         <div class="sec">接口地址</div>
         <input class="input" id="llmBase" autocapitalize="off" spellcheck="false" placeholder="https://…/v1">
+        <label class="check"><input type="checkbox" id="aiMusic"><span>识别完自动找出文稿里提到的音乐（歌曲、专辑、音乐人），文稿页顶部的音乐按钮会亮起，点开有 Apple Music 链接</span></label>
         <label class="check"><input type="checkbox" id="aiTerms"><span>说话人用外语说的词写成外文，第一次出现时后面括号注中文（识别完自动处理）</span></label>
         <button class="btn block" id="bLlmTest">测试文本模型连接</button>
         <p id="llmTestResult"></p>
@@ -694,6 +703,15 @@ input[type=file]{display:none}
       <div class="empty" id="impEmpty" hidden></div>
       <ul class="opts" id="impList"></ul>
       <button class="btn primary block" id="bImpGo" hidden>导入所选</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="musicSheet" hidden>
+  <div class="sheet-box" role="dialog" aria-label="提到的音乐">
+    <div class="sheet-head"><h2>提到的音乐</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
+    <div class="sheet-body">
+      <ul class="opts" id="musicList"></ul>
     </div>
   </div>
 </div>
@@ -3834,7 +3852,7 @@ function openAiSettings(){
     Object.keys(LLM_PROVIDERS).forEach(function(k){ var o = document.createElement('option'); o.value = k; o.textContent = LLM_PROVIDERS[k].name; lsel.appendChild(o); });
   }
   aiDraft = {asr:{}, llm:{}}; aiCur = ''; llmCur = '';
-  $('aiTerms').checked = !ai.termsOff;
+  $('aiTerms').checked = !ai.termsOff; $('aiMusic').checked = !ai.musicOff;
   $('aiLang').value = ai.lang == null ? 'zh' : ai.lang;
   aiFormFill(AI_PROVIDERS[ai.provider] ? ai.provider : 'openai');
   llmFormFill(ai.chat && LLM_PROVIDERS[ai.chat.provider] ? ai.chat.provider : '');
@@ -3865,6 +3883,7 @@ $('bAiSave').onclick = function(){
   ai.chat = useLlm ? {provider:g.provider, key:g.key, base:g.base === lp.base ? '' : g.base, model:g.model === lp.model ? '' : g.model}
                    : {provider:g.provider || '', key:'', base:'', model:''};
   if($('aiTerms').checked) delete ai.termsOff; else ai.termsOff = true;
+  if($('aiMusic').checked) delete ai.musicOff; else ai.musicOff = true;
   // 每家填过的都存下来（地址、模型和默认一样就不存）
   aiStash();
   [['asr', AI_PROVIDERS], ['llm', LLM_PROVIDERS]].forEach(function(x){
@@ -4716,6 +4735,77 @@ function autoTerms(key){
   trJob.sentAt = 0; trJob.msg = (trJob.batch ? '第 ' + trJob.batch.i + ' / ' + trJob.batch.n + ' 集 · ' : '') + '正在标注外文名称…'; trRender();
   return termify(key, trJob.abort.signal).then(function(){}, function(err){ if(err && err.cancelled) throw err; });   // 标注失败不影响文稿
 }
+/* ---- 找出文稿里提到的音乐（歌曲 / 专辑 / 乐曲 / 音乐人），生成 Apple Music 链接 ---- */
+function musicPrompt(text){
+  return '下面是一段中文播客的语音识别文稿，每行开头 [分:秒] 是这句话的时间。\n' +
+    '请找出文稿里提到的【具体的音乐作品或音乐人】：歌曲、专辑、乐曲（包括古典作品）、歌手 / 乐队 / 作曲家。说话人推荐、播放、讲解、顺带提到的都算；「音乐」「旋律」「歌曲」这类泛称不算，不确定是不是音乐的不要列。\n' +
+    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"kind":"song 或 album 或 artist 或 piece","title":"作品名（kind 是 artist 时填人名）","artist":"创作者或演唱者，不知道就留空","t":提到它的那一句的时间（秒，整数）}。\n' +
+    '外国的作品和人名尽量写成原文（如 Kind of Blue、Miles Davis），方便去 Apple Music 搜索；同一个作品只列一次；没有就输出 []。\n\n文稿：\n' + text;
+}
+function parseMusic(txt){
+  var m = /\[[\s\S]*\]/.exec(txt || ''), arr = [], seen = {};
+  try{ arr = JSON.parse(m ? m[0] : '[]'); }catch(e){ arr = []; }
+  var out = [];
+  (Array.isArray(arr) ? arr : []).forEach(function(x){
+    if(!x) return;
+    var title = clean(String(x.title || '')), artist = clean(String(x.artist || '')), kind = /^(song|album|artist|piece)$/.test(x.kind) ? x.kind : 'song';
+    if(!title || title.length > 80) return;
+    var id = (title + '|' + artist).toLowerCase(); if(seen[id]) return; seen[id] = 1;
+    var term = (kind === 'artist' ? title : (artist ? artist + ' ' : '') + title).trim();
+    out.push({kind:kind, title:title, artist:kind === 'artist' ? '' : artist, t:Math.max(0, Math.floor(+x.t) || 0), url:'https://music.apple.com/search?term=' + encodeURIComponent(term)});
+  });
+  return out;
+}
+function musicify(key, signal){
+  var tr = trCache[key];
+  if(!tr || !tr.segments.length) return Promise.reject(new Error('还没有文稿'));
+  var chunks = [], cur = '';
+  tr.segments.forEach(function(sg){ var line = '[' + fmt(sg.t) + '] ' + sg.text + '\n'; if(cur.length + line.length > 6000){ chunks.push(cur); cur = ''; } cur += line; });
+  if(cur) chunks.push(cur);
+  var all = [], seen = {};
+  return chunks.reduce(function(p, text){
+    return p.then(function(){
+      return withRetry(function(){ return llmCall('你是熟悉各类音乐的播客文稿编辑。', musicPrompt(text), signal); }, signal, 3).then(function(txt){
+        parseMusic(txt).forEach(function(x){ var id = (x.title + '|' + x.artist).toLowerCase(); if(!seen[id]){ seen[id] = 1; all.push(x); } });
+      });
+    });
+  }, Promise.resolve()).then(function(){
+    tr.music = all; tr.musicAt = Date.now();
+    return trPut(tr).then(function(){ return all.length; });
+  });
+}
+function autoMusic(key){
+  if(!llmReady() || ai.musicOff) return Promise.resolve();
+  trJob.sentAt = 0; trJob.msg = (trJob.batch ? '第 ' + trJob.batch.i + ' / ' + trJob.batch.n + ' 集 · ' : '') + '正在找文稿里提到的音乐…'; trRender();
+  return musicify(key, trJob.abort.signal).then(function(){}, function(err){ if(err && err.cancelled) throw err; });   // 失败不影响文稿
+}
+var musicBusy = null;
+function musicRun(key){
+  if(musicBusy || chapBusy || termBusy || trJob){ toast('正在处理，请稍等'); return; }
+  if(!llmReady()){ toast('先设置文本模型'); openAiSettings(); return; }
+  musicBusy = key; toast('正在找文稿里提到的音乐…', 30000); render();
+  musicify(key, new AbortController().signal).then(function(n){ toast(n ? '找到 ' + n + ' 个提到的音乐' : '没有找到提到的音乐'); }, function(err){ toast('没找成：' + aiErrMsg(err), 5000); }).then(function(){ musicBusy = null; render(); });
+}
+// 点音乐按钮：列出提到的音乐，每条点一下在 Apple Music 里打开（先给搜索链接；能查到准确链接就换成准确的）
+function openMusicSheet(key){
+  var tr = trCache[key], ul = $('musicList'); ul.innerHTML = '';
+  var KIND = {song:'歌曲', album:'专辑', artist:'音乐人', piece:'乐曲'};
+  (tr && tr.music || []).forEach(function(m){
+    var a = el('a', 'opt mu'); a.href = m.url; a.target = '_blank'; a.rel = 'noopener';
+    var g = el('span', 'grow');
+    g.appendChild(el('span', 'mk-note clamp2', m.title));
+    g.appendChild(el('small', 'line1', (KIND[m.kind] || '') + (m.artist ? ' · ' + m.artist : '') + ' · 文稿 ' + fmt(m.t)));
+    a.appendChild(g); a.appendChild(el('span', 'mu-go', 'Apple Music ↗'));
+    var li = el('li'); li.appendChild(a); ul.appendChild(li);
+    var ent = m.kind === 'album' ? 'album' : m.kind === 'artist' ? 'musicArtist' : 'song';
+    var term = m.kind === 'artist' ? m.title : ((m.artist ? m.artist + ' ' : '') + m.title);
+    fetch('https://itunes.apple.com/search?limit=1&entity=' + ent + '&term=' + encodeURIComponent(term)).then(function(r){ return r.json(); }).then(function(j){
+      var x = j && j.results && j.results[0], u = x && (x.trackViewUrl || x.collectionViewUrl || x.artistLinkUrl);
+      if(u) a.href = u;
+    }).catch(function(){});
+  });
+  openSheet('musicSheet');
+}
 var termBusy = null;
 // 整理文稿：不重新识别，按最新的规则把这篇文稿重新处理一遍并保存——
 // 繁体转简体、去掉乱编的字幕套话和重复句；设置了文本模型（且没关外文标注）的话，再撤销上次的外文标注、按最新规则重新标注
@@ -4730,6 +4820,7 @@ function tidyRun(key){
   toast(useLlm ? '正在整理文稿…（外文标注要问文本模型，请稍等）' : '正在整理文稿…', 20000);
   (useLlm ? termify(key, new AbortController().signal) : trPut(tr).then(function(){ return 0; })).then(function(n){
     toast(text() !== before ? '已整理文稿' + (n ? '，标注外文 ' + n + ' 处' : '') : '已经是按最新规则整理的，没有要改的');
+    if(useLlm && !ai.musicOff) return musicify(key, new AbortController().signal).catch(function(){});   // 顺便重新找一遍提到的音乐
   }, function(err){
     trPut(tr);   // 外文标注失败，前面的整理照样保存
     toast('繁简和重复句已整理；外文标注失败：' + aiErrMsg(err), 5000);
@@ -4781,7 +4872,7 @@ function trRun(key, restart, batch){
       return gate.then(function(ok){
       if(!ok) throw {cancelled:true};
       var tr = rec || {key:key, provider:aiProv().name, model:aiModel(), lang:ai.lang, created:Date.now(), duration:plan.duration, total:plan.chunks.length, done:0, segments:[], status:'partial', simp:true};
-      return trLoop(plan, route, tr).then(function(){ return autoTerms(key); }).then(function(){ return autoChapters(key); });
+      return trLoop(plan, route, tr).then(function(){ return autoTerms(key); }).then(function(){ return autoMusic(key); }).then(function(){ return autoChapters(key); });
       });
     });
   }).then(function(x){ x = x || {}; delete trErr[key]; return {res:'done', noLlm:x.noLlm, chapterErr:x.chapterErr}; }, function(err){
@@ -4974,7 +5065,18 @@ function renderEp(box){
   $('bTrEdit').classList.toggle('on', trEdit);
   var top = el('div', 'ep-top'), au = authorOf(showOf(key), ep);
   top.appendChild(el('div', 'ep-name clamp2', titleOf(key)));
-  top.appendChild(el('div', 'ep-album line1', showLabel(showOf(key)) + (au ? ' · ' + au : '')));
+  var albRow = el('div', 'ep-albrow');
+  albRow.appendChild(el('div', 'ep-album line1', showLabel(showOf(key)) + (au ? ' · ' + au : '')));
+  var nMusic = tr && tr.music ? tr.music.length : 0;
+  var mb = el('button', 'music-btn' + (nMusic ? ' on' : '')); mb.id = 'bMusic';
+  mb.setAttribute('aria-label', nMusic ? '提到的音乐' : '没有提到音乐');
+  mb.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/></svg>' + (nMusic ? '<b>' + nMusic + '</b>' : '');
+  mb.onclick = function(){
+    if(nMusic){ openMusicSheet(key); return; }
+    toast(!tr || tr.status !== 'done' ? '识别完文稿后，会自动找提到的音乐' : tr.musicAt ? '这一集的文稿里没有提到音乐（「⋯」里可以重新找）' : '还没找过：点右上角「⋯」→「找提到的音乐」');
+  };
+  if(tr && tr.segments.length) albRow.appendChild(mb);
+  top.appendChild(albRow);
   if(ep && !(cur && cur.key === key)){
     var pb = el('button', 'btn primary block ep-play', '▶ 播放这一集');
     pb.onclick = function(){ open(ep, true); render(); };
@@ -5266,6 +5368,7 @@ function showTrMore(key){
     items.push({label:tr.chapters && tr.chapters.length ? '重新分章节' : 'AI 分章节', note:llmReady() ? '用 ' + lc.name + ' · ' + lc.model : '要先设置文本模型', pick:function(){
       closeSheet('trMoreSheet'); if(llmReady()) chapterRun(key); else openAiSettings();
     }});
+    items.push({label:tr.musicAt ? '重新找提到的音乐' : '找提到的音乐', note:llmReady() ? '用 ' + lc.name + ' · ' + lc.model + '，找出歌曲、专辑、音乐人，生成 Apple Music 链接' : '要先设置文本模型', pick:function(){ closeSheet('trMoreSheet'); musicRun(key); }});
     items.push({label:'整理文稿', note:'不用重新识别，按最新规则重新整理：繁体转简体、去掉乱编的套话和重复句' + (llmReady() && !ai.termsOff ? '、重新标注外文（用 ' + lc.name + '）' : ''), pick:function(){
       closeSheet('trMoreSheet'); tidyRun(key);
     }});
