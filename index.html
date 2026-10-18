@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.16">
+<meta name="app-version" content="0.46.17">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -5121,7 +5121,7 @@ function musicPrompt(text){
     '   例子：「我是通过蔡明亮的电影知道葛兰、白光那个时候的歌曲的」——葛兰、白光是歌手，要列（artist，role 填「歌手」）；蔡明亮是导演（person，role 填「导演」）。同一句里有几个人，每个都要单独列。\n' +
     '4. 泛称（「音乐」「旋律」「歌曲」「古典乐」「爵士乐」）不算；拿不准就不要列。\n' +
     (kn ? '5. 参考（以前听过的节目里已经确定的）：' + kn + '。这些人按已知身份处理，不用再判断。\n' : '') +
-    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"kind":"song 或 album 或 artist 或 piece 或 person","title":"作品名（kind 是 artist / person 时填人名，用文稿里的写法）","orig":"作品名或人名的原文写法：外国的必须写成原文，并用它通行的写法——首字母大写、介词小写（不要全大写），数字用阿拉伯数字（如 Kayhan Kalhor、Kind of Blue、Music for 18 Musicians），中文的写中文","artist":"创作者或演唱者（文稿里的写法），不知道就留空","artistOrig":"创作者或演唱者的原文写法，外国的必须写原文","role":"kind 是 artist / person 时写这个人的主业，其他留空","ver":"这个作品所放的版本信息：年份、唱片公司、演奏者或指挥、获奖等（如 1997 Nonesuch、卡拉扬 1963），没提到就留空，不要猜","part":"放的是其中哪个乐章或段落，按说话人说的写，数字用阿拉伯数字（说的是 Section Four 就写 Section 4，第二乐章写 第2乐章），没提到就留空","said":"文稿里提到它时原样的写法，必须和文稿里的文字一字不差","why":"文稿里能证明说话人在把它当音乐说的那几个字（如「这首歌」「专辑」「演奏」「歌曲」），必须是文稿里的原话","t":提到它的那一句的时间（秒，整数）}。\n' +
+    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"kind":"song 或 album 或 artist 或 piece 或 person","title":"作品名（kind 是 artist / person 时填人名，用文稿里的写法）","orig":"作品名或人名的原文写法：外国的必须写成原文（日本、韩国等非拉丁文字的音乐人，写他在 Apple Music 上通行的罗马字名字，如 Ryuichi Sakamoto），并用它通行的写法——首字母大写、介词小写（不要全大写），数字用阿拉伯数字（如 Kayhan Kalhor、Kind of Blue、Music for 18 Musicians），中文的写中文","artist":"创作者或演唱者（文稿里的写法），不知道就留空","artistOrig":"创作者或演唱者的原文写法，外国的必须写原文","role":"kind 是 artist / person 时写这个人的主业，其他留空","ver":"这个作品所放的版本信息：年份、唱片公司、演奏者或指挥、获奖等（如 1997 Nonesuch、卡拉扬 1963），没提到就留空，不要猜","part":"放的是其中哪个乐章或段落，按说话人说的写，数字用阿拉伯数字（说的是 Section Four 就写 Section 4，第二乐章写 第2乐章），没提到就留空","said":"文稿里提到它时原样的写法，必须和文稿里的文字一字不差","why":"文稿里能证明说话人在把它当音乐说的那几个字（如「这首歌」「专辑」「演奏」「歌曲」），必须是文稿里的原话","t":提到它的那一句的时间（秒，整数）}。\n' +
     '版本信息经常在说出作品名【之后的几句话里】才详细介绍（「我要介绍的是 1997 年 Nonesuch 唱片的版本……现在就来听其中第四部分」），要把前后几句里说的这个版本的年份、唱片公司、演奏者、乐章合并填进 ver / part，但每项只写关键词，不要写成长句。\n' +
     '同一个作品或人只列一次；没有就输出 []。\n\n文稿：\n' + text;
 }
@@ -5297,8 +5297,10 @@ function musicLink(m){
     return sc;
   }
   return fetch('https://itunes.apple.com/search?limit=25&entity=' + ent + '&term=' + encodeURIComponent(term)).then(function(r){ return r.json(); }).then(function(j){
-    var rs = ((j && j.results) || []).filter(nameOk), best = null, bs = -1;
+    var raw = (j && j.results) || [], rs = raw.filter(nameOk), best = null, bs = -1;
     rs.forEach(function(x){ var sc = score(x); if(sc > bs){ bs = sc; best = x; } });
+    // 音乐人的名字不是拉丁字母（坂本龙一）时，Apple Music 返回的是罗马字写法（Ryuichi Sakamoto），没法逐字对；搜索排第一的通常就是他本人
+    if(!best && isP && /[^\u0000-\u007f]/.test(orig) && raw[0]) best = raw[0];
     var u = best && (best.trackViewUrl || best.collectionViewUrl || best.artistLinkUrl);
     if(u){ mlink[ck] = u; save(MLINK_KEY, mlink); }
     return u || '';
