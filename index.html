@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.2">
+<meta name="app-version" content="0.46.3">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -814,6 +814,13 @@ input[type=file]{display:none}
           <div class="ver-status" id="peopleStatus"></div>
         </div>
         <button class="btn" id="bPeople">查看</button>
+      </div>
+      <div class="ver-row">
+        <div class="ver-text">
+          <div class="ver-num">刷新全部文稿</div>
+          <div class="ver-status" id="refreshStatus">按最新规则重新整理，并重新标注外文名、重找提到的音乐</div>
+        </div>
+        <button class="btn" id="bRefreshTr">刷新</button>
       </div>
       <div class="ver-row">
         <div class="ver-text">
@@ -4005,6 +4012,7 @@ function readLlmForm(){
 $('aiProvider').addEventListener('change', function(){ aiFormFill(this.value); aiChunkVis(); });
 $('llmProvider').addEventListener('change', function(){ llmFormFill(this.value); });
 $('bAiSet').onclick = openAiSettings;
+$('bRefreshTr').onclick = refreshAllTr;
 $('bHist').onclick = function(){ renderHist(); openSheet('histSheet'); };
 $('bPeople').onclick = function(){ peopleTab = 'm'; renderPeople(); openSheet('peopleSheet'); };
 $('bAiSave').onclick = function(){
@@ -4923,6 +4931,11 @@ function peopleMove(kind, id){
   to[id] = from[id]; delete from[id]; to[id].mt = Date.now(); savePeople(); renderPeople();
 }
 function peopleCount(){ return Object.keys(people.m).length + Object.keys(people.o).length; }
+// 外语的名字：主显原文，中文放小字；中文名或没有原文就照旧
+function nameParts(zh, orig){
+  if(orig && orig !== zh && !/[\u4e00-\u9fff]/.test(orig)) return {main:orig, zh:zh};
+  return {main:zh, zh:''};
+}
 function histKeys(){
   return Object.keys(records).filter(function(k){ var r = records[k]; return r && r.updated > 0 && (findEp(k) || hasTr[k]); })
     .sort(function(a, b){ return records[b].updated - records[a].updated; });
@@ -4963,8 +4976,9 @@ function renderPeople(){
   $('peopleEmpty').hidden = !!ids.length;
   ids.forEach(function(id){
     var e = list[id], row = el('div', 'opt mu pp'), g = el('span', 'grow');
-    g.appendChild(el('span', 'mk-note clamp2', e.name + (e.orig && e.orig !== e.name ? '  ' + e.orig : '')));
-    g.appendChild(el('small', 'line1', (e.role || (peopleTab === 'm' ? '音乐人' : '非音乐人')) + ' · 提到 ' + e.mentions.length + ' 次' + (e.works.length ? ' · ' + e.works.slice(0, 2).join('、') : '')));
+    var pp = nameParts(e.name, e.orig);
+    g.appendChild(el('span', 'mk-note clamp2', pp.main));
+    g.appendChild(el('small', 'line1', (pp.zh ? pp.zh + ' · ' : '') + (e.role || (peopleTab === 'm' ? '音乐人' : '非音乐人')) + ' · 提到 ' + e.mentions.length + ' 次' + (e.works.length ? ' · ' + e.works.slice(0, 2).join('、') : '')));
     var main;
     if(peopleTab === 'm'){ main = el('a', 'mu-main'); main.href = 'https://music.apple.com/search?term=' + encodeURIComponent(e.orig || e.name); main.target = '_blank'; main.rel = 'noopener'; main.appendChild(g); main.appendChild(el('span', 'mu-go', 'Apple Music ↗')); }
     else{ main = el('div', 'mu-main'); main.appendChild(g); }
@@ -5116,8 +5130,9 @@ function openMusicSheet(key){
     // 中间 + 右边：点名称或「Apple Music」都在 Apple Music 里打开
     var a = el('a', 'mu-main'); a.href = m.url; a.target = '_blank'; a.rel = 'noopener';
     var g = el('span', 'grow');
-    g.appendChild(el('span', 'mk-note clamp2', m.title + (m.orig && m.orig !== m.title ? '  ' + m.orig : '')));
-    g.appendChild(el('small', 'line1', (KIND[m.kind] || '') + (m.artist ? ' · ' + m.artist + (m.artistOrig && m.artistOrig !== m.artist ? '（' + m.artistOrig + '）' : '') : '')));
+    var np = nameParts(m.title, m.orig), ap = nameParts(m.artist, m.artistOrig);
+    g.appendChild(el('span', 'mk-note clamp2', np.main));
+    g.appendChild(el('small', 'line1', [np.zh, KIND[m.kind] || '', m.artist ? ap.main + (ap.zh ? '（' + ap.zh + '）' : '') : ''].filter(Boolean).join(' · ')));
     a.appendChild(g); a.appendChild(el('span', 'mu-go', 'Apple Music ↗'));
     row.appendChild(tb); row.appendChild(a);
     var li = el('li'); li.appendChild(row); ul.appendChild(li);
@@ -5149,6 +5164,31 @@ function tidyRun(key){
     trPut(tr);   // 外文标注失败，前面的整理照样保存
     toast('繁简和重复句已整理；外文标注失败：' + aiErrMsg(err), 5000);
   }).then(function(){ termBusy = null; render(); });
+}
+var refreshAllRun = false, refreshAllStop = false;
+function refreshAllTr(){
+  var btn = $('bRefreshTr');
+  if(refreshAllRun){ refreshAllStop = true; btn.textContent = '正在停止…'; return; }
+  if(chapBusy || termBusy || musicBusy || trJob){ toast('正在处理，请稍等'); return; }
+  var useLlm = llmReady();
+  refreshAllRun = true; refreshAllStop = false; termBusy = 'all';
+  trKeys().then(function(keys){
+    keys = (keys || []).slice(); var i = 0, done = 0;
+    function step(){
+      if(refreshAllStop || i >= keys.length) return Promise.resolve();
+      var k = keys[i++]; btn.textContent = '停止（' + i + '/' + keys.length + '）';
+      return trGet(k).then(function(tr){
+        if(!tr || tr.status !== 'done' || !tr.segments || !tr.segments.length) return;
+        tr.simp = false; trSimp(tr);
+        var sig = new AbortController().signal;
+        var p = useLlm && !ai.termsOff ? termify(k, sig) : trPut(tr);
+        return p.then(function(){ return useLlm && !ai.musicOff ? musicify(k, sig) : 0; }).then(function(){ done++; }, function(){ return trPut(tr).catch(function(){}); });
+      }).then(step, step);
+    }
+    return step().then(function(){ toast((refreshAllStop ? '已停止，' : '') + '已刷新 ' + done + ' 篇文稿' + (useLlm ? '' : '（没设置文本模型，只整理了繁简和重复句）'), 5000); });
+  }).catch(function(err){ toast('刷新失败：' + aiErrMsg(err), 5000); }).then(function(){
+    refreshAllRun = false; refreshAllStop = false; termBusy = null; btn.textContent = '刷新'; showAiStatus(); render();
+  });
 }
 function chapterRun(key){
   if(chapBusy || termBusy || trJob){ toast('正在处理，请稍等'); return; }
