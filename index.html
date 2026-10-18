@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.37.3">
+<meta name="app-version" content="0.37.4">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -149,6 +149,7 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .selbar .btn:disabled{opacity:.4}
 body.selecting .mini{display:none}
 body.selecting .list-scroll{padding-bottom:90px}
+body.selecting.show-page:not(.playing) .list-scroll,body.selecting.has-player .list-scroll{padding-bottom:110px}   /* 多选时底部操作栏在列表上面，最后一集要能滚出来 */
 .tag{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:0 6px;white-space:nowrap;flex:none}
 .hint{font-size:12px;color:var(--muted);text-align:center;margin:10px 0 0}
 
