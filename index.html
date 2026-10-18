@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.43.4">
+<meta name="app-version" content="0.44.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -549,6 +549,8 @@ input[type=file]{display:none}
     <div class="sheet-body">
       <h3>① 语音转文字</h3>
       <p>把音频识别成文字，需要支持语音的服务商（Claude、DeepSeek 不行）。</p>
+      <div class="sec">接口（可以存两套，比如国内版和国际版各一个，在「关于」里切换用哪套）</div>
+      <div class="pills" id="aiProfTabs"></div>
       <div class="sec">服务商</div>
       <select class="input" id="aiProvider"></select>
       <p id="aiHelp"></p>
@@ -778,6 +780,8 @@ input[type=file]{display:none}
         </div>
         <button class="btn" id="bAiSet">设置</button>
       </div>
+      <div class="sec">语音识别用哪套接口</div>
+      <div class="pills" id="asrSwitch"></div>
 
       <h3>节目列表</h3>
       <label class="check"><input type="checkbox" id="tidyChk"><span>集名优化：「0.」开头的显示为「发刊词：」；名字前有两个序号时去掉第一个；番外以「番外：」开头。列表顺序不变。</span></label>
@@ -3809,8 +3813,47 @@ function llmCfg(){
   return {provider:c.provider, style:pr.style, name:pr.name, key:c.key || '', base:(c.base || pr.base || '').replace(/\/+$/, ''), model:c.model || pr.model || ''};
 }
 function llmReady(){ var c = llmCfg(); return !!(c && c.key && c.base && c.model); }
+/* ---- 语音识别可以存两套接口（比如国内版 / 新加坡版各一个 Key），在「关于」里一键切换用哪套 ----
+   ai.asrProfiles = [{provider,key,base,model,wav} × 2]，ai.asrSel = 当前用的那套；
+   识别代码照旧读 ai.provider / key / base / model / wav，切换时把选中的那套抄过去 */
+function asrProfiles(){
+  if(!ai.asrProfiles){
+    ai.asrProfiles = [{provider:ai.provider || '', key:ai.key || '', base:ai.base || '', model:ai.model || '', wav:!!ai.wav}, {provider:'', key:'', base:'', model:'', wav:false}];
+    ai.asrSel = 0;
+  }
+  return ai.asrProfiles;
+}
+function profFull(p){
+  var pr = AI_PROVIDERS[p.provider];
+  return {provider:p.provider || '', key:p.key || '', base:p.base || (pr ? pr.base : ''), model:p.model || (pr ? pr.model : ''), wav:!!p.wav};
+}
+function applyAsrProfile(i){
+  var p = profFull(asrProfiles()[i]), pr = AI_PROVIDERS[p.provider];
+  ai.asrSel = i; ai.provider = p.provider; ai.key = p.key; ai.wav = p.wav;
+  ai.base = pr && p.base === pr.base ? '' : p.base;
+  ai.model = pr && p.model === pr.model ? '' : p.model;
+}
+function asrProfLabel(i){
+  var p = profFull(asrProfiles()[i]), pr = AI_PROVIDERS[p.provider];
+  if(!p.key || !pr) return '还没设置';
+  var name = pr.name.split(/[（( ]/)[0];
+  if(p.provider === 'aliyun') return name + (/intl|ap-southeast|us-east|eu-central|ap-northeast/.test(p.base) ? ' 国际' : /hongkong/.test(p.base) ? ' 香港' : ' 国内');
+  return name + ' ' + p.model;
+}
+function renderAsrSwitch(){
+  var box = $('asrSwitch'); if(!box) return;
+  box.innerHTML = '';
+  var cur = ai.asrProfiles ? (ai.asrSel || 0) : 0, profs = asrProfiles();
+  [0, 1].forEach(function(i){
+    var has = !!profs[i].key, b = el('button', 'pill' + (has && cur === i && ai.key ? ' on' : ''), '接口 ' + (i + 1) + ' · ' + asrProfLabel(i));
+    b.disabled = !has; b.style.opacity = has ? '' : '.45';
+    b.onclick = function(){ applyAsrProfile(i); saveAi(); showAiStatus(); toast('语音识别改用「接口 ' + (i + 1) + '」：' + asrProfLabel(i)); };
+    box.appendChild(b);
+  });
+}
 function showAiStatus(){
   var l = llmCfg();
+  renderAsrSwitch();
   $('aiStatus').textContent = '语音识别：' + (aiReady() ? aiProv().name + ' · ' + aiModel() : '还没有设置') + '\n分章节：' + (llmReady() ? l.name + ' · ' + l.model : '还没有设置');
 }
 
@@ -3825,6 +3868,35 @@ function aiSaved(kind){
 }
 // 设置面板打开期间，各家填过、还没保存的内容；aiCur / llmCur 是表单上正显示的那一家
 var aiDraft = {asr:{}, llm:{}}, aiCur = '', llmCur = '';
+var aiProfCur = 0, aiProfDraft = [null, null];
+function profStash(){
+  aiProfDraft[aiProfCur] = {provider:$('aiProvider').value, key:clean($('aiKey').value).replace(/\s/g, ''), base:clean($('aiBase').value), model:clean($('aiModel').value), wav:$('aiWav').checked};
+}
+function renderAiProfTabs(){
+  var box = $('aiProfTabs'); box.innerHTML = '';
+  [0, 1].forEach(function(i){
+    var b = el('button', 'pill' + (aiProfCur === i ? ' on' : ''), '接口 ' + (i + 1));
+    b.onclick = function(){ if(aiProfCur === i) return; profStash(); aiProfLoad(i); };
+    box.appendChild(b);
+  });
+}
+// 把第 i 套接口的内容填进表单（没改过的用已保存的，改过还没保存的用草稿）
+function aiProfLoad(i){
+  aiProfCur = i; aiCur = '';   // 不要把上一套的内容当成「这家服务商」的记忆
+  var src = aiProfDraft[i] || profFull(asrProfiles()[i]);
+  var id = AI_PROVIDERS[src.provider] ? src.provider : (i === 0 ? 'openai' : 'aliyun'), pr = AI_PROVIDERS[id];
+  $('aiProvider').value = id;
+  $('aiKey').value = src.key || '';
+  $('aiBase').value = src.base || pr.base;
+  $('aiModel').value = src.model || pr.model;
+  $('aiModels').innerHTML = '';
+  (pr.models || []).forEach(function(m){ var o = document.createElement('option'); o.value = m; $('aiModels').appendChild(o); });
+  $('aiHelp').textContent = pr.help;
+  $('aiWav').checked = !!src.wav;
+  $('aiTestResult').textContent = '';
+  aiCur = id;
+  renderAiProfTabs();
+}
 function aiStash(){
   if(aiCur) aiDraft.asr[aiCur] = {key:clean($('aiKey').value).replace(/\s/g, ''), base:clean($('aiBase').value), model:clean($('aiModel').value), wav:$('aiWav').checked};
   if(llmCur) aiDraft.llm[llmCur] = {key:clean($('llmKey').value).replace(/\s/g, ''), base:clean($('llmBase').value), model:clean($('llmModel').value)};
@@ -3872,7 +3944,9 @@ function openAiSettings(){
   aiDraft = {asr:{}, llm:{}}; aiCur = ''; llmCur = '';
   $('aiTerms').checked = !ai.termsOff; $('aiMusic').checked = !ai.musicOff;
   $('aiLang').value = ai.lang == null ? 'zh' : ai.lang;
-  aiFormFill(AI_PROVIDERS[ai.provider] ? ai.provider : 'openai');
+  aiProfDraft = [null, null];
+  asrProfiles();
+  aiProfLoad(ai.asrSel || 0);
   llmFormFill(ai.chat && LLM_PROVIDERS[ai.chat.provider] ? ai.chat.provider : '');
   closeSheet('about'); openSheet('aiSheet');
 }
@@ -3902,6 +3976,14 @@ $('bAiSave').onclick = function(){
                    : {provider:g.provider || '', key:'', base:'', model:''};
   if($('aiTerms').checked) delete ai.termsOff; else ai.termsOff = true;
   if($('aiMusic').checked) delete ai.musicOff; else ai.musicOff = true;
+  // 两套语音识别接口：把表单里正在看的那套也记下来，再存两套；「保存」后用的是现在看的这一套
+  profStash();
+  [0, 1].forEach(function(i){
+    var d = aiProfDraft[i], pp = d && AI_PROVIDERS[d.provider];
+    if(!d || !pp) return;
+    asrProfiles()[i] = {provider:d.provider, key:d.key, base:d.base === pp.base ? '' : d.base, model:d.model === pp.model ? '' : d.model, wav:!!d.wav};
+  });
+  applyAsrProfile(aiProfCur);
   // 每家填过的都存下来（地址、模型和默认一样就不存）
   aiStash();
   [['asr', AI_PROVIDERS], ['llm', LLM_PROVIDERS]].forEach(function(x){
@@ -3921,6 +4003,7 @@ $('bAiSave').onclick = function(){
 $('bAiClear').onclick = function(){
   if(!confirm('清除保存在这台手机上的所有 API Key？')) return;
   ai.key = ''; if(ai.chat) ai.chat.key = '';
+  (ai.asrProfiles || []).forEach(function(x){ x.key = ''; }); aiProfDraft = [null, null];
   ai.saved = {asr:{}, llm:{}}; aiDraft = {asr:{}, llm:{}};
   saveAi(); $('aiKey').value = ''; $('llmKey').value = ''; showAiStatus(); toast('已清除 API Key');
 };
