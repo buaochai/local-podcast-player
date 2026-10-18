@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.35.3">
+<meta name="app-version" content="0.35.4">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -2516,6 +2516,12 @@ function cloudRemove(key){
 }
 function cloudRemoveAsk(key){
   var ep = findEp(key), local = ep && !ep.remote;
+  var imp = records[key] && records[key].cloud && records[key].cloud.imp;
+  if(imp){
+    if(!confirm('把「' + titleOf(key) + '」移出列表？存储桶里的文件不会被删除，重新导入文件夹可以找回。')) return;
+    cloudRemove(key).then(function(){ toast('已移出列表，云端文件还在'); render(); cloudInfoRefresh(); });
+    return;
+  }
   if(!confirm('从云端删除「' + titleOf(key) + '」的音频？' + (local ? '本机的文件和播放记录都还在。' : '本机没有这一集的文件，删了就听不到了。'))) return;
   cloudRemove(key).then(function(){ toast('已从云端删除'); render(); cloudInfoRefresh(); }, function(err){ toast('云端删除失败：' + err.message, 5000); });
 }
@@ -2642,7 +2648,7 @@ function showEpPop(key, anchor){
   if(ep || hasTr[key]) items.push({label:'AI 转文字', pick:function(){ goEp(key); }});
   if(ep && ep.remote) items.push({label:'下载到本机', pick:function(){ downloadEp(key); }});
   if(!fe && ep && !ep.remote && !r.cloud) items.push({label:'上传到云端', pick:function(){ cloudUploadAll([key]); }});   // 订阅的播客不上传
-  if(!fe && r.cloud) items.push({label:'从云端删除', danger:true, pick:function(){ cloudRemoveAsk(key); }});
+  if(!fe && r.cloud) items.push({label:r.cloud.imp ? '移出列表（不删云端文件）' : '从云端删除', danger:!r.cloud.imp, pick:function(){ cloudRemoveAsk(key); }});
   items.push({label:'详情与更多…', pick:function(){ showEpMenu(key); }});
   $('epPopTitle').textContent = titleOf(key);
   var ul = $('epPopList'); ul.innerHTML = '';
@@ -2691,7 +2697,7 @@ function showEpMenu(key){
   if(ep || hasTr[key]) items.push({label:'AI 转文字', note: hasTr[key] ? '已有文稿，点开查看；也可以重新识别' : '把这一集识别成文字（要用自己的 API Key）', pick:function(){ closeSheet('epSheet'); goEp(key); }});
   if(ep && ep.remote) items.push({label:'下载到本机', note:ep.cloud ? '从云端下载，离线也能听' : '离线也能听；有的播客平台不允许网页下载', pick:function(){ closeSheet('epSheet'); downloadEp(key); }});
   if(!fe && ep && !ep.remote && !r.cloud) items.push({label:'上传到云端', note:'传到你的 R2，其他设备也能在线听', pick:function(){ closeSheet('epSheet'); cloudUploadAll([key]); }});
-  if(!fe && r.cloud) items.push({label:'从云端删除', note:'只删云端的音频' + (ep && !ep.remote ? '，本机的文件还在' : '，本机没有文件的话这一集会变成「文件缺失」'), danger:true, pick:function(){ closeSheet('epSheet'); cloudRemoveAsk(key); }});
+  if(!fe && r.cloud) items.push({label:r.cloud.imp ? '移出列表（不删云端文件）' : '从云端删除', note:r.cloud.imp ? '只是不再显示这一集，存储桶里你的文件不会动；可以重新导入文件夹找回' + (ep && !ep.remote ? '，本机的文件还在' : '') : '只删云端的音频' + (ep && !ep.remote ? '，本机的文件还在' : '，本机没有文件的话这一集会变成「文件缺失」'), danger:true, pick:function(){ closeSheet('epSheet'); cloudRemoveAsk(key); }});
   if(ep && ep.tags) items.push({label:'查看标签详情', note:'看看文件里到底存了哪些信息', pick:function(){
     $('tagText').textContent = describeTags(ep);
     closeSheet('epSheet'); openSheet('tagSheet');
