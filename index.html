@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.39.2">
+<meta name="app-version" content="0.39.3">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -1302,7 +1302,7 @@ function updateTimes(){
 function showBtnText(){ return !audio.paused ? '❚❚ 暂停' : loadingPlay ? '… 正在加载' : '▶ 继续播放'; }
 function setPlayIcon(){
   var playing = !audio.paused;
-  if(playing) loadingPlay = false;
+  if(playing){ loadingPlay = false; if(cur) cur.retried = false; }
   $('playIcon').innerHTML = playing ? '<path d="M6 5h4v14H6zm8 0h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
   $('bPlay').setAttribute('aria-label', playing ? '暂停' : '播放');
   document.body.classList.toggle('playing', playing);
@@ -1330,9 +1330,18 @@ audio.addEventListener('ended', function(){
   if(i >= 0 && i < list.length - 1) open(list[i + 1], true); else render();
 });
 audio.addEventListener('error', function(){
-  loadingPlay = false; setPlayIcon();
   if(!cur || !audio.getAttribute('src')) return;
-  var ep = cur, code = audio.error && audio.error.code;
+  var ep0 = cur, src0 = audio.currentSrc;
+  // 切歌、拖进度时系统可能先报一个错又马上恢复：等一下，真的还是放不出来才算失败
+  setTimeout(function(){
+    if(cur !== ep0 || audio.currentSrc !== src0 || !audio.error) return;
+    if(audio.readyState >= 2 && !audio.paused) return;
+    playFailed(ep0);
+  }, 900);
+});
+function playFailed(ep){
+  loadingPlay = false; setPlayIcon();
+  var code = audio.error && audio.error.code;
   // 云端的集：临时地址可能过期了，换一个新的再试一次
   if(ep.cloud && ep.remote && !ep.retried){ ep.retried = true; ep.url = ''; ep.urlAt = 0; open(ep, true); return; }
   ep.retried = false;
@@ -1348,7 +1357,7 @@ audio.addEventListener('error', function(){
       toast(msg, 8000);
     }, function(){});
   }
-});
+}
 
 var seekEl = $('seek');
 seekEl.addEventListener('input', function(){
