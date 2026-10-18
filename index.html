@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.43.3">
+<meta name="app-version" content="0.43.4">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -2434,7 +2434,22 @@ function fetchFeed(url){
     });
   }, function(){ throw new Error('连不上网络'); });
 }
-var feedBusy = {};
+var feedBusy = {}, coverBusy = {};
+// 订阅的播客封面存一份缩略图在本机（shows[名].cover），没网络也显示，网络不稳时不会一闪一闪
+function cacheFeedCover(f){
+  var sh = shows[f.title];
+  if(!f.image || !sh || (sh.cover && sh.coverFrom === f.image) || coverBusy[f.image]) return;
+  coverBusy[f.image] = 1;
+  function grab(u){ return fetch(u).then(function(r){ if(!r.ok) throw new Error('x'); return r.blob(); }); }
+  grab(f.image).catch(function(){ return grab('api/rss?img=' + encodeURIComponent(f.image)); }).then(function(blob){
+    var u = URL.createObjectURL(blob);
+    return thumb(u).then(function(d){
+      URL.revokeObjectURL(u);
+      if(d){ sh.cover = d; sh.coverFrom = f.image; saveShows(); if(ready) render(); }
+    });
+  }).catch(function(){}).then(function(){ delete coverBusy[f.image]; });
+}
+
 function refreshFeed(url){
   if(feedBusy[url]) return feedBusy[url];
   return feedBusy[url] = fetchFeed(url).then(function(f){
@@ -2446,6 +2461,7 @@ function refreshFeed(url){
     if(f.image) sh.coverUrl = f.image;
     if(f.author && !sh.author){ sh.author = f.author; sh.at = Date.now(); }
     saveFeeds(); saveShows(); syncFeedEps(); saveRecords();
+    cacheFeedCover(f);
     if(ready) render();
     return {feed:f, added:old.eps ? added : f.eps.length};
   }).then(function(x){ delete feedBusy[url]; return x; }, function(err){ delete feedBusy[url]; throw err; });
@@ -5840,6 +5856,7 @@ trKeys().catch(function(){ return []; }).then(function(ks){
   return Promise.all(episodes.filter(function(ep){ return !ep.rss; }).map(readInfo));
 }).then(function(){
   syncFeedEps(); syncCloudEps();
+  setTimeout(function(){ Object.keys(feeds).forEach(function(u){ cacheFeedCover(feeds[u]); }); }, 800);   // 订阅的播客封面存到本机
   saveRecords(); saveShows();
   ready = true;
   render();

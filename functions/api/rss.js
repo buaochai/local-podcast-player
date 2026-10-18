@@ -7,8 +7,25 @@ function json(body, status){
   return new Response(JSON.stringify(body), {status: status || 200, headers: {'Content-Type': 'application/json', 'Cache-Control': 'no-store'}});
 }
 
+// 封面图：很多播客的图片服务器不让网页直接读（跨域），网页拿不到就请这里代取一张小图（最多 2MB，只收图片）
+async function image(target){
+  var u;
+  try{ u = new URL(target); }catch(e){ return json({error: '图片地址不对'}, 400); }
+  if(!/^https?:$/.test(u.protocol)) return json({error: '图片地址要以 http 或 https 开头'}, 400);
+  var res;
+  try{ res = await fetch(u.toString(), {headers: {'User-Agent': 'Mozilla/5.0 (local-podcast-player)', 'Accept': 'image/*'}, redirect: 'follow'}); }catch(e){ return json({error: '连不上这个图片地址'}, 502); }
+  var type = res.headers.get('Content-Type') || '';
+  if(!res.ok || !/^image\//i.test(type)) return json({error: '这不是一张图片'}, 400);
+  if(+(res.headers.get('Content-Length') || 0) > 2 * 1024 * 1024) return json({error: '图片太大'}, 413);
+  var buf = await res.arrayBuffer();
+  if(buf.byteLength > 2 * 1024 * 1024) return json({error: '图片太大'}, 413);
+  return new Response(buf, {headers: {'Content-Type': type, 'Cache-Control': 'private, max-age=86400'}});
+}
+
 export async function onRequestGet({request}){
-  var target = new URL(request.url).searchParams.get('url') || '', u;
+  var q = new URL(request.url).searchParams;
+  if(q.get('img')) return image(q.get('img'));
+  var target = q.get('url') || '', u;
   try{ u = new URL(target); }catch(e){ return json({error: 'RSS 地址不对'}, 400); }
   if(!/^https?:$/.test(u.protocol)) return json({error: 'RSS 地址要以 http 或 https 开头'}, 400);
   var res;
