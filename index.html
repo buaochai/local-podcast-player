@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.0">
+<meta name="app-version" content="0.46.1">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -117,6 +117,8 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .sr-item .a{font-size:15px;font-weight:600}
 .sr-item .b{font-size:13px;color:var(--muted);margin-top:2px}
 .sr-item .c{font-size:11px;color:var(--muted);opacity:.75;margin-top:3px}
+.locate-flash{animation:lflash 2.2s ease-out}
+@keyframes lflash{0%,60%{background:rgba(255,200,0,.38)}100%{background:transparent}}
 .tr-s.found{background:rgba(255,200,0,.38);border-radius:3px}
 .sr-item mark{background:rgba(255,200,0,.35);color:inherit;border-radius:3px}
 .sr-item .a.plain{font-weight:400;line-height:1.6}
@@ -4925,6 +4927,19 @@ function histKeys(){
   return Object.keys(records).filter(function(k){ var r = records[k]; return r && r.updated > 0 && (findEp(k) || hasTr[k]); })
     .sort(function(a, b){ return records[b].updated - records[a].updated; });
 }
+function histGo(k){   // 回到这一集所在专辑的列表，滚到这一集并闪一下
+  closeSheet('histSheet'); closeSheet('about');
+  var name = showOf(k);
+  if(!name){ openEpPage(k); return; }
+  if(searchOpen) closeSearch(true);
+  if(view.page === 'show' && view.show === name) render(); else goShow(name);
+  setTimeout(function(){
+    var sc = $('view').querySelector('.list-scroll'), li = $('view').querySelector('li[data-k="' + k.replace(/(["\\])/g, '\\$1') + '"]');
+    if(!li){ return; }
+    if(sc) sc.scrollTop = Math.max(0, li.offsetTop - sc.clientHeight / 2 + li.offsetHeight / 2);
+    li.classList.add('locate-flash'); setTimeout(function(){ li.classList.remove('locate-flash'); }, 2200);
+  }, 60);
+}
 function renderHist(){
   var box = $('histList'); box.innerHTML = '';
   var ks = histKeys(); $('histEmpty').hidden = !!ks.length; $('histStatus').textContent = '共 ' + ks.length + ' 集';
@@ -4934,7 +4949,7 @@ function renderHist(){
     var pct = r.finished ? '已听完' : (r.duration ? '听到 ' + fmt(r.position || 0) : '');
     g.appendChild(el('small', 'line1', showLabel(showOf(k) || '') + ' · ' + fmtDate(r.updated) + (pct ? ' · ' + pct : '')));
     var main = el('div', 'mu-main'); main.appendChild(g);
-    main.onclick = function(){ closeSheet('histSheet'); openEpPage(k); };
+    main.onclick = function(){ histGo(k); };
     row.appendChild(main); var li = el('li'); li.appendChild(row); box.appendChild(li);
   });
 }
