@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.38.1">
+<meta name="app-version" content="0.38.2">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -169,8 +169,8 @@ body.selecting.show-page:not(.playing) .list-scroll,body.selecting.has-player .l
   padding:10px 12px 8px;
 }
 /* 专辑页（节目列表）：没在播放时不显示播放器 */
-body.show-page:not(.playing) .mini{display:none}
-body.show-page:not(.playing) .list-scroll{padding-bottom:16px}
+body.show-page .mini{display:none}   /* 专辑页不显示播放器 */
+body.show-page .list-scroll{padding-bottom:16px}
 .mini[hidden]{display:none}
 .mini-top{display:flex;align-items:center;gap:10px}
 .mini-cover{width:48px;height:48px;border-radius:9px;object-fit:cover;flex:none;background:var(--line)}
@@ -1297,6 +1297,7 @@ function setPlayIcon(){
   $('playIcon').innerHTML = playing ? '<path d="M6 5h4v14H6zm8 0h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
   $('bPlay').setAttribute('aria-label', playing ? '暂停' : '播放');
   document.body.classList.toggle('playing', playing);
+  var sp = $('bShowPlay'); if(sp) sp.textContent = playing ? '❚❚ 暂停' : '▶ 继续播放';   // 专辑页封面旁的按钮
   Array.prototype.forEach.call(document.querySelectorAll('.play-btn'), function(b){   // 列表里每集的播放按钮跟着变
     var on = playing && cur && cur.key === b.dataset.k;
     b.innerHTML = on ? ICO_PAUSE_S : ICO_PLAY_S; b.setAttribute('aria-label', on ? '暂停' : '播放');
@@ -3421,10 +3422,15 @@ function renderShow(box){
   keys.forEach(function(k){ var r = records[k], ep = findEp(k); if(ep && r && !r.finished && r.updated > t){ resume = ep; t = r.updated; } });
   if(!resume) resume = (rev ? keys.slice().reverse() : keys).map(findEp).filter(function(ep){ return ep && !(records[ep.key] && records[ep.key].finished); })[0];   // 从列表最上面没听完的开始
   var acts = el('div', 'pod-actions');
-  if(resume && !(cur && cur.show === view.show)){ // 这个节目已经在播时不显示
-    var b = el('button', 'btn primary', records[resume.key] && records[resume.key].updated ? '▶ 继续播放' : '▶ 开始播放');
-    b.onclick = function(){ open(resume, true); };
+  // 专辑页没有播放器，封面旁边这一个按钮负责：正在播这个专辑 → 暂停 / 继续播放；否则 → 继续 / 开始播放
+  if(cur && cur.show === view.show){
+    var b = el('button', 'btn primary', audio.paused ? '▶ 继续播放' : '❚❚ 暂停'); b.id = 'bShowPlay';
+    b.onclick = function(){ if(audio.paused) play(); else audio.pause(); };
     acts.appendChild(b);
+  }else if(resume){
+    var b2 = el('button', 'btn primary', records[resume.key] && records[resume.key].updated ? '▶ 继续播放' : '▶ 开始播放');
+    b2.onclick = function(){ open(resume, true); };
+    acts.appendChild(b2);
   }
   var eb = el('button', 'btn', '编辑');
   eb.onclick = function(){ editAlbum(view.show); };
