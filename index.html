@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.38.4">
+<meta name="app-version" content="0.39.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -129,7 +129,7 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .item{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--line)}
 .item:first-child{border-top:none}
 .item{position:relative}
-.ep-seq{position:absolute;right:10px;bottom:4px;min-width:16px;padding:0 4px;border:1px solid var(--line);border-radius:4px;font-size:10px;line-height:14px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums;pointer-events:none}
+.ep-seq{position:absolute;right:10px;bottom:5px;min-width:16px;padding:0 4px;border:1px solid var(--line);border-radius:4px;font-size:10px;line-height:14px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums;pointer-events:none}
 .item.cur{background:var(--accent-soft)}
 .item-main{flex:1;min-width:0}
 .item-name{line-height:1.4}
@@ -145,12 +145,15 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .info-btn{border:none;background:transparent;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none;margin-right:-8px;margin-left:-4px}
 .info-btn svg{width:22px;height:22px;fill:currentColor}
 /* 单集右边：两行两列（上：播放、「!」；下：上传、下载） */
-.item-acts{display:grid;grid-template-columns:repeat(2,30px);grid-auto-rows:28px;justify-items:center;align-items:center;flex:none;margin-right:-6px}
-.item-acts .info-btn,.item-acts .play-btn,.item-acts .cl-btn{width:30px;height:28px;margin:0;padding:0}
-.play-btn{border:none;background:transparent;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--accent);flex:none}
-.play-btn svg{width:22px;height:22px;fill:currentColor}
-.cl-ph{width:30px;height:28px}
-.item{padding-bottom:20px}
+.play-btn{border:none;background:transparent;border-radius:50%;width:36px;height:36px;margin-left:-8px;display:flex;align-items:center;justify-content:center;color:var(--accent);flex:none}
+.play-btn svg{width:26px;height:26px;fill:currentColor}
+/* 「!」浮窗里的上传 / 下载 */
+.pop-cl{display:flex;gap:8px;padding:8px 12px;border-bottom:1px solid var(--pop-line)}
+.pop-cl .cl-item{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;border:none;background:rgba(127,127,127,.12);border-radius:10px;padding:6px 4px;font-size:14px;color:var(--muted)}
+.pop-cl .cl-item.done{color:var(--accent)}
+.pop-cl .cl-item.busy{color:#e09a10}
+.pop-cl .cl-btn{width:24px;height:24px;margin:0;color:inherit;pointer-events:none}
+.pop-cl .cl-btn::after{left:-2px;top:-2px;width:28px;height:28px}
 .chk{flex:none;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--muted);display:flex;align-items:center;justify-content:center}
 .chk.on{background:var(--accent);border-color:var(--accent)}
 .chk.on::after{content:"";width:6px;height:11px;border:solid var(--on-accent);border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
@@ -1325,7 +1328,23 @@ audio.addEventListener('ended', function(){
   if(i >= 0 && i < list.length - 1) open(list[i + 1], true); else render();
 });
 audio.addEventListener('error', function(){
-  if(cur && audio.getAttribute('src')) toast('这个文件播放不了，可能格式不支持');
+  if(!cur || !audio.getAttribute('src')) return;
+  var ep = cur, code = audio.error && audio.error.code;
+  // 云端的集：临时地址可能过期了，换一个新的再试一次
+  if(ep.cloud && ep.remote && !ep.retried){ ep.retried = true; ep.url = ''; ep.urlAt = 0; open(ep, true); return; }
+  ep.retried = false;
+  var why = code === 2 ? '网络中断了' : code === 3 ? '文件内容解码失败（文件可能损坏）' : '格式不支持，或者云端读不到这个文件';
+  toast('这个文件播放不了：' + why, 6000);
+  if(ep.url && ep.remote){   // 去云端问一下到底是什么情况（只取 1 个字节）
+    fetch(ep.url, {headers:{Range:'bytes=0-0'}}).then(function(r){
+      var ct = r.headers.get('Content-Type') || '';
+      var msg = r.status === 403 ? '云端拒绝访问（403）：临时地址失效，或存储桶的访问权限不对'
+        : r.status === 404 ? '云端找不到这个文件（404）：可能被改名、移动或删除了，重新导入文件夹试试'
+        : r.ok ? '云端能读到这个文件（类型 ' + (ct || '未知') + '）' + (/audio|mpeg|mp4|ogg|flac|wav|aac|octet/i.test(ct) || !ct ? '，但这台设备解不了它，可能是音频编码不支持' : '，类型不对，可能不是音频文件')
+        : '云端返回 ' + r.status;
+      toast(msg, 8000);
+    }, function(){});
+  }
 });
 
 var seekEl = $('seek');
@@ -2531,6 +2550,11 @@ function clSet(k, op, p){
     b.className = 'cl-btn ' + b.dataset.op + ' ' + st;
     b.innerHTML = clIco(b.dataset.op, st);
     if(st === 'busy') b.style.setProperty('--p', clBusy[k].p); else b.style.removeProperty('--p');
+    var w = b.parentNode;   // 「!」浮窗里的那一格：颜色和文字一起跟着变
+    if(w && w.classList.contains('cl-item')){
+      w.className = 'cl-item ' + st;
+      var lb = w.querySelector('span'); if(lb) lb.textContent = b.dataset.op === 'up' ? (st === 'done' ? '已上传' : st === 'busy' ? '上传中' : '上传') : (st === 'done' ? '已下载' : st === 'busy' ? '下载中' : '下载');
+    }
   });
 }
 var cloudBusy = false;
@@ -2881,12 +2905,24 @@ function showEpPop(key, anchor){
   items.push({label:'加到播放列表', pick:function(){ qAdd(key, false); }});
   items.push({label:'移动到专辑', pick:function(){ showMoveMenu(key); }});
   if(ep || hasTr[key]) items.push({label:'AI 转文字', pick:function(){ goEp(key); }});
-  if(ep && ep.remote) items.push({label:'下载到本机', pick:function(){ downloadEp(key); }});
-  if(!fe && ep && !ep.remote && !r.cloud) items.push({label:'上传到云端', pick:function(){ cloudUploadAll([key]); }});   // 订阅的播客不上传
   if(!fe && r.cloud) items.push({label:r.cloud.imp ? '移出列表（不删云端文件）' : '从云端删除', danger:!r.cloud.imp, pick:function(){ cloudRemoveAsk(key); }});
   items.push({label:'详情与更多…', pick:function(){ showEpMenu(key); }});
   $('epPopTitle').textContent = titleOf(key);
   var ul = $('epPopList'); ul.innerHTML = '';
+  var old = $('epPop').querySelector('.pop-cl'); if(old) old.remove();
+  if(ep){   // 上传 / 下载：做完是主题色，进行中是橙色（点了不关浮窗，能看到进度）
+    var row = el('div', 'pop-cl');
+    [['up', '上传', '已上传'], ['down', '下载', '已下载']].forEach(function(t){
+      var btn = clBtn(key, t[0]);
+      if(!btn) return;
+      var st = clState(key, t[0]), it = el('button', 'cl-item ' + st);
+      it.dataset.k = key; it.dataset.op = t[0];
+      it.appendChild(btn); it.appendChild(el('span', null, st === 'done' ? t[2] : t[1]));
+      it.onclick = function(e){ e.stopPropagation(); btn.onclick(e); };
+      row.appendChild(it);
+    });
+    if(row.children.length) $('epPop').insertBefore(row, ul);
+  }
   items.forEach(function(it){
     var li = el('li'), b = el('button', 'pop-item' + (it.danger ? ' danger' : ''), it.label);
     b.onclick = function(e){ e.stopPropagation(); closeEpPop(); it.pick(); };
@@ -3490,8 +3526,7 @@ function renderShow(box){
 
     if(!isFeed) li.appendChild(el('span', 'ep-seq', String(idx + 1)));   // 右下角：这一集在列表里的位置（订阅的播客不显示）
     if(!selMode){
-      // 右边两行：上面 播放 + 「!」，下面 上传 + 下载（没有的位置留空，别的不挪位）
-      var acts = el('div', 'item-acts');
+      // 左边播放按钮，右边「!」；上传 / 下载放进「!」的浮窗里
       var pb = el('button', 'play-btn');
       var playing = ep && ep === cur && !audio.paused;
       pb.dataset.k = k; pb.setAttribute('aria-label', playing ? '暂停' : '播放');
@@ -3502,19 +3537,16 @@ function renderShow(box){
         if(!e2){ toast('文件缺失，没法播放'); return; }
         if(e2 === cur){ if(audio.paused) play(); else audio.pause(); } else open(e2, true);
       };
-      acts.appendChild(pb);
+      li.insertBefore(pb, li.firstChild);
       var ib = el('button', 'info-btn');
       ib.setAttribute('aria-label', '详情');
       ib.innerHTML = '<svg viewBox="0 0 24 24"><path d="M11 15h2v2h-2zm0-8h2v6h-2zm.99-5C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/></svg>';
       ib.onclick = function(e){ e.stopPropagation(); showEpPop(k, ib); };
-      acts.appendChild(ib);
-      acts.appendChild(clBtn(k, 'up') || el('span', 'cl-ph'));
-      acts.appendChild(clBtn(k, 'down') || el('span', 'cl-ph'));
-      li.appendChild(acts);
+      li.appendChild(ib);
     }
     li.onclick = selMode ? function(){ if(Date.now() - selStamp > 600) toggleSel(k); }
                : function(){ openEpPage(k); };
-    onLongPress(li, function(){ if(!selMode) enterSel(k); }, function(target){ return target.closest && target.closest('.item-acts'); });
+    onLongPress(li, function(){ if(!selMode) enterSel(k); }, function(target){ return target.closest && (target.closest('.play-btn') || target.closest('.info-btn')); });
     ul.appendChild(li);
   });
   scroll.appendChild(ul);
