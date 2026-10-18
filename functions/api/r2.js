@@ -13,7 +13,7 @@
 //   {op:'put', name, type}      → {key, url}      新文件的 key 和临时上传地址（1 小时有效）
 //   {op:'get', keys:[...]}      → {urls:{key:url}} 临时播放 / 下载地址（12 小时有效）
 //   {op:'delete', keys:[...]}   → {deleted:n}      在这里直接删（很小的请求）
-//   {op:'usage'}                → {count, bytes}   云端已存多少
+//   {op:'usage'}                → {count, bytes, ownCount, ownBytes}   整个存储桶已存多少（含你自己拖进去的文件夹），以及其中网页自己上传的
 //   {op:'folders'}              → {folders:[{dir,count,bytes}]} 存储桶里有音频的文件夹（不含 u/ 目录），让网页选着导入
 //   {op:'list', prefix}         → {files:[{key,size}]} 列出存储桶里某个文件夹下的文件（用来导入自己拖进去的文件夹）
 var enc = new TextEncoder();
@@ -144,9 +144,9 @@ export async function onRequestPost({request, env, data}){
     return json({files: files});
   }
   if(op === 'usage'){
-    var count = 0, bytes = 0, token = '', pages = 0;
+    var count = 0, bytes = 0, ownCount = 0, ownBytes = 0, token = '', pages = 0, own = prefixOf(uid);
     do{
-      var extra = {'list-type': '2', 'prefix': prefixOf(uid), 'max-keys': '1000'};
+      var extra = {'list-type': '2', 'max-keys': '1000'};
       if(token) extra['continuation-token'] = token;
       var lr = await fetch(await presign(c, 'GET', '', 300, extra)).catch(function(){ return null; });
       if(!lr) return json({error: '连不上 R2'}, 502);
@@ -154,12 +154,17 @@ export async function onRequestPost({request, env, data}){
       if(lr.status === 403) return json({error: 'R2 拒绝访问：访问密钥（Access Key / Secret）不对，或这个令牌没有这个存储桶的权限'}, 403);
       if(lr.status === 404) return json({error: '找不到存储桶「' + c.bucket + '」：检查 R2_BUCKET 是不是写对了'}, 404);
       if(!lr.ok) return json({error: 'R2 返回 ' + lr.status + '：' + xml.slice(0, 200)}, 502);
-      var re = /<Size>(\d+)<\/Size>/g, m;
-      while((m = re.exec(xml))){ count++; bytes += +m[1]; }
+      var re = /<Contents>([\s\S]*?)<\/Contents>/g, m;
+      while((m = re.exec(xml))){
+        var uk = /<Key>([\s\S]*?)<\/Key>/.exec(m[1]), us = /<Size>(\d+)<\/Size>/.exec(m[1]);
+        if(!us) continue;
+        count++; bytes += +us[1];
+        if(uk && xmlDecode(uk[1]).indexOf(own) === 0){ ownCount++; ownBytes += +us[1]; }
+      }
       var nt = /<NextContinuationToken>([^<]+)<\/NextContinuationToken>/.exec(xml);
       token = /<IsTruncated>true<\/IsTruncated>/.test(xml) && nt ? nt[1].replace(/&amp;/g, '&') : '';
-    }while(token && ++pages < 20);
-    return json({count: count, bytes: bytes});
+    }while(token && ++pages < 50);
+    return json({count: count, bytes: bytes, ownCount: ownCount, ownBytes: ownBytes});
   }
   return json({error: '不认识的操作'}, 400);
 }

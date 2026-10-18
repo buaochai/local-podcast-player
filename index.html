@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.36.2">
+<meta name="app-version" content="0.36.3">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -5147,7 +5147,7 @@ $('bCloudTest').onclick = function(){
   st.textContent = '正在检查…'; btn.disabled = true;
   cloudApi({op:'usage'}).then(function(j){
     var gb = j.bytes / 1073741824, cost = Math.max(0, gb - 10) * 0.015;
-    st.textContent = '已连接：云端有 ' + j.count + ' 个文件，共 ' + fmtSize(j.bytes) + '，每月约 ' + (cost < 0.005 ? '0 美元（在 10GB 免费额度内）' : cost.toFixed(2) + ' 美元');
+    st.textContent = '已连接：整个存储桶有 ' + j.count + ' 个文件，共 ' + fmtSize(j.bytes) + (j.ownCount != null && j.ownCount !== j.count ? '（其中网页上传的 ' + j.ownCount + ' 个' + (j.ownCount ? '，' + fmtSize(j.ownBytes) : '') + '）' : '') + '，每月约 ' + (cost < 0.005 ? '0 美元（在 10GB 免费额度内）' : cost.toFixed(2) + ' 美元');
   }, function(err){
     st.textContent = (err.missing ? '还没配置：缺少 ' + err.missing.join('、') + '（见 README 的「云端音频」）' : err.message);
   }).then(function(){ btn.disabled = false; });
