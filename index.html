@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.45.3">
+<meta name="app-version" content="0.46.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -716,6 +716,27 @@ input[type=file]{display:none}
   </div>
 </div>
 
+<div class="sheet" id="histSheet" hidden style="z-index:12">
+  <div class="sheet-box" role="dialog" aria-label="播放历史">
+    <div class="sheet-head"><h2>播放历史</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
+    <div class="sheet-body">
+      <ul class="opts" id="histList"></ul>
+      <div class="empty" id="histEmpty" hidden>还没有播放记录。</div>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="peopleSheet" hidden style="z-index:12">
+  <div class="sheet-box" role="dialog" aria-label="人物资料库">
+    <div class="sheet-head"><h2>人物资料库</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
+    <div class="sheet-body">
+      <div class="pills" id="peopleTabs"></div>
+      <ul class="opts" id="peopleList"></ul>
+      <div class="empty" id="peopleEmpty" hidden>还没有。识别文稿、或在文稿页用「⋯」→「找提到的音乐」后，听到的音乐人和非音乐人会记在这里。</div>
+    </div>
+  </div>
+</div>
+
 <div class="sheet" id="musicSheet" hidden>
   <div class="sheet-box" role="dialog" aria-label="提到的音乐">
     <div class="sheet-head"><h2>提到的音乐</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
@@ -784,6 +805,20 @@ input[type=file]{display:none}
           <div class="ver-status" id="aiStatus"></div>
         </div>
         <button class="btn" id="bAiSet">设置</button>
+      </div>
+      <div class="ver-row">
+        <div class="ver-text">
+          <div class="ver-num">人物资料库</div>
+          <div class="ver-status" id="peopleStatus"></div>
+        </div>
+        <button class="btn" id="bPeople">查看</button>
+      </div>
+      <div class="ver-row">
+        <div class="ver-text">
+          <div class="ver-num">播放历史</div>
+          <div class="ver-status" id="histStatus"></div>
+        </div>
+        <button class="btn" id="bHist">查看</button>
       </div>
       <div class="sec">语音识别用哪套接口</div>
       <div class="pills" id="asrSwitch"></div>
@@ -3858,6 +3893,8 @@ function renderAsrSwitch(){
 }
 function showAiStatus(){
   var l = llmCfg();
+  $('histStatus').textContent = '共 ' + histKeys().length + ' 集';
+  $('peopleStatus').textContent = '音乐人 ' + Object.keys(people.m).length + ' · 非音乐人 ' + Object.keys(people.o).length;
   renderAsrSwitch();
   $('aiStatus').textContent = '语音识别：' + (aiReady() ? aiProv().name + ' · ' + aiModel() : '还没有设置') + '\n分章节：' + (llmReady() ? l.name + ' · ' + l.model : '还没有设置');
 }
@@ -3966,6 +4003,8 @@ function readLlmForm(){
 $('aiProvider').addEventListener('change', function(){ aiFormFill(this.value); aiChunkVis(); });
 $('llmProvider').addEventListener('change', function(){ llmFormFill(this.value); });
 $('bAiSet').onclick = openAiSettings;
+$('bHist').onclick = function(){ renderHist(); openSheet('histSheet'); };
+$('bPeople').onclick = function(){ peopleTab = 'm'; renderPeople(); openSheet('peopleSheet'); };
 $('bAiSave').onclick = function(){
   var f = readAiForm(), g = readLlmForm();
   var useAsr = !!f.key, useLlm = !!(g.provider && g.key);
@@ -4753,7 +4792,8 @@ function autoChapters(key){
 function termsPrompt(text){
   return '下面是一段中文播客的语音识别文稿。说话人主要说中文，偶尔会直接说外语（英文单词、外国名字、外文歌名书名等）。\n' +
     '请只找出说话人【实际用外语说出来】的词。它们在文稿里有两种样子：一是语音识别已经写成了外文；二是语音识别把外语发音写成了读不通的中文同音字。\n' +
-    '绝对不要列：用中文说的内容，包括中国的人名、地名、事件、作品（如 梁文道、汶川地震），以及外国名字的通行中文译名（如说话人用中文说的「迈尔斯·戴维斯」）——这些保持中文，不要翻成英文或拼音。\n' +
+    '绝对不要列：用中文说的内容，包括中国的人名、地名、事件、作品（如 梁文道、汶川地震），以及外国的地名、机构名——这些保持中文，不要翻成英文或拼音。\n' +
+    '例外——外国真人的名字：说话人即使是用中文音译说的（如「卡扬卡霍」「迈尔斯·戴维斯」），也要列：from=文稿里的中文音译写法（一字不差），en=这个人的原名拼写（如 Kayhan Kalhor、Miles Davis），zh=这个音译，lang=他的语言。只有你确定原名拼写时才列，不确定就不列；中国人（包括华人，如马友友）和中文名字不列。\n' +
     '只输出一个 JSON 数组，不要任何别的文字。每一项：{"from":"文稿里的原样写法","en":"正确的外文写法","zh":"中文意思或通行译名","lang":"这个词原本的语言，如 英语"}。\n' +
     '像 OK、bye、hi、yes、no、thanks、sorry、wow、cool 这类中文里人人都懂的日常词，zh 填空字符串 ""（不要给中文翻译，只需要纠正写法）。\n' +
     'from 必须和文稿里的文字一字不差；拿不准是不是用外语说的就不要列。\n\n文稿：\n' + text;
@@ -4844,17 +4884,93 @@ function autoTerms(key){
   trJob.sentAt = 0; trJob.msg = (trJob.batch ? '第 ' + trJob.batch.i + ' / ' + trJob.batch.n + ' 集 · ' : '') + '正在标注外文名称…'; trRender();
   return termify(key, trJob.abort.signal).then(function(){}, function(err){ if(err && err.cancelled) throw err; });   // 标注失败不影响文稿
 }
+/* ---- 人物资料库：听过的节目里出现的音乐人（m）和非音乐人（o），以后识别时直接参考；可以在「关于」里查看、纠正 ---- */
+var PEOPLE_KEY = 'lpp.people.v1';
+var people = load(PEOPLE_KEY, {m:{}, o:{}});
+if(!people.m) people.m = {}; if(!people.o) people.o = {};
+function savePeople(){ people.mt = Date.now(); save(PEOPLE_KEY, people); syncSoon(); }
+function peopleFind(list, name, orig){
+  var keys = [normFind(name), normFind(orig)].filter(Boolean);
+  for(var id in list){ var e = list[id]; if(keys.some(function(k){ return id === k || (e.alias || []).indexOf(k) >= 0; })) return id; }
+  return '';
+}
+function peopleNote(kind, it, epKey){   // kind: 'm' 音乐人 / 'o' 非音乐人
+  var mine = people[kind], other = people[kind === 'm' ? 'o' : 'm'];
+  if(peopleFind(other, it.title, it.orig)) return;   // 已经归在另一边了（包括你手动纠正过的），不再改
+  var id = peopleFind(mine, it.title, it.orig), now = Date.now();
+  var e = id ? mine[id] : null;
+  if(!e){ id = normFind(it.orig || it.title); if(!id) return; e = mine[id] = {name:it.title, orig:it.orig || '', role:it.role || '', alias:[], mentions:[], works:[], mt:now}; }
+  [normFind(it.title), normFind(it.orig)].forEach(function(k){ if(k && e.alias.indexOf(k) < 0) e.alias.push(k); });
+  if(it.orig && !e.orig) e.orig = it.orig;
+  if(it.role && !e.role) e.role = it.role;
+  if(!e.mentions.some(function(x){ return x.k === epKey; })) e.mentions.push({k:epKey, t:it.t || 0});
+  e.mt = now;
+}
+function peopleWork(artistName, artistOrig, title){
+  var id = peopleFind(people.m, artistName, artistOrig);
+  if(id && title && people.m[id].works.indexOf(title) < 0 && people.m[id].works.length < 30) people.m[id].works.push(title);
+}
+function peopleHint(){
+  function names(list){ return Object.keys(list).slice(-60).map(function(k){ var e = list[k]; return e.name + (e.orig && e.orig !== e.name ? '（' + e.orig + '）' : '') + (e.role ? '·' + e.role : ''); }).join('、'); }
+  var m = names(people.m), o = names(people.o);
+  return (m ? '音乐人：' + m : '') + (m && o ? '；' : '') + (o ? '不是音乐人：' + o : '');
+}
+function peopleMove(kind, id){
+  var from = people[kind], to = people[kind === 'm' ? 'o' : 'm'];
+  if(!from[id]) return;
+  to[id] = from[id]; delete from[id]; to[id].mt = Date.now(); savePeople(); renderPeople();
+}
+function peopleCount(){ return Object.keys(people.m).length + Object.keys(people.o).length; }
+function histKeys(){
+  return Object.keys(records).filter(function(k){ var r = records[k]; return r && r.updated > 0 && (findEp(k) || hasTr[k]); })
+    .sort(function(a, b){ return records[b].updated - records[a].updated; });
+}
+function renderHist(){
+  var box = $('histList'); box.innerHTML = '';
+  var ks = histKeys(); $('histEmpty').hidden = !!ks.length; $('histStatus').textContent = '共 ' + ks.length + ' 集';
+  ks.slice(0, 300).forEach(function(k){
+    var r = records[k], row = el('div', 'opt mu'), g = el('span', 'grow');
+    g.appendChild(el('span', 'mk-note clamp2', titleOf(k)));
+    var pct = r.finished ? '已听完' : (r.duration ? '听到 ' + fmt(r.position || 0) : '');
+    g.appendChild(el('small', 'line1', showLabel(showOf(k) || '') + ' · ' + fmtDate(r.updated) + (pct ? ' · ' + pct : '')));
+    var main = el('div', 'mu-main'); main.appendChild(g);
+    main.onclick = function(){ closeSheet('histSheet'); openEpPage(k); };
+    row.appendChild(main); var li = el('li'); li.appendChild(row); box.appendChild(li);
+  });
+}
+var peopleTab = 'm';
+function renderPeople(){
+  var box = $('peopleList'), tabs = $('peopleTabs'); box.innerHTML = ''; tabs.innerHTML = '';
+  [['m', '音乐人 ' + Object.keys(people.m).length], ['o', '非音乐人 ' + Object.keys(people.o).length]].forEach(function(t){
+    var b = el('button', 'pill' + (peopleTab === t[0] ? ' on' : ''), t[1]); b.onclick = function(){ peopleTab = t[0]; renderPeople(); }; tabs.appendChild(b);
+  });
+  var list = people[peopleTab], ids = Object.keys(list).sort(function(a, b){ return (list[b].mt || 0) - (list[a].mt || 0); });
+  $('peopleEmpty').hidden = !!ids.length;
+  ids.forEach(function(id){
+    var e = list[id], row = el('div', 'opt mu pp'), g = el('span', 'grow');
+    g.appendChild(el('span', 'mk-note clamp2', e.name + (e.orig && e.orig !== e.name ? '  ' + e.orig : '')));
+    g.appendChild(el('small', 'line1', (e.role || (peopleTab === 'm' ? '音乐人' : '非音乐人')) + ' · 提到 ' + e.mentions.length + ' 次' + (e.works.length ? ' · ' + e.works.slice(0, 2).join('、') : '')));
+    var main;
+    if(peopleTab === 'm'){ main = el('a', 'mu-main'); main.href = 'https://music.apple.com/search?term=' + encodeURIComponent(e.orig || e.name); main.target = '_blank'; main.rel = 'noopener'; main.appendChild(g); main.appendChild(el('span', 'mu-go', 'Apple Music ↗')); }
+    else{ main = el('div', 'mu-main'); main.appendChild(g); }
+    var mv = el('button', 'mu-t', peopleTab === 'm' ? '不是音乐人' : '是音乐人');
+    mv.onclick = function(){ peopleMove(peopleTab, id); };
+    row.appendChild(main); row.appendChild(mv); var li = el('li'); li.appendChild(row); box.appendChild(li);
+  });
+}
 /* ---- 找出文稿里提到的音乐（歌曲 / 专辑 / 乐曲 / 音乐人），生成 Apple Music 链接 ---- */
 function musicPrompt(text){
+  var kn = peopleHint();
   return '下面是一段中文播客的语音识别文稿，每行开头 [分:秒] 是这句话的时间。\n' +
     '请找出文稿里【真的在作为音乐谈论】的具体音乐作品或音乐人。拿不准的不要列，但说得明确的一定要列，不要漏。必须同时满足：\n' +
     '1. 说话人是在把它当作音乐来说：比如说「一首歌」「这张专辑」「演奏」「作曲」「唱」「听这首」，或正在播放、推荐、讲解它。\n' +
     '2. 只是名字碰巧和某首歌、某张专辑一样，但说话人说的是别的东西（一本书、一部电影、一个成语、一件瓷器、一个地名、一件事）的，不要列。\n' +
-    '3. 人名：先用你自己的知识判断这个人的主业。主业是歌手、乐手、作曲家、乐队、音乐制作人，并且说话人在谈他的歌曲、演唱、演奏时才列，要在 role 里写出他的主业。导演、作家、学者、演员、主持人、政治人物等，哪怕和音乐沾点边（唱过一首歌、爱好音乐、写过音乐评论、作品里用了某首歌），只要主业不是音乐，就不要列。\n' +
-    '   例子：「我是通过蔡明亮的电影知道葛兰、白光那个时候的歌曲的，特别喜欢那些歌曲」——葛兰、白光是歌手，说话人在谈她们的歌曲，要列（role 填「歌手」）；蔡明亮是导演，不列。同一句里有几个人，每个符合的都要单独列。\n' +
+    '3. 人名：先用你自己的知识判断这个人的主业。主业是歌手、乐手、作曲家、乐队、音乐制作人，并且说话人在谈他的歌曲、演唱、演奏时，kind 填 artist，role 写他的主业。主业不是音乐的人（导演、作家、学者、演员、主持人、政治人物等，哪怕和音乐沾点边），kind 填 person，role 写主业（网页会把他们记进「非音乐人」名单，不会显示出来）。\n' +
+    '   例子：「我是通过蔡明亮的电影知道葛兰、白光那个时候的歌曲的」——葛兰、白光是歌手，要列（artist，role 填「歌手」）；蔡明亮是导演（person，role 填「导演」）。同一句里有几个人，每个都要单独列。\n' +
     '4. 泛称（「音乐」「旋律」「歌曲」「古典乐」「爵士乐」）不算；拿不准就不要列。\n' +
-    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"kind":"song 或 album 或 artist 或 piece","title":"作品名（kind 是 artist 时填人名）","artist":"创作者或演唱者，不知道就留空","said":"文稿里提到它时原样的写法，必须和文稿里的文字一字不差","role":"kind 是 artist 时写这个人的主业（如 歌手、作曲家、钢琴家、乐队、导演、作家），其他情况留空","why":"文稿里能证明说话人在把它当音乐说的那几个字（如「这首歌」「专辑」「演奏」「歌曲」），必须是文稿里的原话","t":提到它的那一句的时间（秒，整数）}。\n' +
-    '外国的作品和人名尽量写成原文（如 Kind of Blue、Miles Davis），方便去 Apple Music 搜索；同一个作品只列一次；没有就输出 []。\n\n文稿：\n' + text;
+    (kn ? '5. 参考（以前听过的节目里已经确定的）：' + kn + '。这些人按已知身份处理，不用再判断。\n' : '') +
+    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"kind":"song 或 album 或 artist 或 piece 或 person","title":"作品名（kind 是 artist / person 时填人名，用文稿里的写法）","orig":"作品名或人名的原文写法：外国的必须写成原文（如 Kayhan Kalhor、Kind of Blue），中文的写中文","artist":"创作者或演唱者（文稿里的写法），不知道就留空","artistOrig":"创作者或演唱者的原文写法，外国的必须写原文","role":"kind 是 artist / person 时写这个人的主业，其他留空","said":"文稿里提到它时原样的写法，必须和文稿里的文字一字不差","why":"文稿里能证明说话人在把它当音乐说的那几个字（如「这首歌」「专辑」「演奏」「歌曲」），必须是文稿里的原话","t":提到它的那一句的时间（秒，整数）}。\n' +
+    '同一个作品或人只列一次；没有就输出 []。\n\n文稿：\n' + text;
 }
 function parseMusic(txt){
   var m = /\[[\s\S]*\]/.exec(txt || ''), arr = [], seen = {};
@@ -4862,11 +4978,13 @@ function parseMusic(txt){
   var out = [];
   (Array.isArray(arr) ? arr : []).forEach(function(x){
     if(!x) return;
-    var title = clean(String(x.title || '')), artist = clean(String(x.artist || '')), kind = /^(song|album|artist|piece)$/.test(x.kind) ? x.kind : 'song';
+    var title = clean(String(x.title || '')), artist = clean(String(x.artist || '')), kind = /^(song|album|artist|piece|person)$/.test(x.kind) ? x.kind : 'song';
     if(!title || title.length > 80) return;
-    var id = (title + '|' + artist).toLowerCase(); if(seen[id]) return; seen[id] = 1;
-    var term = (kind === 'artist' ? title : (artist ? artist + ' ' : '') + title).trim();
-    out.push({kind:kind, title:title, artist:kind === 'artist' ? '' : artist, said:clean(String(x.said || '')).slice(0, 80), why:clean(String(x.why || '')).slice(0, 60), role:clean(String(x.role || '')).slice(0, 20), t:Math.max(0, Math.floor(+x.t) || 0), url:'https://music.apple.com/search?term=' + encodeURIComponent(term)});
+    var id = (kind + '|' + title + '|' + artist).toLowerCase(); if(seen[id]) return; seen[id] = 1;
+    var orig = clean(String(x.orig || '')).slice(0, 80), aorig = clean(String(x.artistOrig || '')).slice(0, 80), isP = kind === 'artist' || kind === 'person';
+    // Apple Music 里要用原文搜（「卡扬卡霍」搜不到，Kayhan Kalhor 才行）
+    var term = isP ? (orig || title) : (((aorig || artist) ? (aorig || artist) + ' ' : '') + (orig || title)).trim();
+    out.push({kind:kind, title:title, orig:orig, artist:isP ? '' : artist, artistOrig:isP ? '' : aorig, said:clean(String(x.said || '')).slice(0, 80), why:clean(String(x.why || '')).slice(0, 60), role:clean(String(x.role || '')).slice(0, 20), t:Math.max(0, Math.floor(+x.t) || 0), url:'https://music.apple.com/search?term=' + encodeURIComponent(term)});
   });
   return out;
 }
@@ -4934,7 +5052,19 @@ function musicify(key, signal){
       });
     });
   }, Promise.resolve()).then(function(){
-    all = all.filter(function(m){ return musicContextOk(tr, m, musicIndex(tr, m)); });   // 没在说音乐的（碰巧同名、顺便提到的人）去掉
+    // 人物先分流：主业不是音乐的（kind 是 person，或 role 不是音乐）记进非音乐人名单；资料库里已有的人按已知身份处理
+    var keep = [];
+    all.forEach(function(m){
+      if(m.kind === 'person' || (m.kind === 'artist' && m.role && !ROLE_OK.test(m.role))){ peopleNote('o', m, key); return; }
+      if(m.kind === 'artist' && peopleFind(people.o, m.title, m.orig)) return;
+      keep.push(m);
+    });
+    all = keep.filter(function(m){ return musicContextOk(tr, m, musicIndex(tr, m)); });   // 没在说音乐的（碰巧同名、顺便提到的人）去掉
+    all.forEach(function(m){
+      if(m.kind === 'artist') peopleNote('m', m, key);
+      else if(m.artist || m.artistOrig) peopleWork(m.artist, m.artistOrig, m.title);
+    });
+    savePeople();
     all.forEach(function(m){ m.t = musicTime(tr, m); });
     all.sort(function(a, b){ return a.t - b.t; });
     tr.music = all; tr.musicAt = Date.now();
@@ -4971,13 +5101,13 @@ function openMusicSheet(key){
     // 中间 + 右边：点名称或「Apple Music」都在 Apple Music 里打开
     var a = el('a', 'mu-main'); a.href = m.url; a.target = '_blank'; a.rel = 'noopener';
     var g = el('span', 'grow');
-    g.appendChild(el('span', 'mk-note clamp2', m.title));
-    g.appendChild(el('small', 'line1', (KIND[m.kind] || '') + (m.artist ? ' · ' + m.artist : '')));
+    g.appendChild(el('span', 'mk-note clamp2', m.title + (m.orig && m.orig !== m.title ? '  ' + m.orig : '')));
+    g.appendChild(el('small', 'line1', (KIND[m.kind] || '') + (m.artist ? ' · ' + m.artist + (m.artistOrig && m.artistOrig !== m.artist ? '（' + m.artistOrig + '）' : '') : '')));
     a.appendChild(g); a.appendChild(el('span', 'mu-go', 'Apple Music ↗'));
     row.appendChild(tb); row.appendChild(a);
     var li = el('li'); li.appendChild(row); ul.appendChild(li);
     var ent = m.kind === 'album' ? 'album' : m.kind === 'artist' ? 'musicArtist' : 'song';
-    var term = m.kind === 'artist' ? m.title : ((m.artist ? m.artist + ' ' : '') + m.title);
+    var term = m.kind === 'artist' ? (m.orig || m.title) : (((m.artistOrig || m.artist) ? (m.artistOrig || m.artist) + ' ' : '') + (m.orig || m.title));
     fetch('https://itunes.apple.com/search?limit=1&entity=' + ent + '&term=' + encodeURIComponent(term)).then(function(r){ return r.json(); }).then(function(j){
       var x = j && j.results && j.results[0], u = x && (x.trackViewUrl || x.collectionViewUrl || x.artistLinkUrl);
       if(u) a.href = u;
@@ -5636,10 +5766,26 @@ function syncPayload(){
   });
   var fs = {};
   Object.keys(feeds).forEach(function(u){ fs[u] = {title:feeds[u].title, at:feeds[u].at || 0}; });
-  return {app:'local-podcast-player', records:records, shows:sh, ai:ai, feeds:fs, del:syncCfg.del || {}};
+  return {app:'local-podcast-player', records:records, shows:sh, ai:ai, feeds:fs, people:people, del:syncCfg.del || {}};
+}
+function peopleMerge(R){
+  if(!R || !R.people) return false;
+  var ch = false;
+  ['m', 'o'].forEach(function(kd){
+    var rm = R.people[kd] || {};
+    Object.keys(rm).forEach(function(id){
+      var b = rm[id], a = people[kd][id], oppo = people[kd === 'm' ? 'o' : 'm'][id];
+      if(!b || !b.name) return;
+      if(oppo && (oppo.mt || 0) >= (b.mt || 0)) return;   // 本机在另一边的更新，以本机为准
+      if(oppo){ delete people[kd === 'm' ? 'o' : 'm'][id]; ch = true; }
+      if(!a || (b.mt || 0) > (a.mt || 0)){ people[kd][id] = b; ch = true; }
+    });
+  });
+  if(ch) save(PEOPLE_KEY, people);
+  return ch;
 }
 function syncMerge(R){
-  var changed = false, del = syncCfg.del = syncCfg.del || {};
+  var changed = peopleMerge(R), del = syncCfg.del = syncCfg.del || {};
   Object.keys(R.del || {}).forEach(function(k){ if((R.del[k] || 0) > (del[k] || 0)) del[k] = R.del[k]; });
   var rr = R.records || {};
   Object.keys(rr).forEach(function(k){
