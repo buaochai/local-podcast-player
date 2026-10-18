@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.40.3">
+<meta name="app-version" content="0.41.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -334,7 +334,7 @@ select.input{appearance:auto;-webkit-appearance:menulist}
 .q-acts button:disabled{opacity:.25}
 .q-now{margin:2px 0 8px;font-size:13px;color:var(--muted)}
 .q-now b{color:var(--accent);font-weight:600}
-#queueTools{grid-template-columns:1.9fr 1fr 1fr 1fr;gap:6px}
+#queueTools{grid-template-columns:1fr;gap:6px}
 #queueTools .pill{font-size:14px;padding:8px 0;white-space:nowrap;text-align:center}
 #queueCount:empty{display:none}
 /* 收藏：专辑 → 集 → 时间点 */
@@ -407,7 +407,7 @@ input[type=file]{display:none}
   <button class="icon-btn add" id="bAdd" aria-label="添加音频"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg></button>
   <button class="icon-btn" id="bHome" aria-label="首页" hidden><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg></button>
   <input class="search-in" id="searchIn" type="search" placeholder="搜索全部节目、单集、文稿" enterkeyhint="search" autocomplete="off" hidden>
-  <button class="icon-btn" id="bSearch" aria-label="搜索" hidden><svg viewBox="0 0 24 24"><path d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg></button>
+  <button class="icon-btn" id="bSearch" aria-label="搜索" hidden><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15 15l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
   <button class="icon-btn" id="bEpMore" aria-label="更多" hidden><svg viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg></button>
   <button class="icon-btn" id="bAbout" aria-label="关于"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-11h2V7h-2zm0 8h2v-6h-2z"/></svg></button>
 </header>
@@ -1096,23 +1096,26 @@ function infoHalf(cls, clip){ return '<g clip-path="url(#' + clip + ')" class="'
 var INFO_SVG = '<svg viewBox="0 0 24 24"><defs><clipPath id="ibL"><rect x="0" y="0" width="12.2" height="24"/></clipPath><clipPath id="ibR"><rect x="11.8" y="0" width="12.2" height="24"/></clipPath></defs>' + infoHalf('ib-l', 'ibL') + infoHalf('ib-r', 'ibR') + '</svg>';
 var ICO_PLAY_S = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>', ICO_PAUSE_S = '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>';
 var ICO_UP = '<svg viewBox="0 0 24 24"><path d="M7.4 15.4 12 10.8l4.6 4.6L18 14l-6-6-6 6z"/></svg>', ICO_DOWN = '<svg viewBox="0 0 24 24"><path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg>', ICO_X = '<svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>';
-function qMove(i, d){ var j = i + d; if(j < 0 || j >= queue.length) return; var t = queue[i]; queue[i] = queue[j]; queue[j] = t; saveQueue(); renderQueue(); }
-function qShuffle(){ for(var i = queue.length - 1; i > 0; i--){ var j = Math.floor(Math.random() * (i + 1)), t = queue[i]; queue[i] = queue[j]; queue[j] = t; } saveQueue(); renderQueue(); toast('已打乱'); }
-// 把当前专辑里排在这一集后面的集（按列表现在的顺序）都加进来
-function qAddAlbum(){
-  var list = playlist(), i = list.indexOf(cur), n = 0;
-  if(i < 0) return;
-  list.slice(i + 1).forEach(function(e){ if(queue.indexOf(e.key) < 0){ queue.push(e.key); n++; } });
-  saveQueue(); renderQueue(); renderMini();
-  toast(n ? '已加入 ' + n + ' 集' : '后面没有别的集了，或者都已经在播放列表里');
+// 用户主动换一集来听：正在听、还没听完的这一集，放到播放列表最前面（这集听完马上接着它），被选的这集从列表里拿掉
+function playPicked(ep){
+  if(cur && cur !== ep){
+    var r0 = records[cur.key];
+    if(!(r0 && r0.finished) && (audio.currentTime > 1 || (r0 && r0.position > 1))){
+      var t0 = titleOf(cur.key);
+      qAdd(cur.key, true);
+      toast('「' + t0 + '」没听完，已放到播放列表最前面', 3500);
+    }
+  }
+  queue = queue.filter(function(k){ return k !== ep.key; }); saveQueue();
+  open(ep, true);
 }
+function qMove(i, d){ var j = i + d; if(j < 0 || j >= queue.length) return; var t = queue[i]; queue[i] = queue[j]; queue[j] = t; saveQueue(); renderQueue(); }
 function renderQueue(){
   queue = queue.filter(function(k){ return findEp(k); });
   $('queueNow').innerHTML = '';
   if(cur){ $('queueNow').appendChild(document.createTextNode('正在播放：')); $('queueNow').appendChild(el('b', null, titleOf(cur.key))); }
   var tools = $('queueTools'); tools.innerHTML = '';
-  [['加入当前专辑', qAddAlbum, !cur], ['打乱', qShuffle, queue.length < 2], ['倒序', function(){ queue.reverse(); saveQueue(); renderQueue(); }, queue.length < 2],
-   ['清空', function(){ queue = []; saveQueue(); renderQueue(); renderMini(); toast('已清空播放列表'); }, !queue.length]].forEach(function(t){
+  [['清空播放列表', function(){ queue = []; saveQueue(); renderQueue(); renderMini(); toast('已清空播放列表'); }, !queue.length]].forEach(function(t){
     var b = el('button', 'pill', t[0]); b.disabled = !!t[2]; b.style.opacity = t[2] ? '.4' : ''; b.onclick = t[1]; tools.appendChild(b);
   });
   var ul = $('queueList'); ul.innerHTML = '';
@@ -1646,6 +1649,12 @@ function showAlbumMenu(name){
     closeSheet('epSheet');
     ask('新建专辑', '', '专辑名称', function(v){ createAlbum(v); render(); toast('已新建「' + v + '」'); });
   }}];
+  items.unshift({label:'加到播放列表', note:'这个专辑里的集按列表顺序排到播放列表最后', pick:function(){
+    closeSheet('epSheet');
+    var ks = episodeKeys(name); if(settings.rev && settings.rev[name]) ks = ks.slice().reverse();
+    var n = 0; ks.forEach(function(k){ if(findEp(k) && queue.indexOf(k) < 0 && !(cur && cur.key === k)){ queue.push(k); n++; } });
+    saveQueue(); renderMini(); toast(n ? '已把 ' + n + ' 集加到播放列表' : '这个专辑的集已经都在播放列表里了');
+  }});
   var fd = feedOfShow(name);
   if(!fd) items.push({label:'上传整个专辑到云端', note:'把这个专辑里还没上传的集传到你的 R2', pick:function(){ closeSheet('epSheet'); cloudUploadAll(episodeKeys(name)); }});
   if(fd){
@@ -3614,7 +3623,7 @@ function renderShow(box){
         e.stopPropagation();
         var e2 = findEp(k);
         if(!e2){ toast('文件缺失，没法播放'); return; }
-        if(e2 === cur){ if(audio.paused) play(); else audio.pause(); } else open(e2, true);
+        if(e2 === cur){ if(audio.paused) play(); else audio.pause(); } else playPicked(e2);
       };
       li.insertBefore(pb, li.firstChild);
       var ib = el('button', 'info-btn' + (infoUp(k) ? ' up-on' : '') + (hasFile(k) ? ' dn-on' : '')); ib.dataset.k = k;   // 「!」左半边：已上传云端；右半边：已下载到本机
@@ -4878,7 +4887,7 @@ function openEpPage(key){
   var ep = findEp(key);
   if(!ep && !hasTr[key]){ toast('文件缺失，点「＋」重新添加这一集'); return; }
   var busy = cur && !audio.paused;               // 此刻真的有声音在放
-  if(ep && !busy){ if(ep === cur) play(); else open(ep, true); }   // 没在放（没有 / 暂停了 / 放完了）：点哪集就播哪集
+  if(ep && !busy){ if(ep === cur) play(); else playPicked(ep); }   // 没在放（没有 / 暂停了 / 放完了）：点哪集就播哪集
   goEp(key);                                    // 正在放别的集：只进文稿页看，不切换播放
 }
 function trRender(){
