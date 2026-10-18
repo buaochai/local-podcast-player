@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.10">
+<meta name="app-version" content="0.46.13">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -474,9 +474,9 @@ input[type=file]{display:none}
   <input type="range" class="seek" id="seek" min="0" max="0" step="1" value="0">
   <div class="mini-ctl">
     <button class="ctl" id="bPrev" aria-label="上一集"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
-    <button class="ctl" id="bRew" aria-label="后退15秒"><svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></svg>15</button>
+    <button class="ctl" id="bRew" aria-label="后退15秒"><svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/><text x="12" y="15.3" text-anchor="middle" font-size="7.2" font-weight="700" font-family="-apple-system,system-ui,sans-serif" fill="currentColor" style="font-variant-numeric:tabular-nums">15</text></svg></button>
     <button class="ctl play" id="bPlay" aria-label="播放"><svg viewBox="0 0 24 24" id="playIcon"><path d="M8 5v14l11-7z"/></svg></button>
-    <button class="ctl" id="bFwd" aria-label="快进15秒"><svg viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7a6 6 0 1 0 6 6h2a8 8 0 1 1-8-8z"/></svg>15</button>
+    <button class="ctl" id="bFwd" aria-label="快进15秒"><svg viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7a6 6 0 1 0 6 6h2a8 8 0 1 1-8-8z"/><text x="12" y="15.3" text-anchor="middle" font-size="7.2" font-weight="700" font-family="-apple-system,system-ui,sans-serif" fill="currentColor" style="font-variant-numeric:tabular-nums">15</text></svg></button>
     <button class="ctl" id="bNext" aria-label="下一集"><svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
   </div>
 </section>
@@ -4819,7 +4819,7 @@ function termsPrompt(text){
     '绝对不要列：用中文说的内容，包括中国的人名、地名、事件、作品（如 梁文道、汶川地震），以及外国的地名、机构名——这些保持中文，不要翻成英文或拼音。\n' +
     '例外——外国真人的名字：说话人即使是用中文音译说的（如「卡扬卡霍」「迈尔斯·戴维斯」），也要列：from=文稿里的中文音译写法（一字不差），en=这个人的原名拼写（如 Kayhan Kalhor、Miles Davis），zh=这个音译，lang=他的语言。只有你确定原名拼写时才列，不确定就不列；中国人（包括华人，如马友友）和中文名字不列。\n' +
     '例外——外国的作品名、乐曲名、歌名、专辑名、乐队名：说话人用外语说的，即使被写成了中文同音字（如「奈玛」其实是 Coltrane 的曲子 Naima），也要列：from=文稿里的写法，en=原文写法。原文看起来像拼音也没关系，只要你确定它是外语作品（如 Naima、Nima），就要列。说话人连说了两遍（如「奈玛奈玛」），from 按文稿原样，en 也对应写两遍。\n' +
-    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"from":"文稿里的原样写法","en":"正确的外文写法","zh":"中文意思或通行译名","lang":"这个词原本的语言，如 英语"}。\n' +
+    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"from":"文稿里的原样写法","en":"正确的外文写法（用通行的写法：专有名词首字母大写、不要全大写，数字用阿拉伯数字，如 Music for 18 Musicians、iPhone）","zh":"中文意思或通行译名","lang":"这个词原本的语言，如 英语"}。\n' +
     '像 OK、bye、hi、yes、no、thanks、sorry、wow、cool 这类中文里人人都懂的日常词，zh 填空字符串 ""（不要给中文翻译，只需要纠正写法）。\n' +
     'from 必须和文稿里的文字一字不差；拿不准是不是用外语说的就不要列。\n\n文稿：\n' + text;
 }
@@ -4838,7 +4838,7 @@ function parseTerms(txt){
   var m = /\[[\s\S]*\]/.exec(txt || ''), arr = [];
   try{ arr = JSON.parse(m ? m[0] : '[]'); }catch(e){ arr = []; }
   return (Array.isArray(arr) ? arr : []).map(function(x){
-    return x && {from:clean(String(x.from || '')), en:clean(String(x.en || '')), zh:toSimp(clean(String(x.zh || ''))), lang:clean(String(x.lang || ''))};
+    return x && {from:clean(String(x.from || '')), en:fixCase(clean(String(x.en || ''))), zh:toSimp(clean(String(x.zh || ''))), lang:clean(String(x.lang || ''))};
   }).map(function(x){
     if(x && x.en && isCommonEn(x.en)) x.zh = '';
     return x;
@@ -5040,8 +5040,22 @@ function musicPrompt(text){
     '   例子：「我是通过蔡明亮的电影知道葛兰、白光那个时候的歌曲的」——葛兰、白光是歌手，要列（artist，role 填「歌手」）；蔡明亮是导演（person，role 填「导演」）。同一句里有几个人，每个都要单独列。\n' +
     '4. 泛称（「音乐」「旋律」「歌曲」「古典乐」「爵士乐」）不算；拿不准就不要列。\n' +
     (kn ? '5. 参考（以前听过的节目里已经确定的）：' + kn + '。这些人按已知身份处理，不用再判断。\n' : '') +
-    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"kind":"song 或 album 或 artist 或 piece 或 person","title":"作品名（kind 是 artist / person 时填人名，用文稿里的写法）","orig":"作品名或人名的原文写法：外国的必须写成原文（如 Kayhan Kalhor、Kind of Blue），中文的写中文","artist":"创作者或演唱者（文稿里的写法），不知道就留空","artistOrig":"创作者或演唱者的原文写法，外国的必须写原文","role":"kind 是 artist / person 时写这个人的主业，其他留空","ver":"文稿里明确提到的版本信息（年份、演奏者或指挥、录音/现场版本，如 1959、卡拉扬 1963），没提到就留空，不要猜","said":"文稿里提到它时原样的写法，必须和文稿里的文字一字不差","why":"文稿里能证明说话人在把它当音乐说的那几个字（如「这首歌」「专辑」「演奏」「歌曲」），必须是文稿里的原话","t":提到它的那一句的时间（秒，整数）}。\n' +
+    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"kind":"song 或 album 或 artist 或 piece 或 person","title":"作品名（kind 是 artist / person 时填人名，用文稿里的写法）","orig":"作品名或人名的原文写法：外国的必须写成原文，并用它通行的写法——首字母大写、介词小写（不要全大写），数字用阿拉伯数字（如 Kayhan Kalhor、Kind of Blue、Music for 18 Musicians），中文的写中文","artist":"创作者或演唱者（文稿里的写法），不知道就留空","artistOrig":"创作者或演唱者的原文写法，外国的必须写原文","role":"kind 是 artist / person 时写这个人的主业，其他留空","ver":"这个作品所放的版本信息：年份、唱片公司、演奏者或指挥、获奖等（如 1997 Nonesuch、卡拉扬 1963），没提到就留空，不要猜","part":"放的是其中哪个乐章或段落（如 Section IV、第二乐章），没提到就留空","said":"文稿里提到它时原样的写法，必须和文稿里的文字一字不差","why":"文稿里能证明说话人在把它当音乐说的那几个字（如「这首歌」「专辑」「演奏」「歌曲」），必须是文稿里的原话","t":提到它的那一句的时间（秒，整数）}。\n' +
+    '版本信息经常在说出作品名【之后的几句话里】才详细介绍（「我要介绍的是 1997 年 Nonesuch 唱片的版本……现在就来听其中第四部分」），要把前后几句里说的这个版本的年份、唱片公司、演奏者、乐章合并填进 ver / part，但每项只写关键词，不要写成长句。\n' +
     '同一个作品或人只列一次；没有就输出 []。\n\n文稿：\n' + text;
+}
+// 语音识别常把外文写成全大写（MUSIC FOR EIGHTY MUSICIANS）：改回惯用写法（首字母大写、介词小写）；缩写（NASA、BBC、KTV）不动
+var SMALL_W = {a:1, an:1, the:1, and:1, or:1, but:1, for:1, of:1, in:1, on:1, at:1, to:1, by:1, with:1, from:1, as:1, nor:1, de:1, la:1, le:1, von:1, van:1, der:1, di:1, da:1, du:1, del:1};
+function fixCase(t){
+  if(!t || /[a-z]/.test(t) || !/[A-Z]{2}/.test(t)) return t;
+  var w = t.split(/\s+/);
+  if(w.length === 1 && t.length <= 5) return t;   // 单个短词多半是缩写
+  return w.map(function(x, i){
+    var low = x.toLowerCase();
+    if(i > 0 && SMALL_W[low]) return low;
+    if(/^[IVX]+$/.test(x) && i > 0) return x;      // 罗马数字（Section IV）
+    return low.replace(/(^|[-'’(])([a-zà-ÿ])/g, function(_, a, b){ return a + b.toUpperCase(); });
+  }).join(' ');
 }
 function parseMusic(txt){
   var m = /\[[\s\S]*\]/.exec(txt || ''), arr = [], seen = {};
@@ -5052,11 +5066,11 @@ function parseMusic(txt){
     var title = clean(String(x.title || '')), artist = clean(String(x.artist || '')), kind = /^(song|album|artist|piece|person)$/.test(x.kind) ? x.kind : 'song';
     if(!title || title.length > 80) return;
     var id = (kind + '|' + title + '|' + artist).toLowerCase(); if(seen[id]) return; seen[id] = 1;
-    var orig = clean(String(x.orig || '')).slice(0, 80), aorig = clean(String(x.artistOrig || '')).slice(0, 80), isP = kind === 'artist' || kind === 'person';
+    var orig = fixCase(clean(String(x.orig || '')).slice(0, 80)), aorig = fixCase(clean(String(x.artistOrig || '')).slice(0, 80)), isP = kind === 'artist' || kind === 'person';
     // Apple Music 里要用原文搜（「卡扬卡霍」搜不到，Kayhan Kalhor 才行）
-    var ver = isP ? '' : clean(String(x.ver || '')).slice(0, 30);
+    var ver = isP ? '' : clean(String(x.ver || '')).slice(0, 40), part = isP ? '' : clean(String(x.part || '')).slice(0, 30);
     var term = isP ? (orig || title) : (((aorig || artist) ? (aorig || artist) + ' ' : '') + (orig || title)).trim();
-    out.push({kind:kind, title:title, orig:orig, artist:isP ? '' : artist, artistOrig:isP ? '' : aorig, said:clean(String(x.said || '')).slice(0, 80), why:clean(String(x.why || '')).slice(0, 60), role:clean(String(x.role || '')).slice(0, 20), ver:ver, t:Math.max(0, Math.floor(+x.t) || 0), url:'https://music.apple.com/search?term=' + encodeURIComponent(term)});
+    out.push({kind:kind, title:title, orig:orig, artist:isP ? '' : artist, artistOrig:isP ? '' : aorig, said:clean(String(x.said || '')).slice(0, 80), why:clean(String(x.why || '')).slice(0, 60), role:clean(String(x.role || '')).slice(0, 20), ver:ver, part:part, t:Math.max(0, Math.floor(+x.t) || 0), url:'https://music.apple.com/search?term=' + encodeURIComponent(term)});
   });
   return out;
 }
@@ -5158,20 +5172,31 @@ function musicRun(key){
 // 用 iTunes Search 找这首音乐（人）的准确页面；结果要和名字对得上才用，查到的缓存在本机
 var MLINK_KEY = 'lpp.mlink.v1', mlink = load(MLINK_KEY, {});
 function musicLink(m){
-  var orig = (m.orig || m.title), isP = m.kind === 'artist';
+  var orig = (m.orig || m.title), isP = m.kind === 'artist', ver = m.ver || '', part = m.part || '';
   var ent = m.kind === 'album' ? 'album' : isP ? 'musicArtist' : 'song';
-  var term = isP ? orig : (((m.artistOrig || m.artist) ? (m.artistOrig || m.artist) + ' ' : '') + orig);
-  var ck = ent + '|' + term + '|' + (m.ver || '');
+  var term = isP ? orig : (((m.artistOrig || m.artist) ? (m.artistOrig || m.artist) + ' ' : '') + orig + (part ? ' ' + part : ''));
+  var ck = ent + '|' + term + '|' + ver;
   if(mlink[ck]) return Promise.resolve(mlink[ck]);
-  var yr = (/(1[5-9]\d\d|20\d\d)/.exec(m.ver || '') || [])[1], want = normFind(orig);
+  var yr = (/(1[5-9]\d\d|20\d\d)/.exec(ver) || [])[1], want = normFind(orig);
+  var words = ver.replace(/(1[5-9]\d\d|20\d\d)/g, ' ').split(/[\s,，、·/]+/).filter(function(w){ return /^[A-Za-z]{3,}$/.test(w); }).map(function(w){ return w.toLowerCase(); });
+  var pn = (/(\d+)|(?:section|part|movement)\s*(iv|iii|ii|i|vi|v)\b/i.exec(part) || []), partTok = (pn[1] || pn[2] || '').toLowerCase();
+  function has(str, q){ return normFind(str).indexOf(normFind(q)) >= 0; }
   function nameOk(x){
-    var nm = normFind(isP ? x.artistName : m.kind === 'album' ? x.collectionName : x.trackName);
-    return !!nm && !!want && (nm.indexOf(want) >= 0 || want.indexOf(nm) >= 0);
+    var nm = isP ? [x.artistName] : m.kind === 'album' ? [x.collectionName] : [x.trackName, x.collectionName];
+    return !!want && nm.some(function(n){ n = normFind(n || ''); return !!n && (n.indexOf(want) >= 0 || want.indexOf(n) >= 0); });
   }
-  return fetch('https://itunes.apple.com/search?limit=15&entity=' + ent + '&term=' + encodeURIComponent(term)).then(function(r){ return r.json(); }).then(function(j){
-    var rs = ((j && j.results) || []).filter(nameOk);
-    var x = (yr && rs.filter(function(z){ return String(z.releaseDate || '').slice(0, 4) === yr; })[0]) || rs[0];
-    var u = x && (x.trackViewUrl || x.collectionViewUrl || x.artistLinkUrl);
+  function score(x){   // 版本描述里的年份、唱片公司、乐章，和这条结果对得上的越多越好
+    var sc = 0, cr = String(x.copyright || '').toLowerCase(), y = String(x.releaseDate || '').slice(0, 4);
+    if(yr && (y === yr || cr.indexOf(yr) >= 0 || cr.indexOf(String(+yr + 1)) >= 0)) sc += 3;
+    words.forEach(function(w){ if(cr.indexOf(w) >= 0 || has(x.collectionName || '', w) || has(x.artistName || '', w)) sc += 2; });
+    if(partTok && /\d/.test(partTok) ? new RegExp('(^|\\D)0?' + partTok + '(\\D|$)').test(x.trackName || '') : (partTok && has(x.trackName || '', partTok))) sc += 2;
+    if(!isP && m.kind !== 'album' && x.trackName && has(x.trackName, orig)) sc += 1;
+    return sc;
+  }
+  return fetch('https://itunes.apple.com/search?limit=25&entity=' + ent + '&term=' + encodeURIComponent(term)).then(function(r){ return r.json(); }).then(function(j){
+    var rs = ((j && j.results) || []).filter(nameOk), best = null, bs = -1;
+    rs.forEach(function(x){ var sc = score(x); if(sc > bs){ bs = sc; best = x; } });
+    var u = best && (best.trackViewUrl || best.collectionViewUrl || best.artistLinkUrl);
     if(u){ mlink[ck] = u; save(MLINK_KEY, mlink); }
     return u || '';
   }).catch(function(){ return ''; });
@@ -5196,7 +5221,7 @@ function openMusicSheet(key){
     var g = el('span', 'grow');
     var np = nameParts(m.title, m.orig), ap = nameParts(m.artist, m.artistOrig);
     g.appendChild(el('span', 'mk-note clamp2', np.main));
-    var meta = [m.ver || '', m.artist ? ap.main : ''].filter(Boolean).join(' · ');   // 音乐列表只显示原文，不附中文译名
+    var meta = [m.ver || '', m.part || '', m.artist ? ap.main : ''].filter(Boolean).join(' · ');   // 音乐列表只显示原文，不附中文译名
     if(meta) g.appendChild(el('small', 'mu-meta', meta));
     a.appendChild(muIcon(m.kind)); a.appendChild(g); a.appendChild(el('span', 'mu-go', '↗'));
     row.appendChild(tb); row.appendChild(a);
