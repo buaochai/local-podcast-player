@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.8">
+<meta name="app-version" content="0.46.9">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -275,6 +275,7 @@ div.mu-main{display:flex;align-items:center;flex:1;min-width:0;cursor:pointer}
 a.mu-main{display:flex;align-items:center;flex:1;min-width:0;text-decoration:none;color:var(--text)}
 .opt.mu{gap:10px;cursor:default}
 .mu-ico{flex:none;width:22px;height:22px;margin-right:10px;fill:var(--accent);opacity:.9}
+.mu-meta{display:block;white-space:normal;overflow-wrap:anywhere;line-height:1.35;margin-top:1px}
 .mu-zh{display:block;font-size:13px;font-style:italic;color:var(--muted);margin-top:1px}
 .mu-main .mk-note{display:block;word-break:normal;overflow-wrap:break-word}
 .opt.mu .mu-go{flex:none;font-size:13px;color:var(--accent);margin-left:10px;white-space:nowrap}
@@ -5051,7 +5052,7 @@ function parseMusic(txt){
     var orig = clean(String(x.orig || '')).slice(0, 80), aorig = clean(String(x.artistOrig || '')).slice(0, 80), isP = kind === 'artist' || kind === 'person';
     // Apple Music 里要用原文搜（「卡扬卡霍」搜不到，Kayhan Kalhor 才行）
     var ver = isP ? '' : clean(String(x.ver || '')).slice(0, 30);
-    var term = isP ? (orig || title) : (((aorig || artist) ? (aorig || artist) + ' ' : '') + (orig || title) + (ver ? ' ' + ver : '')).trim();
+    var term = isP ? (orig || title) : (((aorig || artist) ? (aorig || artist) + ' ' : '') + (orig || title)).trim();
     out.push({kind:kind, title:title, orig:orig, artist:isP ? '' : artist, artistOrig:isP ? '' : aorig, said:clean(String(x.said || '')).slice(0, 80), why:clean(String(x.why || '')).slice(0, 60), role:clean(String(x.role || '')).slice(0, 20), ver:ver, t:Math.max(0, Math.floor(+x.t) || 0), url:'https://music.apple.com/search?term=' + encodeURIComponent(term)});
   });
   return out;
@@ -5151,6 +5152,27 @@ function musicRun(key){
   musicBusy = key; toast('正在找文稿里提到的音乐…', 30000); render();
   musicify(key, new AbortController().signal).then(function(n){ toast(n ? '找到 ' + n + ' 个提到的音乐' : '没有找到提到的音乐'); }, function(err){ toast('没找成：' + aiErrMsg(err), 5000); }).then(function(){ musicBusy = null; render(); });
 }
+// 用 iTunes Search 找这首音乐（人）的准确页面；结果要和名字对得上才用，查到的缓存在本机
+var MLINK_KEY = 'lpp.mlink.v1', mlink = load(MLINK_KEY, {});
+function musicLink(m){
+  var orig = (m.orig || m.title), isP = m.kind === 'artist';
+  var ent = m.kind === 'album' ? 'album' : isP ? 'musicArtist' : 'song';
+  var term = isP ? orig : (((m.artistOrig || m.artist) ? (m.artistOrig || m.artist) + ' ' : '') + orig);
+  var ck = ent + '|' + term + '|' + (m.ver || '');
+  if(mlink[ck]) return Promise.resolve(mlink[ck]);
+  var yr = (/(1[5-9]\d\d|20\d\d)/.exec(m.ver || '') || [])[1], want = normFind(orig);
+  function nameOk(x){
+    var nm = normFind(isP ? x.artistName : m.kind === 'album' ? x.collectionName : x.trackName);
+    return !!nm && !!want && (nm.indexOf(want) >= 0 || want.indexOf(nm) >= 0);
+  }
+  return fetch('https://itunes.apple.com/search?limit=15&entity=' + ent + '&term=' + encodeURIComponent(term)).then(function(r){ return r.json(); }).then(function(j){
+    var rs = ((j && j.results) || []).filter(nameOk);
+    var x = (yr && rs.filter(function(z){ return String(z.releaseDate || '').slice(0, 4) === yr; })[0]) || rs[0];
+    var u = x && (x.trackViewUrl || x.collectionViewUrl || x.artistLinkUrl);
+    if(u){ mlink[ck] = u; save(MLINK_KEY, mlink); }
+    return u || '';
+  }).catch(function(){ return ''; });
+}
 // 点音乐按钮：列出提到的音乐，每条点一下在 Apple Music 里打开（先给搜索链接；能查到准确链接就换成准确的）
 function openMusicSheet(key){
   var tr = trCache[key], ul = $('musicList'); ul.innerHTML = '';
@@ -5172,18 +5194,13 @@ function openMusicSheet(key){
     var np = nameParts(m.title, m.orig), ap = nameParts(m.artist, m.artistOrig);
     g.appendChild(el('span', 'mk-note clamp2', np.main));
     var meta = [m.ver || '', m.artist ? ap.main : ''].filter(Boolean).join(' · ');   // 音乐列表只显示原文，不附中文译名
-    if(meta) g.appendChild(el('small', 'line1', meta));
+    if(meta) g.appendChild(el('small', 'mu-meta', meta));
     a.appendChild(muIcon(m.kind)); a.appendChild(g); a.appendChild(el('span', 'mu-go', '↗'));
     row.appendChild(tb); row.appendChild(a);
     var li = el('li'); li.appendChild(row); ul.appendChild(li);
-    var ent = m.kind === 'album' ? 'album' : m.kind === 'artist' ? 'musicArtist' : 'song';
-    var term = m.kind === 'artist' ? (m.orig || m.title) : (((m.artistOrig || m.artist) ? (m.artistOrig || m.artist) + ' ' : '') + (m.orig || m.title) + (m.ver ? ' ' + m.ver : ''));
-    var yr = (/(1[5-9]\d\d|20\d\d)/.exec(m.ver || '') || [])[1];
-    fetch('https://itunes.apple.com/search?limit=' + (yr ? 10 : 1) + '&entity=' + ent + '&term=' + encodeURIComponent(term)).then(function(r){ return r.json(); }).then(function(j){
-      var rs = (j && j.results) || [];
-      var x = (yr && rs.filter(function(z){ return String(z.releaseDate || '').slice(0, 4) === yr; })[0]) || rs[0], u = x && (x.trackViewUrl || x.collectionViewUrl || x.artistLinkUrl);
-      if(u) a.href = u;
-    }).catch(function(){});
+    var base = m.kind === 'artist' ? (m.orig || m.title) : (((m.artistOrig || m.artist) ? (m.artistOrig || m.artist) + ' ' : '') + (m.orig || m.title));
+    a.href = 'https://music.apple.com/search?term=' + encodeURIComponent(base);   // 查不到准确链接时才用搜索页，搜索词只带创作者和名字
+    musicLink(m).then(function(u){ if(u) a.href = u; });
   });
   openSheet('musicSheet');
 }
