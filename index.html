@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.32.0">
+<meta name="app-version" content="0.33.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -15,13 +15,13 @@
 :root{
   --bg:#f6f5f2; --card:#ffffff; --text:#1d1d1f; --muted:#6b6b70; --line:#e4e2dd;
   --accent:#1f6f5c; --accent-soft:#e2f0eb; --on-accent:#ffffff; --danger:#c0392b;
-  --shadow:0 6px 24px rgba(0,0,0,.14);
+  --shadow:0 6px 24px rgba(0,0,0,.14); --pop:rgba(255,255,255,.72); --pop-line:rgba(0,0,0,.08);
 }
 @media (prefers-color-scheme: dark){
   :root{
     --bg:#121413; --card:#1c1f1e; --text:#ecece9; --muted:#9a9c99; --line:#2c302e;
     --accent:#5cc3a4; --accent-soft:#1d3a32; --on-accent:#0d1f1a; --danger:#ff7b6e;
-    --shadow:0 6px 24px rgba(0,0,0,.5);
+    --shadow:0 6px 24px rgba(0,0,0,.5); --pop:rgba(38,42,40,.72); --pop-line:rgba(255,255,255,.1);
   }
 }
 *{box-sizing:border-box}
@@ -273,6 +273,22 @@ select.input{appearance:auto;-webkit-appearance:menulist}
 .pills{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 4px}
 .pills.g4{display:grid;grid-template-columns:repeat(4,1fr);margin:10px 0 4px}
 .pills.g4 .pill{padding:9px 0;text-align:center;white-space:nowrap}
+/* 单集「!」菜单：悬浮的半透明浮窗 */
+#epPopBack{position:fixed;inset:0;z-index:30;background:transparent}
+#epPopBack[hidden],#epPop[hidden]{display:none}
+#epPop{position:fixed;z-index:31;width:min(270px,calc(100vw - 24px));max-height:min(72vh,540px);overflow-y:auto;overscroll-behavior:contain;border-radius:16px;
+  background:var(--pop);-webkit-backdrop-filter:blur(22px) saturate(1.8);backdrop-filter:blur(22px) saturate(1.8);
+  border:1px solid var(--pop-line);box-shadow:0 12px 40px rgba(0,0,0,.28);animation:popin .14s ease-out}
+@keyframes popin{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
+.pop-head{padding:12px 16px 8px;font-size:13px;color:var(--muted);border-bottom:1px solid var(--pop-line)}
+.pop-list{list-style:none;margin:0;padding:0}
+.pop-item{display:block;width:100%;text-align:left;border:none;background:transparent;padding:13px 16px;font-size:16px;color:var(--text);border-top:1px solid var(--pop-line)}
+.pop-list li:first-child .pop-item{border-top:none}
+.pop-item:active{background:rgba(127,127,127,.18)}
+.pop-item.danger{color:var(--danger)}
+/* 播放列表 */
+.opt.q{padding-right:54px}
+#bQueue[hidden]{display:none}
 /* 收藏：专辑 → 集 → 时间点 */
 .fav-cover{width:48px;height:48px;border-radius:8px;object-fit:cover;flex:none;background:var(--line)}
 .fav-chev{flex:none;display:flex;color:var(--muted)}
@@ -367,6 +383,7 @@ input[type=file]{display:none}
       <div class="mini-title line1" id="miniTitle"></div>
       <div class="mini-sub line1" id="miniSub">0:00 / 0:00</div>
     </button>
+    <button class="chip" id="bQueue" aria-label="播放列表" hidden><svg viewBox="0 0 24 24"><path d="M3 6h12v2H3zm0 4h12v2H3zm0 4h8v2H3zm13-4v6.18A3 3 0 1 0 18 19v-7h3v-2z"/></svg><span id="queueCount"></span></button>
     <button class="chip" id="bTrEdit" aria-label="修改文稿"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
     <button class="chip" id="bMark" aria-label="收藏时间点"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.2L6 21z"/></svg><span id="markCount"></span></button>
     <button class="chip" id="bSpeed" aria-label="播放速度">1x</button>
@@ -589,6 +606,21 @@ input[type=file]{display:none}
     </div>
   </div>
 </div>
+
+<!-- 播放列表 -->
+<div class="sheet" id="queueSheet" hidden>
+  <div class="sheet-box" role="dialog" aria-label="播放列表">
+    <div class="sheet-head"><h2>播放列表</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
+    <div class="sheet-body">
+      <ul class="opts" id="queueList"></ul>
+      <button class="btn danger block" id="bQueueClear">清空播放列表</button>
+    </div>
+  </div>
+</div>
+
+<!-- 单集「!」浮窗 -->
+<div id="epPopBack" hidden></div>
+<div id="epPop" hidden><div class="pop-head clamp2" id="epPopTitle"></div><ul class="pop-list" id="epPopList"></ul></div>
 
 <!-- 订阅播客（RSS） -->
 <div class="sheet" id="rssSheet" hidden>
@@ -955,7 +987,44 @@ function episodeKeys(show){
 // 同一个节目里有文件的集，用来切上一集 / 下一集
 function playlist(){
   if(!cur) return [];
-  return episodeKeys(cur.show).map(findEp).filter(Boolean);
+  var list = episodeKeys(cur.show).map(findEp).filter(Boolean);
+  if(settings.rev && settings.rev[cur.show]) list.reverse();   // 列表选了倒序，上一集 / 下一集也按倒序
+  return list;
+}
+/* ---------- 播放列表（队列）：「下一集播放」「加到播放列表」---------- */
+var QUEUE_KEY = 'lpp.queue.v1';
+var queue = load(QUEUE_KEY, []);
+if(!Array.isArray(queue)) queue = [];
+function saveQueue(){ save(QUEUE_KEY, queue); }
+function qAdd(key, front){
+  queue = queue.filter(function(k){ return k !== key; });
+  if(front) queue.unshift(key); else queue.push(key);
+  saveQueue(); renderMini();
+  toast(front ? '已设为下一集播放' : '已加到播放列表（共 ' + queue.length + ' 集）');
+}
+// 取出队列里的下一集（删掉了的跳过）
+function takeQueued(){
+  var ep = null;
+  while(queue.length && !ep){ var e = findEp(queue.shift()); if(e && e !== cur) ep = e; }
+  saveQueue();
+  return ep;
+}
+function renderQueue(){
+  queue = queue.filter(function(k){ return findEp(k); });
+  var ul = $('queueList'); ul.innerHTML = '';
+  queue.forEach(function(k, i){
+    var li = el('li', 'has-edit'), b = el('button', 'opt q'), g = el('span', 'grow');
+    g.appendChild(el('span', 'mk-note clamp2', (i + 1) + '. ' + titleOf(k)));
+    g.appendChild(el('small', 'line1', showLabel(showOf(k))));
+    b.appendChild(g);
+    b.onclick = function(){ queue.splice(i, 1); saveQueue(); closeSheet('queueSheet'); open(findEp(k), true); renderMini(); };
+    var x = el('button', 'opt-edit'); x.setAttribute('aria-label', '移出播放列表');
+    x.innerHTML = '<svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>';
+    x.onclick = function(e){ e.stopPropagation(); queue.splice(i, 1); saveQueue(); renderQueue(); renderMini(); };
+    li.appendChild(b); li.appendChild(x); ul.appendChild(li);
+  });
+  $('bQueueClear').hidden = !queue.length;
+  if(!queue.length) closeSheet('queueSheet');
 }
 // 专辑封面：先找这一专辑里有封面的那一集，再用存下来的小图，最后借用原专辑的封面
 function coverInfo(show){
@@ -1108,6 +1177,8 @@ function skip(sec){
   recordNow(true);
 }
 function next(){
+  var q = takeQueued();
+  if(q){ renderMini(); open(q, !audio.paused || audio.ended); return; }
   var list = playlist(), i = list.indexOf(cur);
   if(i >= 0 && i < list.length - 1) open(list[i + 1], !audio.paused || audio.ended);
 }
@@ -1149,6 +1220,8 @@ audio.addEventListener('ended', function(){
   r.show = cur.show; r.title = cur.title;
   records[cur.key] = r; saveRecords();
   if(sleep && sleep.episode){ setSleep(0); toast('定时关闭：本集已播完'); render(); return; }
+  var q = takeQueued();
+  if(q){ renderMini(); open(q, true); return; }
   var list = playlist(), i = list.indexOf(cur);
   if(i >= 0 && i < list.length - 1) open(list[i + 1], true); else render();
 });
@@ -1168,6 +1241,8 @@ $('bRew').onclick = function(){ skip(-SKIP); };
 $('bFwd').onclick = function(){ skip(SKIP); };
 $('bPrev').onclick = prev;
 $('bNext').onclick = next;
+$('bQueue').onclick = function(){ renderQueue(); if(queue.length) openSheet('queueSheet'); };
+$('bQueueClear').onclick = function(){ queue = []; saveQueue(); renderQueue(); renderMini(); toast('已清空播放列表'); };
 $('miniInfo').onclick = function(){ if(cur && view.page !== 'ep') goEp(cur.key); };
 $('miniCover').onclick = function(){ if(cur) goEp(cur.key); };
 
@@ -1179,7 +1254,8 @@ function renderMini(){
   if($('miniCover').getAttribute('src') !== src) $('miniCover').src = src;
   $('miniTitle').textContent = titleOf(cur.key);
   var list = playlist(), i = list.indexOf(cur);
-  $('bNext').disabled = i < 0 || i >= list.length - 1;
+  $('bNext').disabled = !queue.length && (i < 0 || i >= list.length - 1);
+  $('bQueue').hidden = !queue.length; $('queueCount').textContent = queue.length || '';
   var mc = marksOf(cur.key).length;
   $('markCount').textContent = mc || '';
   $('bMark').classList.toggle('on', mc > 0);
@@ -1360,7 +1436,7 @@ function showMoveMenu(keys, done){
     ask('新建专辑', '', '专辑名称', function(name){ go(createAlbum(name)); });
   }}];
   albumNames().forEach(function(name){
-    items.push({label:name, note: single && name === tag && now !== tag ? '原来的专辑' : '', on: name === now, pick:function(){
+    items.push({label:showLabel(name), note: single && name === tag && now !== tag ? '原来的专辑' : '', on: name === now, pick:function(){
       if(name === now){ closeSheet('moveSheet'); return; }
       go(name);
     }});
@@ -1396,7 +1472,7 @@ $('albumName').addEventListener('keydown', function(e){ if(e.key === 'Enter') $(
 $('albumAuthor').addEventListener('keydown', function(e){ if(e.key === 'Enter') saveAlbum(); });
 function showAlbumMenu(name){
   var keys = episodeKeys(name);
-  $('epTitle').textContent = name;
+  $('epTitle').textContent = showLabel(name);
   var facts = $('epFacts'); facts.innerHTML = '';
   [['集数', keys.length + ' 集'], ['创作者', authorOf(name) || '（没有）'], ['类型', feedOfShow(name) ? 'RSS 订阅' : isCustom(name) ? '自己建的专辑' : '来自音频里的专辑信息']].forEach(function(f){
     var d = el('div'); d.appendChild(el('b', null, f[0])); d.appendChild(el('span', null, f[1]));
@@ -1571,8 +1647,8 @@ function setMediaSession(titleOverride){
   if(!cur || !('mediaSession' in navigator)) return;
   navigator.mediaSession.metadata = new MediaMetadata({
     title: typeof titleOverride === 'string' ? titleOverride : titleOf(cur.key),
-    artist: authorOf(cur.show, cur) || (cur.show === OTHER ? '本地播客' : cur.show),
-    album: cur.show,
+    artist: authorOf(cur.show, cur) || (cur.show === OTHER ? '本地播客' : showLabel(cur.show)),
+    album: showLabel(cur.show),
     artwork: artFor(cur)
   });
 }
@@ -2275,7 +2351,7 @@ function cloudUploadOne(key, onProgress){
 var cloudBusy = false;
 // 一集一集上传；配置不对这类问题会停下，网络出错的跳过继续
 function cloudUploadAll(keys){
-  keys = keys.filter(function(k){ return hasFile(k) && !(records[k] && records[k].cloud); });
+  keys = keys.filter(function(k){ var e = findEp(k); return hasFile(k) && !(e && e.rss) && !feedEpMap[k] && !(records[k] && records[k].cloud); });   // 订阅的播客不上传
   if(!keys.length){ toast('没有要上传的：这些集已经在云端了，或者没有本地文件'); return Promise.resolve(); }
   if(cloudBusy){ toast('正在上传，请稍等'); return Promise.resolve(); }
   cloudBusy = true;
@@ -2329,6 +2405,11 @@ function cloudRemove(key){
     delete r.cloud; r.cat = Date.now();
     saveRecords(); syncCloudEps();
   });
+}
+function cloudRemoveAsk(key){
+  var ep = findEp(key), local = ep && !ep.remote;
+  if(!confirm('从云端删除「' + titleOf(key) + '」的音频？' + (local ? '本机的文件和播放记录都还在。' : '本机没有这一集的文件，删了就听不到了。'))) return;
+  cloudRemove(key).then(function(){ toast('已从云端删除'); render(); cloudInfoRefresh(); }, function(err){ toast('云端删除失败：' + err.message, 5000); });
 }
 function cloudInfoRefresh(){ if(!$('about').hidden) $('bCloudTest').onclick(); }
 
@@ -2415,17 +2496,49 @@ function deleteEpisode(key){
     if(!episodeKeys(show).length && shows[show] && !shows[show].custom){ delete shows[show]; saveShows(); }
   });
 }
+/* ---------- 单集「!」：悬浮的半透明浮窗（常用操作）；「详情与更多」打开原来的面板 ---------- */
+function closeEpPop(){ $('epPop').hidden = true; $('epPopBack').hidden = true; }
+function showEpPop(key, anchor){
+  var ep = findEp(key), r = records[key] || {}, fe = feedEpMap[key], items = [];
+  items.push({label:'下一集播放', pick:function(){ qAdd(key, true); }});
+  items.push({label:'加到播放列表', pick:function(){ qAdd(key, false); }});
+  items.push({label:'移动到专辑', pick:function(){ showMoveMenu(key); }});
+  if(ep || hasTr[key]) items.push({label:'AI 转文字', pick:function(){ goEp(key); }});
+  if(ep && ep.remote) items.push({label:'下载到本机', pick:function(){ downloadEp(key); }});
+  if(!fe && ep && !ep.remote && !r.cloud) items.push({label:'上传到云端', pick:function(){ cloudUploadAll([key]); }});   // 订阅的播客不上传
+  if(!fe && r.cloud) items.push({label:'从云端删除', danger:true, pick:function(){ cloudRemoveAsk(key); }});
+  items.push({label:'详情与更多…', pick:function(){ showEpMenu(key); }});
+  $('epPopTitle').textContent = titleOf(key);
+  var ul = $('epPopList'); ul.innerHTML = '';
+  items.forEach(function(it){
+    var li = el('li'), b = el('button', 'pop-item' + (it.danger ? ' danger' : ''), it.label);
+    b.onclick = function(e){ e.stopPropagation(); closeEpPop(); it.pick(); };
+    li.appendChild(b); ul.appendChild(li);
+  });
+  var pop = $('epPop');
+  pop.hidden = false; $('epPopBack').hidden = false; pop.style.visibility = 'hidden'; pop.scrollTop = 0;
+  // 贴着「!」按钮：右边对齐，下面放得下就放下面，不然放上面
+  var rc = anchor.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
+  var left = Math.min(Math.max(12, rc.right - w), vw - w - 12);
+  var top = rc.bottom + 6;
+  if(top + h > vh - 12) top = rc.top - h - 6;
+  if(top < 12) top = 12;
+  pop.style.left = left + 'px'; pop.style.top = top + 'px'; pop.style.visibility = '';
+  pop.style.transformOrigin = (rc.right - left) + 'px ' + (top > rc.top ? '0' : '100%');
+}
+$('epPopBack').addEventListener('click', closeEpPop);
+$('epPopBack').addEventListener('touchmove', closeEpPop, {passive:true});
 function showEpMenu(key){
   var ep = findEp(key), r = records[key] || {};
   $('epTitle').textContent = titleOf(key);
   var facts = $('epFacts'); facts.innerHTML = '';
   var fe = feedEpMap[key];
-  (fe ? [['专辑', showOf(key) + (r.customShow ? '（原专辑：' + fe.f.title + '）' : '')],
+  (fe ? [['专辑', showLabel(showOf(key)) + (r.customShow ? '（原专辑：' + showLabel(fe.f.title) + '）' : '')],
    ['发布', fe.e.pub ? new Date(fe.e.pub).toLocaleDateString('zh-CN') : '—'],
    ['时长', fe.e.dur ? fmt(fe.e.dur) : '—'],
    ['状态', ep && !ep.remote ? '已下载到本机（' + fmtSize(ep.size) + '）' : '在线播放'],
    ['简介', fe.e.d || '—']]
-  : [['专辑', showOf(key) + (r.customShow ? '（原专辑：' + (r.tagShow || OTHER) + '）' : '')],
+  : [['专辑', showLabel(showOf(key)) + (r.customShow ? '（原专辑：' + showLabel(r.tagShow || OTHER) + '）' : '')],
    ['文件名', fileNameOf(key)],
    ['大小', fmtSize(ep ? ep.size : r.size || 0)],
    ['信息来源', ep ? (ep.tags && ep.tags.format ? ep.tags.format + (ep.tags.album ? '' : '（没有专辑）') : '没有读到标签') : '—'],
@@ -2436,15 +2549,13 @@ function showEpMenu(key){
   });
   var n = renderMarkList($('epMarks'), key, function(){ closeSheet('epSheet'); });
   $('epMarksHead').hidden = !n;
-  var items = [{label:'移动到专辑', note:'现在在「' + showOf(key) + '」', pick:function(){ closeSheet('epSheet'); showMoveMenu(key); }}];
+  var items = [{label:'下一集播放', note:'这一集播完后，接着播这一集', pick:function(){ closeSheet('epSheet'); qAdd(key, true); }},
+    {label:'加到播放列表', note:'排在播放列表的最后', pick:function(){ closeSheet('epSheet'); qAdd(key, false); }},
+    {label:'移动到专辑', note:'现在在「' + showLabel(showOf(key)) + '」', pick:function(){ closeSheet('epSheet'); showMoveMenu(key); }}];
   if(ep || hasTr[key]) items.push({label:'AI 转文字', note: hasTr[key] ? '已有文稿，点开查看；也可以重新识别' : '把这一集识别成文字（要用自己的 API Key）', pick:function(){ closeSheet('epSheet'); goEp(key); }});
   if(ep && ep.remote) items.push({label:'下载到本机', note:ep.cloud ? '从云端下载，离线也能听' : '离线也能听；有的播客平台不允许网页下载', pick:function(){ closeSheet('epSheet'); downloadEp(key); }});
   if(!fe && ep && !ep.remote && !r.cloud) items.push({label:'上传到云端', note:'传到你的 R2，其他设备也能在线听', pick:function(){ closeSheet('epSheet'); cloudUploadAll([key]); }});
-  if(!fe && r.cloud) items.push({label:'从云端删除', note:'只删云端的音频' + (ep && !ep.remote ? '，本机的文件还在' : '，本机没有文件的话这一集会变成「文件缺失」'), danger:true, pick:function(){
-    if(!confirm('从云端删除「' + titleOf(key) + '」的音频？' + (ep && !ep.remote ? '本机的文件和播放记录都还在。' : '本机没有这一集的文件，删了就听不到了。'))) return;
-    closeSheet('epSheet');
-    cloudRemove(key).then(function(){ toast('已从云端删除'); render(); cloudInfoRefresh(); }, function(err){ toast('云端删除失败：' + err.message, 5000); });
-  }});
+  if(!fe && r.cloud) items.push({label:'从云端删除', note:'只删云端的音频' + (ep && !ep.remote ? '，本机的文件还在' : '，本机没有文件的话这一集会变成「文件缺失」'), danger:true, pick:function(){ closeSheet('epSheet'); cloudRemoveAsk(key); }});
   if(ep && ep.tags) items.push({label:'查看标签详情', note:'看看文件里到底存了哪些信息', pick:function(){
     $('tagText').textContent = describeTags(ep);
     closeSheet('epSheet'); openSheet('tagSheet');
@@ -2585,6 +2696,7 @@ function render(){
   $('bSelAll').hidden = !selecting; $('bSelDone').hidden = !selecting;
   $('bAdd').hidden = selecting || isEp || isFav; $('bAbout').hidden = selecting || isEp || isFav;
   $('selBar').hidden = !selecting;
+  $('bSelUp').hidden = !!(view.page === 'show' && feedOfShow(view.show));   // 订阅的播客没有「传云端」
   document.body.classList.toggle('selecting', selecting);
   showTrJob();
   $('bSelMove').disabled = $('bSelDel').disabled = $('bSelTr').disabled = $('bSelUp').disabled = !selCount();
@@ -2649,7 +2761,7 @@ function renderFav(box){
   var q = searchOpen ? searchQ.trim().toLowerCase() : '';   // 在收藏页搜索：只在当前这一层里找
   // 顶部栏没有标题，这一层是什么放在页面里
   if(lvl === 'albums') sc.appendChild(el('div', 'page-h', '收藏'));
-  else if(lvl === 'show') sc.appendChild(el('div', 'page-h clamp2', view.show));
+  else if(lvl === 'show') sc.appendChild(el('div', 'page-h clamp2', showLabel(view.show)));
   else sc.appendChild(el('div', 'page-h clamp2', titleOf(view.key)));
   if(lvl === 'albums'){
     var albums = favAlbums().filter(function(a){ return !q || a.name.toLowerCase().indexOf(q) >= 0 || a.keys.some(function(k){ return favMatch(k, q); }); });
@@ -2658,7 +2770,7 @@ function renderFav(box){
       var ul = el('ul', 'list');
       albums.forEach(function(a){
         var img = el('img', 'fav-cover'); img.alt = ''; img.src = coverOf(a.name);
-        ul.appendChild(favRow(img, a.name, a.keys.length + ' 集 · ' + a.n + ' 个收藏', function(){ goFav('show', {show:a.name}); }));
+        ul.appendChild(favRow(img, showLabel(a.name), a.keys.length + ' 集 · ' + a.n + ' 个收藏', function(){ goFav('show', {show:a.name}); }));
       });
       sc.appendChild(ul);
     }
@@ -2675,7 +2787,7 @@ function renderFav(box){
     }
   }else{
     var key = view.key, n = marksOf(key).length;
-    sc.appendChild(el('div', 'fav-sub line1', showOf(key) + (n ? ' · ' + n + ' 个收藏' : '')));
+    sc.appendChild(el('div', 'fav-sub line1', showLabel(showOf(key)) + (n ? ' · ' + n + ' 个收藏' : '')));
     var ul3 = el('ul', 'opts');
     if(renderMarkList(ul3, key, null, q)) sc.appendChild(ul3);
     else sc.appendChild(el('div', 'empty', q ? '没有找到「' + searchQ.trim() + '」。' : '这一集没有收藏了。'));
@@ -2702,6 +2814,13 @@ function closeSearch(quiet){
   if(!quiet) render();
 }
 $('bSearch').onclick = function(){ if(searchOpen) closeSearch(); else openSearch(); };
+// 搜索框展开后，点别的地方（不是输入框、搜索按钮、搜索结果）就自动收回
+document.addEventListener('click', function(e){
+  if(!searchOpen) return;
+  var t = e.target;
+  if(t.closest && (t.closest('#searchIn') || t.closest('#bSearch') || t.closest('.sr-item'))) return;
+  closeSearch();
+});
 $('searchIn').addEventListener('input', function(){
   searchQ = this.value; clearTimeout(searchTimer);
   searchTimer = setTimeout(render, 150);
@@ -2748,8 +2867,8 @@ function buildSearch(scopeKeys){
     if(b){ var y = el('div', 'b ' + (hl ? 'clamp2' : 'line1')); if(hl) hilite(y, b, q); else y.textContent = b; it.appendChild(y); }
     it.onclick = fn; wrap.appendChild(it);
   }
-  if(shs.length){ sec('节目'); shs.slice(0, 20).forEach(function(x){ item(x.name, x.keys.length + ' 集', function(){ closeSearch(true); goShow(x.name); }); }); }
-  if(eps.length){ sec('单集'); eps.slice(0, 40).forEach(function(k){ item(titleOf(k), scoped ? progressText(records[k]) : showOf(k), function(){ closeSearch(true); openEpPage(k); }); }); }
+  if(shs.length){ sec('节目'); shs.slice(0, 20).forEach(function(x){ item(showLabel(x.name), x.keys.length + ' 集', function(){ closeSearch(true); goShow(x.name); }); }); }
+  if(eps.length){ sec('单集'); eps.slice(0, 40).forEach(function(k){ item(titleOf(k), scoped ? progressText(records[k]) : showLabel(showOf(k)), function(){ closeSearch(true); openEpPage(k); }); }); }
   if(hits.length){ sec('文稿内容'); hits.forEach(function(h){ item(titleOf(h.key) + ' · ' + fmt(h.t), snippet(h.text, q), function(){
     var ep = findEp(h.key); closeSearch(true);
     if(ep) open(ep, true, h.t);
@@ -2829,7 +2948,7 @@ function renderHome(box){
   var done = {};
   list.forEach(function(s){
     var grp = s.ps && series[s.ps.base].length > 1 ? series[s.ps.base] : null;
-    if(!grp){ podCard(s, [s.name]); return; }
+    if(!grp){ podCard(s, [showLabel(s.name)]); return; }
     var base = s.ps.base;
     if(done[base]) return;
     done[base] = true;
@@ -2871,20 +2990,25 @@ function cnToInt(t){
 }
 // 「西方艺术三万年第一季：永恒的古典」→ ['永恒的古典', '西方艺术三万年·第1季']
 // 「西方艺术三万年第一季：永恒的古典」→ {base:'西方艺术三万年', season:1, sub:'永恒的古典'}；没有「第X季」就返回 null
+// 命名规则：专辑名里的「｜」（也可能是半角 |）只是我用来隔开名称和季数的，不属于名字，任何地方都不显示
+function stripBar(t){ return String(t || '').replace(/^[｜|\s]+|[｜|\s]+$/g, ''); }
+function showLabel(name){ return stripBar(name).replace(/\s*[｜|]\s*/g, ' '); }   // 显示用的专辑名
 function parseSeason(name){
   var m = /^(.+?)\s*[：:]\s*(.+)$/.exec(name), main = m ? m[1] : name, sub = m ? m[2].trim() : '';
-  var q = /^(.*?)\s*[·・]?\s*第\s*([一二三四五六七八九十百零两\d]+)\s*季\s*$/.exec(main);
-  if(!q || !q[1].trim()) return null;
-  return {base:q[1].trim(), season:cnToInt(q[2]), sub:sub};
+  var q = /^(.*?)\s*[·・｜|]*\s*第\s*([一二三四五六七八九十百零两\d]+)\s*季\s*$/.exec(main);
+  var base = q ? stripBar(q[1]) : '';
+  if(!q || !base) return null;
+  return {base:base, season:cnToInt(q[2]), sub:sub};
 }
 function showNameLines(name){
   var m = /^(.+?)\s*[：:]\s*(.+)$/.exec(name), main = m ? m[1] : name, sub = m ? m[2] : '';
-  main = main.replace(/\s*[·・]?\s*第\s*([一二三四五六七八九十百零两\d]+)\s*季\s*$/, function(x, n){ return '·第' + cnToInt(n) + '季'; });
-  return sub ? [sub.trim(), main.trim()] : [main.trim()];
+  main = main.replace(/\s*[·・｜|]*\s*第\s*([一二三四五六七八九十百零两\d]+)\s*季\s*$/, function(x, n){ return '·第' + cnToInt(n) + '季'; });
+  main = showLabel(main);
+  return sub ? [showLabel(sub), main.trim()] : [main.trim()];
 }
 var headImg = null;   // 专辑页封面图元素复用（播放时每隔几秒会重画，不复用会一直闪）
 function renderShow(box){
-  var keys = episodeKeys(view.show), isFeed = !!feedOfShow(view.show);
+  var keys = episodeKeys(view.show), isFeed = !!feedOfShow(view.show), rev = !!(settings.rev && settings.rev[view.show]);
   if(!keys.length && !isCustom(view.show)){ view = {page:'home'}; history.replaceState(null, ''); render(); return; }
   if(!keys.length){
     box.appendChild(el('div', 'empty', '这个专辑还没有内容。到其他专辑里选中几集，点「移动到专辑」，就能移到这里。'));
@@ -2903,7 +3027,7 @@ function renderShow(box){
   // 「继续播放」：这个节目里最近听过、没听完、有文件的一集；没有就从第一集没听完的开始
   var resume = null, t = 0;
   keys.forEach(function(k){ var r = records[k], ep = findEp(k); if(ep && r && !r.finished && r.updated > t){ resume = ep; t = r.updated; } });
-  if(!resume) resume = keys.map(findEp).filter(function(ep){ return ep && !(records[ep.key] && records[ep.key].finished); })[0];
+  if(!resume) resume = (rev ? keys.slice().reverse() : keys).map(findEp).filter(function(ep){ return ep && !(records[ep.key] && records[ep.key].finished); })[0];   // 从列表最上面没听完的开始
   var acts = el('div', 'pod-actions');
   if(resume && !(cur && cur.show === view.show)){ // 这个节目已经在播时不显示
     var b = el('button', 'btn primary', records[resume.key] && records[resume.key].updated ? '▶ 继续播放' : '▶ 开始播放');
@@ -2914,7 +3038,6 @@ function renderShow(box){
   eb.onclick = function(){ editAlbum(view.show); };
   acts.appendChild(eb);
   // 排序：默认「顺序」，可以切成「倒序」（每个专辑各自记住；只改显示，上一集 / 下一集照旧按顺序）
-  var rev = !!(settings.rev && settings.rev[view.show]);
   var sb = el('button', 'btn', rev ? '倒序' : '顺序');
   sb.setAttribute('aria-label', '切换排序');
   sb.onclick = function(){
@@ -2961,7 +3084,7 @@ function renderShow(box){
       var ib = el('button', 'info-btn');
       ib.setAttribute('aria-label', '详情');
       ib.innerHTML = '<svg viewBox="0 0 24 24"><path d="M11 15h2v2h-2zm0-8h2v6h-2zm.99-5C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/></svg>';
-      ib.onclick = function(e){ e.stopPropagation(); showEpMenu(k); };
+      ib.onclick = function(e){ e.stopPropagation(); showEpPop(k, ib); };
       li.appendChild(ib);
     }
     li.onclick = selMode ? function(){ if(Date.now() - selStamp > 600) toggleSel(k); }
@@ -4228,7 +4351,7 @@ function renderEp(box){
   $('bTrEdit').classList.toggle('on', trEdit);
   var top = el('div', 'ep-top'), au = authorOf(showOf(key), ep);
   top.appendChild(el('div', 'ep-name clamp2', titleOf(key)));
-  top.appendChild(el('div', 'ep-album line1', showOf(key) + (au ? ' · ' + au : '')));
+  top.appendChild(el('div', 'ep-album line1', showLabel(showOf(key)) + (au ? ' · ' + au : '')));
   if(ep && !(cur && cur.key === key)){
     var pb = el('button', 'btn primary block ep-play', '▶ 播放这一集');
     pb.onclick = function(){ open(ep, true); render(); };
