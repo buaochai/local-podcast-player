@@ -14,6 +14,7 @@
 //   {op:'get', keys:[...]}      → {urls:{key:url}} 临时播放 / 下载地址（12 小时有效）
 //   {op:'delete', keys:[...]}   → {deleted:n}      在这里直接删（很小的请求）
 //   {op:'usage'}                → {count, bytes}   云端已存多少
+//   {op:'folders'}              → {folders:[{dir,count,bytes}]} 存储桶里有音频的文件夹（不含 u/ 目录），让网页选着导入
 //   {op:'list', prefix}         → {files:[{key,size}]} 列出存储桶里某个文件夹下的文件（用来导入自己拖进去的文件夹）
 var enc = new TextEncoder();
 var PUT_TTL = 3600, GET_TTL = 12 * 3600;
@@ -94,6 +95,30 @@ export async function onRequestPost({request, env, data}){
       if(r && (r.ok || r.status === 404)) n++;
     }
     return json({deleted: n});
+  }
+  if(op === 'folders'){
+    var map = {}, ft = '', fp = 0, AUD = /\.(mp3|m4a|m4b|aac|wav|ogg|oga|opus|flac|mp4)$/i;
+    do{
+      var fx = {'list-type': '2', 'max-keys': '1000'};
+      if(ft) fx['continuation-token'] = ft;
+      var fr = await fetch(await presign(c, 'GET', '', 300, fx)).catch(function(){ return null; });
+      if(!fr) return json({error: '连不上 R2'}, 502);
+      var ftx = await fr.text();
+      if(fr.status === 403) return json({error: 'R2 拒绝访问：访问密钥不对，或令牌没有这个存储桶的权限'}, 403);
+      if(!fr.ok) return json({error: 'R2 返回 ' + fr.status}, 502);
+      var fre = /<Contents>([\s\S]*?)<\/Contents>/g, fm;
+      while((fm = fre.exec(ftx))){
+        var fk = /<Key>([\s\S]*?)<\/Key>/.exec(fm[1]), fs = /<Size>(\d+)<\/Size>/.exec(fm[1]);
+        if(!fk || !fs) continue;
+        var key2 = xmlDecode(fk[1]), cut = key2.lastIndexOf('/');
+        if(cut < 1 || key2.indexOf('u/') === 0 || !AUD.test(key2) || +fs[1] <= 0) continue;
+        var d = key2.slice(0, cut), e = map[d] || (map[d] = {dir: d, count: 0, bytes: 0});
+        e.count++; e.bytes += +fs[1];
+      }
+      var fnt = /<NextContinuationToken>([^<]+)<\/NextContinuationToken>/.exec(ftx);
+      ft = /<IsTruncated>true<\/IsTruncated>/.test(ftx) && fnt ? xmlDecode(fnt[1]) : '';
+    }while(ft && ++fp < 20);
+    return json({folders: Object.keys(map).sort().map(function(k){ return map[k]; })});
   }
   if(op === 'list'){
     var pre = String(body.prefix || '').replace(/^\/+/, '');
