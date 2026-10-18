@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.35.4">
+<meta name="app-version" content="0.35.5">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -15,13 +15,13 @@
 :root{
   --bg:#f6f5f2; --card:#ffffff; --text:#1d1d1f; --muted:#6b6b70; --line:#e4e2dd;
   --accent:#1f6f5c; --accent-soft:#e2f0eb; --on-accent:#ffffff; --danger:#c0392b;
-  --shadow:0 6px 24px rgba(0,0,0,.14); --pop:rgba(255,255,255,.72); --pop-line:rgba(0,0,0,.08);
+  --shadow:0 6px 24px rgba(0,0,0,.14); --pop:rgba(255,255,255,.72); --sheet:rgba(247,246,242,.9); --pop-line:rgba(0,0,0,.08);
 }
 @media (prefers-color-scheme: dark){
   :root{
     --bg:#121413; --card:#1c1f1e; --text:#ecece9; --muted:#9a9c99; --line:#2c302e;
     --accent:#5cc3a4; --accent-soft:#1d3a32; --on-accent:#0d1f1a; --danger:#ff7b6e;
-    --shadow:0 6px 24px rgba(0,0,0,.5); --pop:rgba(38,42,40,.72); --pop-line:rgba(255,255,255,.1);
+    --shadow:0 6px 24px rgba(0,0,0,.5); --pop:rgba(38,42,40,.72); --sheet:rgba(30,33,32,.9); --pop-line:rgba(255,255,255,.1);
   }
 }
 *{box-sizing:border-box}
@@ -195,7 +195,7 @@ body.show-page:not(.playing) .list-scroll{padding-bottom:16px}
 .opt small{display:block;font-size:12px;color:var(--muted);font-weight:normal}
 .input{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text);-webkit-user-select:text;user-select:text;outline-color:var(--accent)}
 .btn.block{display:block;width:100%;margin-top:10px}
-.sec{font-size:13px;color:var(--muted);margin:16px 2px 6px}
+.sec{font-size:13px;color:var(--muted);margin:16px 0 6px}
 .opt .time{flex:none;font-variant-numeric:tabular-nums;font-weight:600;color:var(--accent);margin-right:12px}
 .opt .grow{flex:1;min-width:0}
 li.has-edit{position:relative}
@@ -253,8 +253,8 @@ textarea.input{resize:vertical;line-height:1.7;min-height:200px}
 .tr-loc{position:absolute;right:14px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:4;width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--accent);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;padding:0}
 .tr-loc[hidden]{display:none}
 .tr-loc svg{width:24px;height:24px;fill:currentColor}
-.check{display:flex;gap:8px;align-items:flex-start;margin:12px 2px 0;font-size:14px;color:var(--muted)}
-.check input{margin-top:4px;flex:none}
+.check{display:flex;gap:10px;align-items:flex-start;margin:12px 0 0;font-size:14px;line-height:1.5;color:var(--muted)}
+.check input{width:18px;height:18px;margin:1.5px 0 0;flex:none;accent-color:var(--accent)}
 select.input{appearance:auto;-webkit-appearance:menulist}
 .tr-status{font-size:14px;color:var(--muted);margin:2px 0 8px}
 .tr-prog{height:4px;background:var(--line);border-radius:2px;overflow:hidden;margin:0 0 10px}
@@ -267,7 +267,7 @@ select.input{appearance:auto;-webkit-appearance:menulist}
 .slider{flex:1;min-width:0;width:100%;accent-color:var(--accent);height:30px;margin:2px 0}
 .slide-row{display:flex;align-items:center;gap:8px}
 .slide-row .btn{width:44px;min-height:40px;padding:0;font-size:22px;flex:none}
-.ticks{position:relative;height:18px;margin:0 52px 6px;font-size:11px;color:var(--muted)}
+.ticks{position:relative;height:18px;margin:0 60px 6px;font-size:11px;color:var(--muted)}
 .slide-row.single + .ticks{margin:0 14px 6px}
 .ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}
 .pills{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 4px}
@@ -288,16 +288,16 @@ select.input{appearance:auto;-webkit-appearance:menulist}
 .pop-item.danger{color:var(--danger)}
 /* 所有弹出的菜单面板：悬浮、半透明毛玻璃，四周留边（和「!」浮窗一致） */
 .sheet{background:rgba(0,0,0,.22)}
-.sheet-box{width:calc(100% - 12px);margin:0 6px max(3px, calc(env(safe-area-inset-bottom) - 26px));padding-bottom:0;max-height:84%;border-radius:22px;
-  background:var(--pop);-webkit-backdrop-filter:blur(24px) saturate(1.8);backdrop-filter:blur(24px) saturate(1.8);border:1px solid var(--pop-line);box-shadow:0 12px 40px rgba(0,0,0,.28)}
+.sheet-box{width:calc(100% - 12px);margin:0 6px max(10px, calc(env(safe-area-inset-bottom) - 12px));padding-bottom:0;max-height:84%;border-radius:22px;
+  background:var(--sheet);-webkit-backdrop-filter:blur(24px) saturate(1.8);backdrop-filter:blur(24px) saturate(1.8);border:1px solid var(--pop-line);box-shadow:0 12px 40px rgba(0,0,0,.28)}
 /* 列表里的上传 / 下载图标：灰色 = 还没做，转动 = 正在做（带进度圈），彩色 = 已经有了 */
-.cl-btn{position:relative;border:none;background:transparent;width:26px;height:36px;margin-right:-2px;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none;padding:0}
-.cl-btn svg{width:20px;height:20px;fill:currentColor}
+.cl-btn{position:relative;border:none;background:transparent;width:28px;height:36px;margin-right:-3px;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none;padding:0}
+.cl-btn svg{width:22px;height:22px;fill:currentColor}
 .cl-btn.done{color:var(--accent)}
 .cl-btn.busy{color:#e09a10}
 .cl-btn.busy svg{animation:clup .95s ease-in-out infinite}
 .cl-btn.busy.down svg{animation-name:cldown}
-.cl-btn.busy::after{content:'';position:absolute;left:-1px;top:4px;width:28px;height:28px;border-radius:50%;pointer-events:none;
+.cl-btn.busy::after{content:'';position:absolute;left:0;top:4px;width:28px;height:28px;border-radius:50%;pointer-events:none;
   background:conic-gradient(currentColor calc(var(--p, 0) * 1%), rgba(127,127,127,.25) 0);
   -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px));mask:radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px))}
 @keyframes clup{0%{transform:translateY(5px);opacity:.15}50%{opacity:1}100%{transform:translateY(-5px);opacity:.15}}
@@ -308,7 +308,7 @@ select.input{appearance:auto;-webkit-appearance:menulist}
 .q-acts button{border:none;background:transparent;width:36px;height:40px;display:flex;align-items:center;justify-content:center;color:var(--muted);border-radius:50%}
 .q-acts button svg{width:20px;height:20px;fill:currentColor}
 .q-acts button:disabled{opacity:.25}
-.q-now{margin:2px 2px 6px;font-size:13px;color:var(--muted)}
+.q-now{margin:2px 0 8px;font-size:13px;color:var(--muted)}
 .q-now b{color:var(--accent);font-weight:600}
 #queueTools{grid-template-columns:1.9fr 1fr 1fr 1fr;gap:6px}
 #queueTools .pill{font-size:14px;padding:8px 0;white-space:nowrap;text-align:center}
@@ -338,7 +338,9 @@ select.input{appearance:auto;-webkit-appearance:menulist}
 .facts b{flex:none;width:4em;color:var(--muted);font-weight:normal}
 .facts span{min-width:0;word-break:break-all}
 .ver-row{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:8px}
-.ver-row .ver-text{flex:1}
+.ver-row .ver-text{flex:1;min-width:0}
+.ver-row .btn{flex:none;min-width:64px}
+.ver-row .input{margin:6px 0 4px;padding:8px 10px;font-size:15px}
 .ver-row .ver-num{font-weight:600}
 .ver-row .ver-status{font-size:13px;color:var(--muted)}
 .tools{display:flex;gap:8px;margin-top:8px}
