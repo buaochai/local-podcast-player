@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.4">
+<meta name="app-version" content="0.46.5">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -273,6 +273,9 @@ li.has-edit{position:relative}
 #bMusic b:empty{display:none}
 a.mu-main{display:flex;align-items:center;flex:1;min-width:0;text-decoration:none;color:var(--text)}
 .opt.mu{gap:10px;cursor:default}
+.mu-ico{flex:none;width:22px;height:22px;margin-right:10px;fill:var(--accent);opacity:.9}
+.mu-zh{display:block;font-size:13px;font-style:italic;color:var(--muted);margin-top:1px}
+.mu-main .mk-note{display:block;word-break:normal;overflow-wrap:break-word}
 .opt.mu .mu-go{flex:none;font-size:13px;color:var(--accent);margin-left:10px;white-space:nowrap}
 .mu-t{flex:none;border:none;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:6px 10px;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
 .ep-name,.ep-album{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
@@ -4932,6 +4935,17 @@ function peopleMove(kind, id){
 }
 function peopleCount(){ return Object.keys(people.m).length + Object.keys(people.o).length; }
 // 外语的名字：主显原文，中文放小字；中文名或没有原文就照旧
+var MU_ICON = {
+  artist:'<svg viewBox="0 0 24 24"><path d="M12 12a4.2 4.2 0 1 0 0-8.4 4.2 4.2 0 0 0 0 8.4zm0 2.1c-3 0-8.4 1.5-8.4 4.5v1.8h16.8v-1.8c0-3-5.4-4.5-8.4-4.5z"/></svg>',
+  album:'<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 12.6a2.6 2.6 0 1 1 0-5.2 2.6 2.6 0 0 1 0 5.2z"/></svg>',
+  song:'<svg viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>'
+};
+function muIcon(kind){
+  var k = kind === 'person' ? 'artist' : (MU_ICON[kind] ? kind : 'song'), sp = document.createElement('span');
+  sp.innerHTML = MU_ICON[k]; var v = sp.firstChild; v.setAttribute('class', 'mu-ico');
+  v.setAttribute('aria-label', {artist:'音乐人', album:'专辑', song:'歌曲'}[k]);
+  return v;
+}
 function nameParts(zh, orig){
   if(orig && orig !== zh && !/[\u4e00-\u9fff]/.test(orig)) return {main:orig, zh:zh};
   return {main:zh, zh:''};
@@ -4978,10 +4992,11 @@ function renderPeople(){
     var e = list[id], row = el('div', 'opt mu pp'), g = el('span', 'grow');
     var pp = nameParts(e.name, e.orig);
     g.appendChild(el('span', 'mk-note clamp2', pp.main));
-    g.appendChild(el('small', 'line1', (pp.zh ? pp.zh + ' · ' : '') + (e.role || (peopleTab === 'm' ? '音乐人' : '非音乐人')) + ' · 提到 ' + e.mentions.length + ' 次' + (e.works.length ? ' · ' + e.works.slice(0, 2).join('、') : '')));
+    if(pp.zh) g.appendChild(el('span', 'mu-zh line1', pp.zh));
+    g.appendChild(el('small', 'line1', (e.role || (peopleTab === 'm' ? '音乐人' : '非音乐人')) + ' · 提到 ' + e.mentions.length + ' 次' + (e.works.length ? ' · ' + e.works.slice(0, 2).join('、') : '')));
     var main;
-    if(peopleTab === 'm'){ main = el('a', 'mu-main'); main.href = 'https://music.apple.com/search?term=' + encodeURIComponent(e.orig || e.name); main.target = '_blank'; main.rel = 'noopener'; main.appendChild(g); main.appendChild(el('span', 'mu-go', 'Apple Music ↗')); }
-    else{ main = el('div', 'mu-main'); main.appendChild(g); }
+    if(peopleTab === 'm'){ main = el('a', 'mu-main'); main.href = 'https://music.apple.com/search?term=' + encodeURIComponent(e.orig || e.name); main.target = '_blank'; main.rel = 'noopener'; main.appendChild(muIcon('artist')); main.appendChild(g); main.appendChild(el('span', 'mu-go', '↗')); }
+    else{ main = el('div', 'mu-main'); main.appendChild(g); }   // 非音乐人不放图标
     var mv = el('button', 'mu-t', peopleTab === 'm' ? '不是音乐人' : '是音乐人');
     mv.onclick = function(){ peopleMove(peopleTab, id); };
     row.appendChild(main); row.appendChild(mv); var li = el('li'); li.appendChild(row); box.appendChild(li);
@@ -5133,8 +5148,10 @@ function openMusicSheet(key){
     var g = el('span', 'grow');
     var np = nameParts(m.title, m.orig), ap = nameParts(m.artist, m.artistOrig);
     g.appendChild(el('span', 'mk-note clamp2', np.main));
-    g.appendChild(el('small', 'line1', [np.zh, KIND[m.kind] || '', m.ver || '', m.artist ? ap.main + (ap.zh ? '（' + ap.zh + '）' : '') : ''].filter(Boolean).join(' · ')));
-    a.appendChild(g); a.appendChild(el('span', 'mu-go', 'Apple Music ↗'));
+    if(np.zh) g.appendChild(el('span', 'mu-zh line1', np.zh));
+    var meta = [m.ver || '', m.artist ? ap.main + (ap.zh ? '（' + ap.zh + '）' : '') : ''].filter(Boolean).join(' · ');
+    if(meta) g.appendChild(el('small', 'line1', meta));
+    a.appendChild(muIcon(m.kind)); a.appendChild(g); a.appendChild(el('span', 'mu-go', '↗'));
     row.appendChild(tb); row.appendChild(a);
     var li = el('li'); li.appendChild(row); ul.appendChild(li);
     var ent = m.kind === 'album' ? 'album' : m.kind === 'artist' ? 'musicArtist' : 'song';
