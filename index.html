@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.38.3">
+<meta name="app-version" content="0.38.4">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -4766,9 +4766,9 @@ function goEp(key){
 function openEpPage(key){
   var ep = findEp(key);
   if(!ep && !hasTr[key]){ toast('文件缺失，点「＋」重新添加这一集'); return; }
-  if(!cur && ep) open(ep, true);                // 什么都没在播：点哪集就播哪集
-  else if(ep && ep === cur && audio.paused) play();   // 就是当前这一集但暂停着：接着播
-  goEp(key);                                    // 已经有在播的别的集：只进文稿页看，不切换播放
+  var busy = cur && !audio.paused;               // 此刻真的有声音在放
+  if(ep && !busy){ if(ep === cur) play(); else open(ep, true); }   // 没在放（没有 / 暂停了 / 放完了）：点哪集就播哪集
+  goEp(key);                                    // 正在放别的集：只进文稿页看，不切换播放
 }
 function trRender(){
   showTrJob();
