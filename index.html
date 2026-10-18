@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.17">
+<meta name="app-version" content="0.46.18">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -3051,11 +3051,12 @@ $('bDup').onclick = function(){
 function cloudInfoRefresh(){ if(!$('about').hidden) $('bCloudTest').onclick(); }
 
 /* ---------- 添加文件（保存进网页） ---------- */
-$('bAdd').onclick = function(){ closeSheet('about'); $('fileInput').click(); };
+$('bAdd').onclick = function(){ $('fileInput').click(); };   // 「关于」先不收，选完文件才收起（取消选择就还停在这里）
 $('fileInput').addEventListener('change', function(e){
   var files = Array.prototype.slice.call(e.target.files || []);
   e.target.value = '';
   if(!files.length) return;
+  closeSheet('about');
   var skipped = 0;
   files = files.filter(function(f){
     var ok = /^audio\//.test(f.type) || AUDIO_EXT.test(f.name);
