@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.39.1">
+<meta name="app-version" content="0.39.2">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -1220,12 +1220,13 @@ function recordNow(force){
 }
 
 /* ---------- 播放 ---------- */
+var loadingPlay = false;   // 点了播放、还没开始出声
 function open(ep, autoplay, at){
   if(!ep) return;
   // 只在云端的集：先拿（或刷新）临时播放地址再播
   if(ep.cloud && ep.remote && (!ep.url || Date.now() - (ep.urlAt || 0) > CLOUD_URL_AGE)){
-    if(autoplay) toast('正在连接云端…', 8000);
-    cloudResolve(ep).then(function(){ open(ep, autoplay, at); }, function(err){ if(autoplay) toast('云端连不上：' + err.message, 5000); });
+    if(autoplay){ toast('正在连接云端…', 8000); loadingPlay = true; setPlayIcon(); }
+    cloudResolve(ep).then(function(){ open(ep, autoplay, at); }, function(err){ loadingPlay = false; setPlayIcon(); if(autoplay) toast('云端连不上：' + err.message, 5000); });
     return;
   }
   if(ep === cur && at != null){ audio.currentTime = at; if(autoplay) play(); recordNow(true); return; }
@@ -1245,6 +1246,7 @@ function open(ep, autoplay, at){
     if(autoplay) play();
   });
   audio.load();
+  if(autoplay){ loadingPlay = true; play(); }   // 马上在点击手势里请求播放（数据一到就出声），不等 loadedmetadata
   if(startAt > 0 && autoplay && at == null) toast('从 ' + fmt(startAt) + ' 继续');
   setMediaSession();
   if(view.page === 'ep' && view.key !== ep.key){   // 文稿页跟着正在播放的这一集走
@@ -1297,12 +1299,14 @@ function updateTimes(){
     try{ navigator.mediaSession.setPositionState({duration:d, position:Math.min(audio.currentTime, d), playbackRate:audio.playbackRate}); }catch(e){}
   }
 }
+function showBtnText(){ return !audio.paused ? '❚❚ 暂停' : loadingPlay ? '… 正在加载' : '▶ 继续播放'; }
 function setPlayIcon(){
   var playing = !audio.paused;
+  if(playing) loadingPlay = false;
   $('playIcon').innerHTML = playing ? '<path d="M6 5h4v14H6zm8 0h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
   $('bPlay').setAttribute('aria-label', playing ? '暂停' : '播放');
   document.body.classList.toggle('playing', playing);
-  var sp = $('bShowPlay'); if(sp) sp.textContent = playing ? '❚❚ 暂停' : '▶ 继续播放';   // 专辑页封面旁的按钮
+  var sp = $('bShowPlay'); if(sp) sp.textContent = showBtnText();   // 专辑页封面旁的按钮
   Array.prototype.forEach.call(document.querySelectorAll('.play-btn'), function(b){   // 列表里每集的播放按钮跟着变
     var on = playing && cur && cur.key === b.dataset.k;
     b.innerHTML = on ? ICO_PAUSE_S : ICO_PLAY_S; b.setAttribute('aria-label', on ? '暂停' : '播放');
@@ -1326,6 +1330,7 @@ audio.addEventListener('ended', function(){
   if(i >= 0 && i < list.length - 1) open(list[i + 1], true); else render();
 });
 audio.addEventListener('error', function(){
+  loadingPlay = false; setPlayIcon();
   if(!cur || !audio.getAttribute('src')) return;
   var ep = cur, code = audio.error && audio.error.code;
   // 云端的集：临时地址可能过期了，换一个新的再试一次
@@ -3466,12 +3471,13 @@ function renderShow(box){
   var acts = el('div', 'pod-actions');
   // 专辑页没有播放器，封面旁边这一个按钮负责：正在播这个专辑 → 暂停 / 继续播放；否则 → 继续 / 开始播放
   if(cur && cur.show === view.show){
-    var b = el('button', 'btn primary', audio.paused ? '▶ 继续播放' : '❚❚ 暂停'); b.id = 'bShowPlay';
-    b.onclick = function(){ if(audio.paused) play(); else audio.pause(); };
+    var b = el('button', 'btn primary', showBtnText()); b.id = 'bShowPlay';
+    b.onclick = function(){ if(audio.paused){ loadingPlay = true; b.textContent = showBtnText(); play(); } else audio.pause(); };
     acts.appendChild(b);
   }else if(resume){
     var b2 = el('button', 'btn primary', records[resume.key] && records[resume.key].updated ? '▶ 继续播放' : '▶ 开始播放');
-    b2.onclick = function(){ open(resume, true); };
+    b2.onclick = function(){ b2.textContent = '… 正在加载'; open(resume, true); };
+    if(resume.cloud && resume.remote) cloudResolve(resume).catch(function(){});   // 云端的集：先把临时地址备好，点了就不用等
     acts.appendChild(b2);
   }
   var eb = el('button', 'btn', '编辑');
