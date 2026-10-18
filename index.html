@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.14">
+<meta name="app-version" content="0.46.15">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -275,6 +275,8 @@ div.mu-main{display:flex;align-items:center;flex:1;min-width:0;cursor:pointer}
 a.mu-main{display:flex;align-items:center;flex:1;min-width:0;text-decoration:none;color:var(--text)}
 .opt.mu{gap:10px;cursor:default}
 .mu-ico{flex:none;width:22px;height:22px;margin-right:10px;fill:var(--accent);opacity:.9}
+.mu-ments{list-style:none;margin:0;padding:0 0 6px 32px}
+.mu-ment{display:block;width:100%;text-align:left;border:none;background:transparent;color:var(--accent);font-size:13px;padding:7px 4px;overflow-wrap:anywhere}
 .mu-meta{display:block;white-space:normal;overflow-wrap:anywhere;line-height:1.35;margin-top:1px}
 .mu-zh{display:block;font-size:13px;font-style:italic;color:var(--muted);margin-top:1px}
 .mu-main .mk-note{display:block;word-break:normal;overflow-wrap:break-word}
@@ -431,6 +433,8 @@ input[type=file]{display:none}
   <button class="icon-btn" id="bTrJob" aria-label="AI 识别进度" hidden><svg viewBox="0 0 24 24"><path d="M3 10h2v4H3zm4-4h2v12H7zm4-3h2v18h-2zm4 3h2v12h-2zm4 4h2v4h-2z"/></svg><i class="trdot"></i></button>
   <button class="txt-btn" id="bSelAll" hidden>全选</button>
   <button class="txt-btn" id="bSelDone" hidden>完成</button>
+  <button class="icon-btn" id="bMusicAll" aria-label="音乐" hidden><svg viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/></svg></button>
+  <button class="icon-btn" id="bHist" aria-label="播放历史" hidden><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7z"/></svg></button>
   <button class="icon-btn" id="bFav" aria-label="收藏" hidden><svg viewBox="0 0 24 24"><path d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2zm0 15-5-2.18L7 18V5h10z"/></svg></button>
   <button class="icon-btn" id="bRss" aria-label="订阅播客" hidden><svg viewBox="0 0 24 24"><path d="M6.18 15.64a2.18 2.18 0 1 1 0 4.36 2.18 2.18 0 0 1 0-4.36zM4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27zm0 5.66A9.9 9.9 0 0 1 13.9 20h-2.83A7.07 7.07 0 0 0 4 12.93z"/></svg></button>
   <button class="icon-btn" id="bNewAlbum" aria-label="新建专辑" hidden><svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"/></svg></button>
@@ -723,7 +727,18 @@ input[type=file]{display:none}
   </div>
 </div>
 
-<div class="sheet" id="histSheet" hidden style="z-index:12">
+<div class="sheet" id="musicAllSheet" hidden>
+  <div class="sheet-box" role="dialog" aria-label="音乐">
+    <div class="sheet-head"><h2>音乐</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
+    <div class="sheet-body" id="musicAllBody">
+      <div class="pills" id="musicAllTabs"></div>
+      <ul class="opts" id="musicAllList"></ul>
+      <div class="empty" id="musicAllEmpty" hidden>还没有。文稿里提到的音乐会汇总在这里。</div>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="histSheet" hidden>
   <div class="sheet-box" role="dialog" aria-label="播放历史">
     <div class="sheet-head"><h2>播放历史</h2><button class="icon-btn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
     <div class="sheet-body">
@@ -826,13 +841,6 @@ input[type=file]{display:none}
           <div class="ver-status" id="refreshStatus">按最新规则重新整理，并重新标注外文名、重找提到的音乐</div>
         </div>
         <button class="btn" id="bRefreshTr">刷新</button>
-      </div>
-      <div class="ver-row">
-        <div class="ver-text">
-          <div class="ver-num">播放历史</div>
-          <div class="ver-status" id="histStatus"></div>
-        </div>
-        <button class="btn" id="bHist">查看</button>
       </div>
       <div class="sec">语音识别用哪套接口</div>
       <div class="pills" id="asrSwitch"></div>
@@ -3336,7 +3344,7 @@ function render(){
   var selecting = selMode && !home && !isEp && nKeys > 0;
   if(!selecting && selMode){ selMode = false; selKeys = {}; }
   $('bBack').hidden = home || selecting;
-  $('bNewAlbum').hidden = !home; $('bRss').hidden = !home; $('bFav').hidden = !home;
+  $('bNewAlbum').hidden = !home; $('bRss').hidden = !home; $('bFav').hidden = !home; $('bHist').hidden = !home; $('bMusicAll').hidden = !home;
   // 搜索：首页是全局搜索，其他页面只搜所在的这个地方；换了页面就收起
   $('bSearch').hidden = selecting;
   if(pendingSearch && home){   // 从人物资料库来：直接在首页搜这个人
@@ -3916,7 +3924,6 @@ function renderAsrSwitch(){
 }
 function showAiStatus(){
   var l = llmCfg();
-  $('histStatus').textContent = '共 ' + histKeys().length + ' 集';
   $('peopleStatus').textContent = '音乐人 ' + Object.keys(people.m).length + ' · 非音乐人 ' + Object.keys(people.o).length;
   renderAsrSwitch();
   $('aiStatus').textContent = '语音识别：' + (aiReady() ? aiProv().name + ' · ' + aiModel() : '还没有设置') + '\n分章节：' + (llmReady() ? l.name + ' · ' + l.model : '还没有设置');
@@ -4027,6 +4034,7 @@ $('aiProvider').addEventListener('change', function(){ aiFormFill(this.value); a
 $('llmProvider').addEventListener('change', function(){ llmFormFill(this.value); });
 $('bAiSet').onclick = openAiSettings;
 $('bRefreshTr').onclick = refreshAllTr;
+$('bMusicAll').onclick = openMusicAll;
 $('bHist').onclick = function(){ renderHist(); openSheet('histSheet'); };
 $('bPeople').onclick = function(){ peopleTab = 'm'; renderPeople(); openSheet('peopleSheet'); };
 $('bAiSave').onclick = function(){
@@ -4973,6 +4981,67 @@ function nameParts(zh, orig){
   if(orig && orig !== zh && !/[\u4e00-\u9fff]/.test(orig)) return {main:orig, zh:zh};
   return {main:zh, zh:''};
 }
+// 首页的音乐汇总：所有文稿里提到的音乐、音乐人、专辑，分三类看
+var musicAllTab = 'song', mlObserver = null;
+function musicAllCollect(){
+  var map = {};
+  Object.keys(trCache).forEach(function(k){
+    var tr = trCache[k]; if(!tr || !tr.music || !tr.segments) return;
+    musicList(tr).forEach(function(m){
+      var kind = m.kind === 'artist' ? 'artist' : m.kind === 'album' ? 'album' : 'song';
+      var id = kind + '|' + normFind(m.orig || m.title) + '|' + normFind(m.artistOrig || m.artist || '');
+      var e = map[id] || (map[id] = {kind:kind, m:m, ments:[]});
+      e.ments.push({k:k, t:m.t});
+    });
+  });
+  return map;
+}
+// 跳到文稿里这个位置：正在播放就只跳转、不切换播放；没在播放就从这里开始播
+function gotoMention(k, t){
+  closeSheet('musicAllSheet');
+  var busy = cur && !audio.paused, ep = findEp(k);
+  pendingLocate = {key:k, t:t};
+  if(!busy && ep) open(ep, true, t);
+  goEp(k);
+}
+function renderMusicAll(){
+  var all = musicAllCollect(), tabs = $('musicAllTabs'), box = $('musicAllList'); tabs.innerHTML = ''; box.innerHTML = '';
+  var cnt = {song:0, artist:0, album:0}; Object.keys(all).forEach(function(id){ cnt[all[id].kind]++; });
+  [['song', '音乐'], ['artist', '音乐人'], ['album', '专辑']].forEach(function(t){
+    var b = el('button', 'pill' + (musicAllTab === t[0] ? ' on' : ''), t[1] + ' ' + cnt[t[0]]); b.onclick = function(){ musicAllTab = t[0]; renderMusicAll(); }; tabs.appendChild(b);
+  });
+  var ids = Object.keys(all).filter(function(id){ return all[id].kind === musicAllTab; }).sort(function(a, b){ return all[b].ments.length - all[a].ments.length || (all[a].m.orig || all[a].m.title).localeCompare(all[b].m.orig || all[b].m.title); });
+  $('musicAllEmpty').hidden = !!ids.length;
+  if(mlObserver) mlObserver.disconnect();
+  mlObserver = window.IntersectionObserver ? new IntersectionObserver(function(es){
+    es.forEach(function(en){ if(!en.isIntersecting) return; mlObserver.unobserve(en.target); en.target._load && en.target._load(); });
+  }, {root:$('musicAllBody')}) : null;
+  ids.forEach(function(id){
+    var e = all[id], m = e.m, np = nameParts(m.title, m.orig), ap = nameParts(m.artist, m.artistOrig);
+    var li = el('li'), row = el('div', 'opt mu'), main = el('div', 'mu-main'), g = el('span', 'grow');
+    g.appendChild(el('span', 'mk-note clamp2', np.main));
+    var meta = [e.kind === 'artist' ? '' : (m.ver || ''), e.kind === 'artist' ? '' : (m.part || ''), m.artist ? ap.main : '', e.ments.length > 1 ? '提到 ' + e.ments.length + ' 次' : ''].filter(Boolean).join(' · ');
+    if(meta) g.appendChild(el('small', 'mu-meta', meta));
+    main.appendChild(muIcon(e.kind)); main.appendChild(g);
+    var sub = el('ul', 'mu-ments'); sub.hidden = true;
+    e.ments.forEach(function(x){
+      var b = el('button', 'mu-ment', titleOf(x.k) + ' · ' + fmt(x.t)); b.onclick = function(){ gotoMention(x.k, x.t); }; var l2 = el('li'); l2.appendChild(b); sub.appendChild(l2);
+    });
+    main.onclick = function(){ if(e.ments.length === 1) gotoMention(e.ments[0].k, e.ments[0].t); else sub.hidden = !sub.hidden; };
+    var go = el('a', 'mu-go', '↗'); go.href = 'https://music.apple.com/search?term=' + encodeURIComponent(e.kind === 'artist' ? (m.orig || m.title) : (((m.artistOrig || m.artist) ? (m.artistOrig || m.artist) + ' ' : '') + (m.orig || m.title)));
+    go.target = '_blank'; go.rel = 'noopener'; go.setAttribute('aria-label', '在 Apple Music 打开'); go.onclick = function(ev){ ev.stopPropagation(); };
+    row._load = function(){ musicLink(m).then(function(u){ if(u) go.href = u; }); };
+    row.appendChild(main); row.appendChild(go); li.appendChild(row); li.appendChild(sub); box.appendChild(li);
+    if(mlObserver) mlObserver.observe(row); else row._load();
+  });
+}
+function openMusicAll(){
+  var go = function(){ renderMusicAll(); openSheet('musicAllSheet'); };
+  if(trAllReady) return go();
+  store('readonly', function(st){ return st.getAll(); }, 'transcripts').then(function(rows){
+    (rows || []).forEach(function(r){ trCache[r.key] = trSimp(r); hasTr[r.key] = true; }); trAllReady = true;
+  }).catch(function(){}).then(go);
+}
 function histKeys(){
   return Object.keys(records).filter(function(k){ var r = records[k]; return r && r.updated > 0 && (findEp(k) || hasTr[k]); })
     .sort(function(a, b){ return records[b].updated - records[a].updated; });
@@ -4992,7 +5061,7 @@ function histGo(k){   // 回到这一集所在专辑的列表，滚到这一集�
 }
 function renderHist(){
   var box = $('histList'); box.innerHTML = '';
-  var ks = histKeys(); $('histEmpty').hidden = !!ks.length; $('histStatus').textContent = '共 ' + ks.length + ' 集';
+  var ks = histKeys(); $('histEmpty').hidden = !!ks.length;
   ks.slice(0, 300).forEach(function(k){
     var r = records[k], row = el('div', 'opt mu'), g = el('span', 'grow');
     g.appendChild(el('span', 'mk-note clamp2', titleOf(k)));
