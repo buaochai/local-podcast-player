@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.40.0">
+<meta name="app-version" content="0.40.1">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -1086,6 +1086,8 @@ function takeQueued(){
   saveQueue();
   return ep;
 }
+// 「!」左半边 = 已上传云端（订阅的播客不能上传，下载到手机后左右两半都算有）；右半边 = 已下载到手机
+function infoUp(k){ return !!(records[k] && records[k].cloud) || !!(feedEpMap[k] && hasFile(k)); }
 var INFO_PATH = 'M11 15h2v2h-2zm0-8h2v6h-2zm.99-5C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z';
 var INFO_SVG = '<svg viewBox="0 0 24 24"><defs><clipPath id="ibL"><rect x="0" y="0" width="12" height="24"/></clipPath><clipPath id="ibR"><rect x="12" y="0" width="12" height="24"/></clipPath></defs><g clip-path="url(#ibL)" class="ib-l"><path d="' + INFO_PATH + '"/></g><g clip-path="url(#ibR)" class="ib-r"><path d="' + INFO_PATH + '"/></g></svg>';
 var ICO_PLAY_S = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>', ICO_PAUSE_S = '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>';
@@ -2592,7 +2594,7 @@ function clBtn(k, op){
 // 开始 / 更新 / 结束（p 为 null）一个集的上传或下载，并直接刷新列表里对应的图标（不用整页重画）
 function clSet(k, op, p){
   if(p == null) delete clBusy[k]; else clBusy[k] = {op:op, p:Math.max(0, Math.min(100, p))};
-  Array.prototype.forEach.call(document.querySelectorAll('.info-btn[data-k]'), function(b){ if(b.dataset.k !== k) return; b.classList.toggle('dn-on', hasFile(k)); b.classList.toggle('up-on', !!(records[k] && records[k].cloud)); });
+  Array.prototype.forEach.call(document.querySelectorAll('.info-btn[data-k]'), function(b){ if(b.dataset.k !== k) return; b.classList.toggle('dn-on', hasFile(k)); b.classList.toggle('up-on', infoUp(k)); });
   Array.prototype.forEach.call(document.querySelectorAll('.cl-btn'), function(b){
     if(b.dataset.k !== k) return;
     var st = clState(k, b.dataset.op);
@@ -3611,7 +3613,7 @@ function renderShow(box){
         if(e2 === cur){ if(audio.paused) play(); else audio.pause(); } else open(e2, true);
       };
       li.insertBefore(pb, li.firstChild);
-      var ib = el('button', 'info-btn' + (records[k] && records[k].cloud ? ' up-on' : '') + (hasFile(k) ? ' dn-on' : '')); ib.dataset.k = k;   // 「!」左半边：已上传云端；右半边：已下载到本机
+      var ib = el('button', 'info-btn' + (infoUp(k) ? ' up-on' : '') + (hasFile(k) ? ' dn-on' : '')); ib.dataset.k = k;   // 「!」左半边：已上传云端；右半边：已下载到本机
       ib.setAttribute('aria-label', '详情');
       ib.innerHTML = INFO_SVG;
       ib.onclick = function(e){ e.stopPropagation(); showEpPop(k, ib); };
