@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.37.1">
+<meta name="app-version" content="0.37.2">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -726,6 +726,14 @@ input[type=file]{display:none}
 
       <h3>节目列表</h3>
       <label class="check"><input type="checkbox" id="tidyChk"><span>集名优化：「0.」开头的显示为「发刊词：」；名字前有两个序号时去掉第一个；番外以「番外：」开头。列表顺序不变。</span></label>
+      <label class="check"><input type="checkbox" id="mergeChk"><span>导入时自动合并同名的集（同一专辑里名字相同就是一集）</span></label>
+      <div class="ver-row">
+        <div class="ver-text">
+          <div class="ver-num">合并重复</div>
+          <div class="ver-status" id="dupStatus">把专辑里同名的集合并成一集，统一写法不同的专辑名</div>
+        </div>
+        <button class="btn" id="bDup">检查</button>
+      </div>
 
       <h3>云端音频</h3>
       <p>把音频传到你自己的 Cloudflare R2：在线播放，多个设备都能听。音频由手机直接传给 R2，不经过 Cloudflare 后台。单集「!」→「上传到云端」，或打开下面的开关。</p>
@@ -2615,7 +2623,7 @@ function cloudImport(dir){
       var name = f.key.split('/').pop(), key = name + '|' + f.size;
       if(records[key] && records[key].cloud) return;
       var old = mine[normName(stripExt(name))];
-      if(old && !records[key]){
+      if(old && !records[key] && !settings.noMerge){
         if(old.r.cloud) return;   // 已经有云端音频了：同一集，不重复
         old.r.cloud = {k:f.key, size:f.size, type:mimeOf(name), imp:true}; old.r.cat = now;
         merged++; return;
@@ -2678,6 +2686,86 @@ $('bImpGo').onclick = function(){
     $('cloudImpStatus').textContent = msg; toast(msg, 5000);
     if(total || merged || covers){ render(); cloudInfoRefresh(); }
   }, function(err){ btn.textContent = '导入所选'; btn.disabled = false; toast('导入失败：' + err.message, 5000); });
+};
+/* ---------- 合并重复 ---------- */
+// 同一专辑（按 canonShow 判断）里、名字（按 normName 判断）相同的集算一集
+function dupPlan(){
+  var names = {}, groups = {}, rename = {};
+  Object.keys(records).forEach(function(k){
+    if(k.indexOf('rss|') === 0) return;
+    var show = showOf(k); if(show === OTHER) return;
+    var cs = canonShow(show);
+    names[cs] = names[cs] || {}; names[cs][show] = (names[cs][show] || 0) + 1;
+    var nk = normName(rawTitleOf(k)); if(!nk) return;
+    (groups[cs + '||' + nk] = groups[cs + '||' + nk] || []).push(k);
+  });
+  Object.keys(names).forEach(function(cs){
+    var ns = Object.keys(names[cs]); if(ns.length < 2) return;
+    ns.sort(function(a, b){ return names[cs][b] - names[cs][a] || (a < b ? -1 : 1); });
+    ns.slice(1).forEach(function(n){ rename[n] = ns[0]; });
+  });
+  var dups = Object.keys(groups).map(function(g){ return groups[g]; }).filter(function(a){ return a.length > 1; });
+  return {dups:dups, rename:rename, extra:dups.reduce(function(n, a){ return n + a.length - 1; }, 0)};
+}
+function dupScore(k){
+  var r = records[k] || {};
+  return (hasFile(k) ? 16 : 0) + (hasTr[k] ? 8 : 0) + (r.cloud ? 4 : 0) + (r.marks && r.marks.length ? 2 : 0) + (r.updated ? 1 : 0);
+}
+function mergeInto(keep, other){
+  var a = records[keep], b = records[other], now = Date.now(), jobs = [];
+  if(!a.cloud && b.cloud){ a.cloud = b.cloud; a.cat = now; }
+  else if(b.cloud && a.cloud && !b.cloud.imp && b.cloud.k !== a.cloud.k) jobs.push(cloudApi({op:'delete', keys:[b.cloud.k]}).catch(function(){}));   // 自己传的重复云端文件也清掉
+  if(b.marks && b.marks.length){
+    a.marks = a.marks || [];
+    b.marks.forEach(function(m){ if(!a.marks.some(function(x){ return Math.abs(x.t - m.t) < 1 && (x.note || '') === (m.note || ''); })) a.marks.push(m); });
+    a.mt = now;
+  }
+  if((b.updated || 0) > (a.updated || 0)){ a.position = b.position; a.finished = b.finished; a.updated = b.updated; }
+  a.duration = Math.max(a.duration || 0, b.duration || 0);
+  a.added = Math.min(a.added || now, b.added || now);
+  // 文稿：保留更完整的那份
+  jobs.push(Promise.all([trGet(keep), trGet(other)]).then(function(t){
+    var ta = t[0], tb = t[1];
+    var better = tb && (!ta || (ta.status !== 'done' && tb.status === 'done') || (ta.status === tb.status && (tb.segments || []).length > (ta.segments || []).length));
+    if(better){ tb = JSON.parse(JSON.stringify(tb)); tb.key = keep; return trPut(tb); }
+  }));
+  return Promise.all(jobs).then(function(){
+    if(cur && cur.key === other) stopPlayer();
+    return trDelete(other);
+  }).then(function(){ return deleteFile(other); }).then(function(){
+    delete records[other]; syncDel(other);
+  });
+}
+function mergeDups(plan){
+  // 先统一专辑名写法
+  Object.keys(records).forEach(function(k){
+    var show = showOf(k), to = plan.rename[show];
+    if(!to) return;
+    var r = records[k], ep = findEp(k);
+    r.show = to; r.customShow = to; r.ct = Date.now(); if(ep) ep.show = to;
+    if(shows[show] && shows[to] && shows[show].cover && !shows[to].cover) shows[to].cover = shows[show].cover;
+  });
+  Object.keys(plan.rename).forEach(function(n){ if(shows[n] && !shows[n].custom && !episodeKeys(n).length) delete shows[n]; });
+  return plan.dups.reduce(function(p, grp){
+    return p.then(function(){
+      var live = grp.filter(function(k){ return records[k]; }).sort(function(x, y){ return dupScore(y) - dupScore(x) || (records[y].updated || 0) - (records[x].updated || 0); });
+      return live.slice(1).reduce(function(q, o){ return q.then(function(){ return mergeInto(live[0], o); }); }, Promise.resolve());
+    });
+  }, Promise.resolve()).then(function(){
+    syncCloudEps(); epDirty(); saveRecords(); saveShows();
+  });
+}
+$('mergeChk').addEventListener('change', function(){ if(this.checked) delete settings.noMerge; else settings.noMerge = true; saveSettings(); });
+$('bDup').onclick = function(){
+  var st = $('dupStatus'), plan = dupPlan(), nr = Object.keys(plan.rename).length;
+  if(!plan.extra && !nr){ st.textContent = '没有重复的集，专辑名写法也都统一'; return; }
+  var msg = '找到 ' + plan.dups.length + ' 组重复的集（多出 ' + plan.extra + ' 集）' + (nr ? '，' + nr + ' 个专辑名写法不统一' : '') + '。\n合并后每组保留有音频 / 文稿的那一集，收藏和文稿合到一起，多余的删除（云端的音频文件不动）。继续？';
+  if(!confirm(msg)) return;
+  st.textContent = '正在合并…';
+  mergeDups(plan).then(function(){
+    st.textContent = '合并了 ' + plan.extra + ' 集' + (nr ? '，统一了 ' + nr + ' 个专辑名' : '');
+    render(); renderMini(); updateStorage(); cloudInfoRefresh();
+  }, function(err){ st.textContent = '合并失败：' + err.message; });
 };
 function cloudInfoRefresh(){ if(!$('about').hidden) $('bCloudTest').onclick(); }
 
@@ -5208,7 +5296,7 @@ function updateStorage(){
     }).catch(function(){});
   }
 }
-$('bAbout').onclick = function(){ updateStorage(); $('tidyChk').checked = !settings.tidyOff; $('cloudAutoChk').checked = !!settings.cloudAuto; openSheet('about'); var ab = document.querySelector('#about .sheet-body'); if(ab) ab.scrollTop = 0; };   // 每次打开都回到顶部
+$('bAbout').onclick = function(){ updateStorage(); $('tidyChk').checked = !settings.tidyOff; $('cloudAutoChk').checked = !!settings.cloudAuto; $('mergeChk').checked = !settings.noMerge; openSheet('about'); var ab = document.querySelector('#about .sheet-body'); if(ab) ab.scrollTop = 0; };   // 每次打开都回到顶部
 $('cloudAutoChk').addEventListener('change', function(){ if(this.checked) settings.cloudAuto = true; else delete settings.cloudAuto; saveSettings(); });
 // 检查云端：连得上不，存了多少，大概每月多少钱（R2：前 10GB 免费，之后每 GB 每月 0.015 美元）
 $('bCloudTest').onclick = function(){
