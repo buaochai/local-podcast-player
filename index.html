@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.36.4">
+<meta name="app-version" content="0.37.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -443,6 +443,8 @@ input[type=file]{display:none}
       </div>
       <div class="ticks" id="speedTicks"></div>
       <div class="pills g4" id="speedPills"></div>
+      <div class="sec">应用范围</div>
+      <div class="pills g4" id="speedScope"></div>
     </div>
   </div>
 </div>
@@ -1209,14 +1211,14 @@ function open(ep, autoplay, at){
   cur = ep;
   ep.loaded = false;
   audio.src = ep.url;
-  audio.playbackRate = settings.speed;
+  audio.playbackRate = curSpeed();
   var r = records[ep.key];
   var startAt = at != null ? at : (r && !r.finished) ? r.position : 0;
   audio.addEventListener('loadedmetadata', function onMeta(){
     audio.removeEventListener('loadedmetadata', onMeta);
     if(startAt > 0 && startAt < audio.duration - 2) audio.currentTime = startAt;
     ep.loaded = true;
-    audio.playbackRate = settings.speed;
+    audio.playbackRate = curSpeed();
     updateTimes();
     if(autoplay) play();
   });
@@ -1329,8 +1331,8 @@ function renderMini(){
   var mc = marksOf(cur.key).length;
   $('markCount').textContent = mc || '';
   $('bMark').classList.toggle('on', mc > 0);
-  $('bSpeed').textContent = fmtSpeed(settings.speed);
-  $('bSpeed').classList.toggle('on', settings.speed !== 1);
+  $('bSpeed').textContent = fmtSpeed(curSpeed());
+  $('bSpeed').classList.toggle('on', curSpeed() !== 1);
 }
 
 /* ---------- 弹出面板 ---------- */
@@ -1584,14 +1586,49 @@ function showAlbumMenu(name){
 
 /* ---------- 倍速 ---------- */
 function fmtSpeed(v){ return (Math.round(v * 100) / 100) + 'x'; }
+// 倍速可以只对某个专辑 / 某个作者生效：专辑的设置优先，其次作者，最后是全部通用的
+var spScope = 'all';
+function curAuthor(){ return cur ? (authorOf(cur.show, cur) || '') : ''; }
+function curSpeed(){
+  if(cur){
+    var a = curAuthor();
+    if(settings.speedShow && settings.speedShow[cur.show]) return settings.speedShow[cur.show];
+    if(a && settings.speedAuthor && settings.speedAuthor[a]) return settings.speedAuthor[a];
+  }
+  return settings.speed;
+}
+function scopeSpeed(){   // 当前选中的范围里存的倍速（没设过就是现在实际在用的）
+  if(spScope === 'show' && cur && settings.speedShow && settings.speedShow[cur.show]) return settings.speedShow[cur.show];
+  if(spScope === 'author' && settings.speedAuthor && settings.speedAuthor[curAuthor()]) return settings.speedAuthor[curAuthor()];
+  return spScope === 'all' ? settings.speed : curSpeed();
+}
 function setSpeed(v, persist){
   v = Math.min(SPEED_MAX, Math.max(SPEED_MIN, Math.round(v * 20) / 20));
-  settings.speed = v; audio.playbackRate = v;
+  if(spScope === 'show' && cur){ settings.speedShow = settings.speedShow || {}; settings.speedShow[cur.show] = v; }
+  else if(spScope === 'author' && curAuthor()){ settings.speedAuthor = settings.speedAuthor || {}; settings.speedAuthor[curAuthor()] = v; }
+  else settings.speed = v;
+  audio.playbackRate = curSpeed();
   $('speedRange').value = v;
   $('speedBig').textContent = fmtSpeed(v);
   Array.prototype.forEach.call($('speedPills').children, function(b){ b.classList.toggle('on', +b.dataset.v === v); });
+  renderSpeedScope();
   renderMini(); updateTimes();
   if(persist) saveSettings();
+}
+function renderSpeedScope(){
+  var box = $('speedScope'); box.innerHTML = '';
+  var au = curAuthor(), has = (spScope === 'show' && cur && settings.speedShow && settings.speedShow[cur.show]) || (spScope === 'author' && au && settings.speedAuthor && settings.speedAuthor[au]);
+  [['all', '全部', false], ['author', '此作者', !au], ['show', '此专辑', !cur]].forEach(function(t){
+    var b = el('button', 'pill' + (spScope === t[0] ? ' on' : ''), t[1]); b.disabled = t[2]; b.style.opacity = t[2] ? '.4' : '';
+    b.onclick = function(){ spScope = t[0]; setSpeed(scopeSpeed(), false); };
+    box.appendChild(b);
+  });
+  var rm = el('button', 'pill', '取消'); rm.disabled = !has; rm.style.opacity = has ? '' : '.4';
+  rm.onclick = function(){
+    if(spScope === 'show') delete settings.speedShow[cur.show]; else delete settings.speedAuthor[au];
+    saveSettings(); audio.playbackRate = curSpeed(); setSpeed(scopeSpeed(), false); toast('已取消，恢复通用倍速');
+  };
+  box.appendChild(rm);
 }
 function buildTicks(box, values, min, max, label){
   box.innerHTML = '';
@@ -1609,10 +1646,14 @@ function buildTicks(box, values, min, max, label){
   });
   $('speedRange').addEventListener('input', function(){ setSpeed(+this.value, false); });
   $('speedRange').addEventListener('change', function(){ saveSettings(); });
-  $('speedMinus').onclick = function(){ setSpeed(settings.speed - 0.05, true); };
-  $('speedPlus').onclick = function(){ setSpeed(settings.speed + 0.05, true); };
+  $('speedMinus').onclick = function(){ setSpeed(scopeSpeed() - 0.05, true); };
+  $('speedPlus').onclick = function(){ setSpeed(scopeSpeed() + 0.05, true); };
 })();
-$('bSpeed').onclick = function(){ setSpeed(settings.speed, false); openSheet('speedSheet'); };
+$('bSpeed').onclick = function(){
+  var au = curAuthor();
+  spScope = cur && settings.speedShow && settings.speedShow[cur.show] ? 'show' : au && settings.speedAuthor && settings.speedAuthor[au] ? 'author' : 'all';
+  setSpeed(scopeSpeed(), false); openSheet('speedSheet');
+};
 
 /* ---------- 定时关闭 ---------- */
 var sleepTimer = null;
