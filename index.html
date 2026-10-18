@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.45.0">
+<meta name="app-version" content="0.45.1">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -566,6 +566,10 @@ input[type=file]{display:none}
         <option value="zh">中文</option><option value="">自动识别</option><option value="en">英语</option>
         <option value="ja">日语</option><option value="ko">韩语</option><option value="fr">法语</option><option value="de">德语</option><option value="es">西班牙语</option>
       </select>
+      <div id="aiChunkRow">
+        <div class="sec">长音频每段最长（百炼用）</div>
+        <select class="input" id="aiChunk"><option value="10">10 分钟（段多，进度细，失败只重试一小段）</option><option value="20">20 分钟（推荐）</option><option value="30">30 分钟</option><option value="60">60 分钟（段少，一段失败重试的就多）</option></select>
+      </div>
       <label class="check"><input type="checkbox" id="aiWav"><span>先转成 wav 再发送（服务商不认 mp3 / m4a 时才用；会多花一点手机的时间）</span></label>
       <button class="btn block" id="bAiTest">测试语音服务连接</button>
       <p id="aiTestResult"></p>
@@ -3870,6 +3874,7 @@ function aiSaved(kind){
 // 设置面板打开期间，各家填过、还没保存的内容；aiCur / llmCur 是表单上正显示的那一家
 var aiDraft = {asr:{}, llm:{}}, aiCur = '', llmCur = '';
 var aiProfCur = 0, aiProfDraft = [null, null];
+function aiChunkVis(){ $('aiChunkRow').hidden = $('aiProvider').value !== 'aliyun'; $('aiChunk').value = String(ai.chunkMin || 20); }
 function profStash(){
   aiProfDraft[aiProfCur] = {provider:$('aiProvider').value, key:clean($('aiKey').value).replace(/\s/g, ''), base:clean($('aiBase').value), model:clean($('aiModel').value), wav:$('aiWav').checked};
 }
@@ -3896,6 +3901,7 @@ function aiProfLoad(i){
   $('aiWav').checked = !!src.wav;
   $('aiTestResult').textContent = '';
   aiCur = id;
+  aiChunkVis();
   renderAiProfTabs();
 }
 function aiStash(){
@@ -3957,7 +3963,7 @@ function readAiForm(){
 function readLlmForm(){
   return {provider:$('llmProvider').value, key:clean($('llmKey').value).replace(/\s/g, ''), base:clean($('llmBase').value), model:clean($('llmModel').value)};
 }
-$('aiProvider').addEventListener('change', function(){ aiFormFill(this.value); });
+$('aiProvider').addEventListener('change', function(){ aiFormFill(this.value); aiChunkVis(); });
 $('llmProvider').addEventListener('change', function(){ llmFormFill(this.value); });
 $('bAiSet').onclick = openAiSettings;
 $('bAiSave').onclick = function(){
@@ -3970,6 +3976,7 @@ $('bAiSave').onclick = function(){
   if(useLlm && !g.model){ toast('分章节：请填模型名称'); return; }
   var pr = AI_PROVIDERS[f.provider];
   ai.provider = f.provider; ai.key = f.key; ai.lang = f.lang; ai.wav = f.wav;
+  ai.chunkMin = +$('aiChunk').value || 20;
   ai.base = f.base === pr.base ? '' : f.base;
   ai.model = f.model === pr.model ? '' : f.model;
   var lp = LLM_PROVIDERS[g.provider];
@@ -4301,7 +4308,7 @@ function aiRoute(){
   var p = aiProv(), model = aiModel(), chat = p.style === 'chat';
   var timed = !chat && /whisper/i.test(model);
   var r = {chat:chat, timed:timed, formats:ai.wav ? ['wav'] : (p.formats || ['mp3']), maxBytes:chat ? 12e6 : 24e6, maxSec:chat ? 300 : timed ? 600 : 300, convSec:300};
-  if(p.style === 'ali'){ r.ali = true; r.timed = true; r.maxBytes = 80e6; r.maxSec = 3600; r.noConv = true; r.formats = ['mp3', 'm4a', 'wav']; }   // 百炼是提交任务再取结果，一次可以送很长的音频
+  if(p.style === 'ali'){ r.ali = true; r.timed = true; r.maxBytes = 80e6; r.maxSec = (ai.chunkMin || 20) * 60; r.noConv = true; r.formats = ['mp3', 'm4a', 'wav']; }   // 百炼是提交任务再取结果，一次可以送很长的音频
   if(p.maxSec) r.maxSec = Math.min(r.maxSec, p.maxSec);
   if(ai.maxSec) r.maxSec = r.convSec = ai.maxSec;   // 调试用，设置里没有这一项
   return r;
