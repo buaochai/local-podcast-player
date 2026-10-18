@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.39.6">
+<meta name="app-version" content="0.39.7">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -152,7 +152,7 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .pop-cl .cl-item.done{color:var(--accent)}
 .pop-cl .cl-item.busy{color:#e09a10}
 .pop-cl .cl-btn{width:24px;height:24px;margin:0;color:inherit;pointer-events:none}
-.pop-cl .cl-btn::after{left:-2px;top:-2px;width:28px;height:28px}
+.pop-cl .cl-item .cl-btn.busy::after{left:-2px;top:-2px;width:28px;height:28px}   /* 圈要和 24px 的图标同心 */
 .chk{flex:none;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--muted);display:flex;align-items:center;justify-content:center}
 .chk.on{background:var(--accent);border-color:var(--accent)}
 .chk.on::after{content:"";width:6px;height:11px;border:solid var(--on-accent);border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
@@ -2461,6 +2461,20 @@ function cloudResolve(ep){   // 云端的集：拿到（或刷新）临时播放
     return u;
   });
 }
+// 一次把多集的临时地址都要来（一个请求），点播放时就不用再等；顺便先和 R2 建立连接
+var prefetchAt = 0;
+function cloudPrefetch(list){
+  var need = list.filter(function(e){ return e.cloud && e.remote && e.ckey && (!e.url || Date.now() - (e.urlAt || 0) > CLOUD_URL_AGE); }).slice(0, 100);
+  if(!need.length || Date.now() - prefetchAt < 15000) return;
+  prefetchAt = Date.now();
+  cloudApi({op:'get', keys:need.map(function(e){ return e.ckey; })}).then(function(j){
+    need.forEach(function(e){ var u = j.urls && j.urls[e.ckey]; if(u){ e.url = u; e.urlAt = Date.now(); } });
+    var any = need.filter(function(e){ return e.url; })[0];
+    if(any && !document.getElementById('r2pre')){
+      try{ var l = document.createElement('link'); l.id = 'r2pre'; l.rel = 'preconnect'; l.href = new URL(any.url).origin; document.head.appendChild(l); }catch(e){}
+    }
+  }, function(){});
+}
 function cloudEpObj(key, r){
   return {key:key, name:r.name, size:(r.cloud && r.cloud.size) || r.size || 0, blob:null, url:'', urlAt:0, title:r.title || stripExt(r.name),
     show:r.customShow || r.tagShow || r.show || OTHER, art:null, tags:null, remote:true, cloud:true, ckey:r.cloud.k, dur:r.duration || 0};
@@ -3513,6 +3527,7 @@ function renderShow(box){
     if(resume.cloud && resume.remote) cloudResolve(resume).catch(function(){});   // 云端的集：先把临时地址备好，点了就不用等
     acts.appendChild(b2);
   }
+  cloudPrefetch(keys.map(findEp).filter(Boolean));   // 这个专辑里所有云端的集一起备好
   var eb = el('button', 'btn', '编辑');
   eb.onclick = function(){ editAlbum(view.show); };
   acts.appendChild(eb);
