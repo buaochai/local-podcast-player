@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.7">
+<meta name="app-version" content="0.46.8">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -4814,6 +4814,7 @@ function termsPrompt(text){
     '请只找出说话人【实际用外语说出来】的词。它们在文稿里有两种样子：一是语音识别已经写成了外文；二是语音识别把外语发音写成了读不通的中文同音字。\n' +
     '绝对不要列：用中文说的内容，包括中国的人名、地名、事件、作品（如 梁文道、汶川地震），以及外国的地名、机构名——这些保持中文，不要翻成英文或拼音。\n' +
     '例外——外国真人的名字：说话人即使是用中文音译说的（如「卡扬卡霍」「迈尔斯·戴维斯」），也要列：from=文稿里的中文音译写法（一字不差），en=这个人的原名拼写（如 Kayhan Kalhor、Miles Davis），zh=这个音译，lang=他的语言。只有你确定原名拼写时才列，不确定就不列；中国人（包括华人，如马友友）和中文名字不列。\n' +
+    '例外——外国的作品名、乐曲名、歌名、专辑名、乐队名：说话人用外语说的，即使被写成了中文同音字（如「奈玛」其实是 Coltrane 的曲子 Naima），也要列：from=文稿里的写法，en=原文写法。原文看起来像拼音也没关系，只要你确定它是外语作品（如 Naima、Nima），就要列。说话人连说了两遍（如「奈玛奈玛」），from 按文稿原样，en 也对应写两遍。\n' +
     '只输出一个 JSON 数组，不要任何别的文字。每一项：{"from":"文稿里的原样写法","en":"正确的外文写法","zh":"中文意思或通行译名","lang":"这个词原本的语言，如 英语"}。\n' +
     '像 OK、bye、hi、yes、no、thanks、sorry、wow、cool 这类中文里人人都懂的日常词，zh 填空字符串 ""（不要给中文翻译，只需要纠正写法）。\n' +
     'from 必须和文稿里的文字一字不差；拿不准是不是用外语说的就不要列。\n\n文稿：\n' + text;
@@ -4840,7 +4841,9 @@ function parseTerms(txt){
   }).filter(function(x){
     if(!x || !x.from || !x.en || x.from.length > 60 || x.en.length > 80 || !/[A-Za-z]/.test(x.en)) return false;
     if(/中文|汉语|普通话|粤语|chinese|mandarin|cantonese/i.test(x.lang)) return false;   // 本来就是中文的
-    if(!/[A-Za-z]/.test(x.from) && pinyinLike(x.en)) return false;                         // 中文名字被写成了拼音
+    // 中文名字被写成了拼音；但模型明确说是外语、且只有一个词（连说两遍也算）的（如 Naima 碰巧像拼音 nai-ma），相信模型
+    var foreignLang = x.lang && !/中文|汉|chinese|mandarin|cantonese/i.test(x.lang);
+    if(!/[A-Za-z]/.test(x.from) && pinyinLike(x.en) && !(foreignLang && x.en.toLowerCase().split(/\s+/).filter(function(w, i, a){ return a.indexOf(w) === i; }).length === 1)) return false;
     return true;
   });
 }
