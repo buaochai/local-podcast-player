@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.41.2">
+<meta name="app-version" content="0.41.3">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -15,13 +15,13 @@
 :root{
   --bg:#f6f5f2; --card:#ffffff; --text:#1d1d1f; --muted:#6b6b70; --line:#e4e2dd;
   --accent:#1f6f5c; --accent-soft:#e2f0eb; --on-accent:#ffffff; --danger:#c0392b;
-  --shadow:0 6px 24px rgba(0,0,0,.14); --pop:rgba(255,255,255,.72); --sheet:rgba(247,246,242,.9); --mini:rgba(255,255,255,.78); --done:#2a7de1; --pop-line:rgba(0,0,0,.08);
+  --shadow:0 6px 24px rgba(0,0,0,.14); --pop:rgba(255,255,255,.72); --sheet:rgba(247,246,242,.9); --mini:rgba(255,255,255,.58); --done:#2a7de1; --pop-line:rgba(0,0,0,.08);
 }
 @media (prefers-color-scheme: dark){
   :root{
     --bg:#121413; --card:#1c1f1e; --text:#ecece9; --muted:#9a9c99; --line:#2c302e;
     --accent:#5cc3a4; --accent-soft:#1d3a32; --on-accent:#0d1f1a; --danger:#ff7b6e;
-    --shadow:0 6px 24px rgba(0,0,0,.5); --pop:rgba(38,42,40,.72); --sheet:rgba(30,33,32,.9); --mini:rgba(38,42,40,.78); --done:#5ea8ff; --pop-line:rgba(255,255,255,.1);
+    --shadow:0 6px 24px rgba(0,0,0,.5); --pop:rgba(38,42,40,.72); --sheet:rgba(30,33,32,.9); --mini:rgba(38,42,40,.6); --done:#5ea8ff; --pop-line:rgba(255,255,255,.1);
   }
 }
 *{box-sizing:border-box}
@@ -178,7 +178,7 @@ body.selecting.show-page:not(.playing) .list-scroll,body.selecting.has-player .l
 /* 悬浮播放器 */
 .mini{
   position:absolute;left:16px;right:16px;bottom:max(10px, calc(env(safe-area-inset-bottom) - 12px));z-index:5;   /* 左右和文稿框一样宽，悬浮在屏幕底部上方一点点 */
-  background:var(--mini);-webkit-backdrop-filter:blur(22px) saturate(1.6);backdrop-filter:blur(22px) saturate(1.6);
+  background:var(--mini);-webkit-backdrop-filter:blur(18px) saturate(1.8);backdrop-filter:blur(18px) saturate(1.8);
   border:1px solid var(--pop-line);border-radius:22px;box-shadow:0 8px 30px rgba(0,0,0,.2);
   padding:10px 12px 8px;
 }
@@ -950,10 +950,10 @@ function progressText(r){
   if(r && r.finished) return '已听完';
   if(!r || !r.updated) return '未播放';
   if(!r.duration) return '已听 ' + fmt(r.position);
-  // 位置的写法和总时长一样宽（补零），百分比补到三位宽，数字等宽：播放时这一段的宽度不会变，不会一下换行一下又回来
-  var full = fmt(r.duration), pos = fmt(Math.min(r.position, r.duration)), pct = String(Math.min(100, Math.floor(r.position / r.duration * 100)));
+  // 位置的写法和总时长一样宽（补零），数字等宽：播放时这一段的宽度不会变，不会一下换行一下又回来
+  var full = fmt(r.duration), pos = fmt(Math.min(r.position, r.duration));
   while(pos.length < full.length) pos = '0' + pos;
-  return '已听 ' + pos + ' / ' + full + '（' + pct.padStart(3, '\u2007') + '%）';
+  return '已听 ' + pos + ' / ' + full;
 }
 function progressBar(r){
   var p = el('div', 'prog'), i = el('i');
