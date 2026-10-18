@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.43.1">
+<meta name="app-version" content="0.43.2">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -269,8 +269,10 @@ li.has-edit{position:relative}
 #bMusic.on{opacity:1;color:var(--accent)}   /* 提到了音乐：亮起来 */
 #bMusic b{position:absolute;top:3px;right:1px;min-width:15px;height:15px;padding:0 3px;border-radius:8px;background:var(--accent);color:var(--on-accent);font-size:10px;line-height:15px;font-weight:700;text-align:center}
 #bMusic b:empty{display:none}
-a.opt{text-decoration:none;color:var(--text)}
+a.mu-main{display:flex;align-items:center;flex:1;min-width:0;text-decoration:none;color:var(--text)}
+.opt.mu{gap:10px;cursor:default}
 .opt.mu .mu-go{flex:none;font-size:13px;color:var(--accent);margin-left:10px;white-space:nowrap}
+.mu-t{flex:none;border:none;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:6px 10px;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
 .ep-name,.ep-album{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 /* 文稿页的播放器：还在底部，但矮一点、没有封面 */
 body.ep-page .mini{padding:6px 10px 4px}
@@ -4770,6 +4772,7 @@ function musicify(key, signal){
       });
     });
   }, Promise.resolve()).then(function(){
+    all.sort(function(a, b){ return a.t - b.t; });   // 按在文稿里出现的先后排
     tr.music = all; tr.musicAt = Date.now();
     return trPut(tr).then(function(){ return all.length; });
   });
@@ -4790,13 +4793,25 @@ function musicRun(key){
 function openMusicSheet(key){
   var tr = trCache[key], ul = $('musicList'); ul.innerHTML = '';
   var KIND = {song:'歌曲', album:'专辑', artist:'音乐人', piece:'乐曲'};
-  (tr && tr.music || []).forEach(function(m){
-    var a = el('a', 'opt mu'); a.href = m.url; a.target = '_blank'; a.rel = 'noopener';
+  (tr && tr.music || []).slice().sort(function(x, y){ return x.t - y.t; }).forEach(function(m){
+    var row = el('div', 'opt mu');
+    // 左边：文稿时间，点一下跳到那里播放
+    var tb = el('button', 'mu-t', '▶ ' + fmt(m.t));
+    tb.setAttribute('aria-label', '跳到 ' + fmt(m.t) + ' 播放');
+    tb.onclick = function(){
+      var ep = findEp(key);
+      if(!ep){ toast('文件缺失，没法播放'); return; }
+      closeSheet('musicSheet'); trTouch = 0; trFollow();
+      open(ep, true, m.t);
+    };
+    // 中间 + 右边：点名称或「Apple Music」都在 Apple Music 里打开
+    var a = el('a', 'mu-main'); a.href = m.url; a.target = '_blank'; a.rel = 'noopener';
     var g = el('span', 'grow');
     g.appendChild(el('span', 'mk-note clamp2', m.title));
-    g.appendChild(el('small', 'line1', (KIND[m.kind] || '') + (m.artist ? ' · ' + m.artist : '') + ' · 文稿 ' + fmt(m.t)));
+    g.appendChild(el('small', 'line1', (KIND[m.kind] || '') + (m.artist ? ' · ' + m.artist : '')));
     a.appendChild(g); a.appendChild(el('span', 'mu-go', 'Apple Music ↗'));
-    var li = el('li'); li.appendChild(a); ul.appendChild(li);
+    row.appendChild(tb); row.appendChild(a);
+    var li = el('li'); li.appendChild(row); ul.appendChild(li);
     var ent = m.kind === 'album' ? 'album' : m.kind === 'artist' ? 'musicArtist' : 'song';
     var term = m.kind === 'artist' ? m.title : ((m.artist ? m.artist + ' ' : '') + m.title);
     fetch('https://itunes.apple.com/search?limit=1&entity=' + ent + '&term=' + encodeURIComponent(term)).then(function(r){ return r.json(); }).then(function(j){
