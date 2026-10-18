@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.35.5">
+<meta name="app-version" content="0.35.6">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -4159,6 +4159,7 @@ function termsPrompt(text){
     '请只找出说话人【实际用外语说出来】的词。它们在文稿里有两种样子：一是语音识别已经写成了外文；二是语音识别把外语发音写成了读不通的中文同音字。\n' +
     '绝对不要列：用中文说的内容，包括中国的人名、地名、事件、作品（如 梁文道、汶川地震），以及外国名字的通行中文译名（如说话人用中文说的「迈尔斯·戴维斯」）——这些保持中文，不要翻成英文或拼音。\n' +
     '只输出一个 JSON 数组，不要任何别的文字。每一项：{"from":"文稿里的原样写法","en":"正确的外文写法","zh":"中文意思或通行译名","lang":"这个词原本的语言，如 英语"}。\n' +
+    '像 OK、bye、hi、yes、no、thanks、sorry、wow、cool 这类中文里人人都懂的日常词，zh 填空字符串 ""（不要给中文翻译，只需要纠正写法）。\n' +
     'from 必须和文稿里的文字一字不差；拿不准是不是用外语说的就不要列。\n\n文稿：\n' + text;
 }
 // 拼音（如 Liang Wendao、Wenchuan）：这是中文的名字，不该写成外文
@@ -4168,11 +4169,18 @@ function pinyinLike(en){
   if(!w.length || !/^[A-Z]/.test(w[0]) || /[A-Z]{2}/.test(en) || !PINYIN.test(w[0])) return false;
   return w[0].length > 2 || w.every(function(x){ return PINYIN.test(x); });   // 第一个词是拼音；太短的（如 Da）要整个都是拼音
 }
+// 人人都懂的日常外语词：只纠正写法，不附中文翻译
+var COMMON_EN = {};
+'ok okay bye hi hello hey yes no yeah yep nope thanks thank sorry wow cool oh ah uh um hmm sir madam please welcome party show vip app wifi tv pk dj cd dvd mv ktv pc ai gps usb sim id live happy bingo oops nice good sorry pass fans fan hot top bug'.split(' ').forEach(function(w){ COMMON_EN[w] = 1; });
+function isCommonEn(en){ return en.toLowerCase().replace(/[^a-z ]/g, ' ').trim().split(/\s+/).every(function(w){ return COMMON_EN[w]; }); }
 function parseTerms(txt){
   var m = /\[[\s\S]*\]/.exec(txt || ''), arr = [];
   try{ arr = JSON.parse(m ? m[0] : '[]'); }catch(e){ arr = []; }
   return (Array.isArray(arr) ? arr : []).map(function(x){
     return x && {from:clean(String(x.from || '')), en:clean(String(x.en || '')), zh:toSimp(clean(String(x.zh || ''))), lang:clean(String(x.lang || ''))};
+  }).map(function(x){
+    if(x && x.en && isCommonEn(x.en)) x.zh = '';
+    return x;
   }).filter(function(x){
     if(!x || !x.from || !x.en || x.from.length > 60 || x.en.length > 80 || !/[A-Za-z]/.test(x.en)) return false;
     if(/中文|汉语|普通话|粤语|chinese|mandarin|cantonese/i.test(x.lang)) return false;   // 本来就是中文的
