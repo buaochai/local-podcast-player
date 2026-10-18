@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.43.2">
+<meta name="app-version" content="0.43.3">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -4741,7 +4741,7 @@ function autoTerms(key){
 function musicPrompt(text){
   return '下面是一段中文播客的语音识别文稿，每行开头 [分:秒] 是这句话的时间。\n' +
     '请找出文稿里提到的【具体的音乐作品或音乐人】：歌曲、专辑、乐曲（包括古典作品）、歌手 / 乐队 / 作曲家。说话人推荐、播放、讲解、顺带提到的都算；「音乐」「旋律」「歌曲」这类泛称不算，不确定是不是音乐的不要列。\n' +
-    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"kind":"song 或 album 或 artist 或 piece","title":"作品名（kind 是 artist 时填人名）","artist":"创作者或演唱者，不知道就留空","t":提到它的那一句的时间（秒，整数）}。\n' +
+    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"kind":"song 或 album 或 artist 或 piece","title":"作品名（kind 是 artist 时填人名）","artist":"创作者或演唱者，不知道就留空","said":"文稿里提到它时原样的写法，必须和文稿里的文字一字不差（用来在文稿里定位）","t":提到它的那一句的时间（秒，整数）}。\n' +
     '外国的作品和人名尽量写成原文（如 Kind of Blue、Miles Davis），方便去 Apple Music 搜索；同一个作品只列一次；没有就输出 []。\n\n文稿：\n' + text;
 }
 function parseMusic(txt){
@@ -4754,9 +4754,25 @@ function parseMusic(txt){
     if(!title || title.length > 80) return;
     var id = (title + '|' + artist).toLowerCase(); if(seen[id]) return; seen[id] = 1;
     var term = (kind === 'artist' ? title : (artist ? artist + ' ' : '') + title).trim();
-    out.push({kind:kind, title:title, artist:kind === 'artist' ? '' : artist, t:Math.max(0, Math.floor(+x.t) || 0), url:'https://music.apple.com/search?term=' + encodeURIComponent(term)});
+    out.push({kind:kind, title:title, artist:kind === 'artist' ? '' : artist, said:clean(String(x.said || '')).slice(0, 80), t:Math.max(0, Math.floor(+x.t) || 0), url:'https://music.apple.com/search?term=' + encodeURIComponent(term)});
   });
   return out;
+}
+// 模型给的时间不可靠，所以拿它说的原话（或作品名 / 人名）回文稿里找第一次出现的那一句，用那一句的时间
+function normFind(t){ return String(t || '').toLowerCase().replace(/[\s\u3000\-_.,，。！？!?:：；;、'"“”‘’《》()（）\[\]【】·]/g, ''); }
+function musicTime(tr, m){
+  var segs = (tr && tr.segments) || [], norm = segs.map(function(x){ return normFind(x.text); });
+  var needles = [m.said, m.title, m.artist].map(normFind).filter(function(n, i, a){ return n.length >= 2 && a.indexOf(n) === i; });
+  for(var k = 0; k < needles.length; k++){
+    for(var i = 0; i < segs.length; i++){
+      if(norm[i].indexOf(needles[k]) >= 0) return segs[i].t;
+      if(i + 1 < segs.length){   // 跨在两句之间的：从这一句开头的才算这一句
+        var at = (norm[i] + norm[i + 1]).indexOf(needles[k]);
+        if(at >= 0 && at < norm[i].length) return segs[i].t;
+      }
+    }
+  }
+  return m.t;   // 文稿里实在找不到，才用模型给的大概时间
 }
 function musicify(key, signal){
   var tr = trCache[key];
@@ -4772,6 +4788,7 @@ function musicify(key, signal){
       });
     });
   }, Promise.resolve()).then(function(){
+    all.forEach(function(m){ m.t = musicTime(tr, m); });   // 时间以文稿里第一次出现的位置为准
     all.sort(function(a, b){ return a.t - b.t; });   // 按在文稿里出现的先后排
     tr.music = all; tr.musicAt = Date.now();
     return trPut(tr).then(function(){ return all.length; });
@@ -4793,7 +4810,7 @@ function musicRun(key){
 function openMusicSheet(key){
   var tr = trCache[key], ul = $('musicList'); ul.innerHTML = '';
   var KIND = {song:'歌曲', album:'专辑', artist:'音乐人', piece:'乐曲'};
-  (tr && tr.music || []).slice().sort(function(x, y){ return x.t - y.t; }).forEach(function(m){
+  (tr && tr.music || []).map(function(m0){ var m = Object.assign({}, m0); m.t = musicTime(tr, m0); return m; }).sort(function(x, y){ return x.t - y.t; }).forEach(function(m){
     var row = el('div', 'opt mu');
     // 左边：文稿时间，点一下跳到那里播放
     var tb = el('button', 'mu-t', '▶ ' + fmt(m.t));
