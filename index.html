@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.37.6">
+<meta name="app-version" content="0.38.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -15,13 +15,13 @@
 :root{
   --bg:#f6f5f2; --card:#ffffff; --text:#1d1d1f; --muted:#6b6b70; --line:#e4e2dd;
   --accent:#1f6f5c; --accent-soft:#e2f0eb; --on-accent:#ffffff; --danger:#c0392b;
-  --shadow:0 6px 24px rgba(0,0,0,.14); --pop:rgba(255,255,255,.72); --sheet:rgba(247,246,242,.9); --pop-line:rgba(0,0,0,.08);
+  --shadow:0 6px 24px rgba(0,0,0,.14); --pop:rgba(255,255,255,.72); --sheet:rgba(247,246,242,.9); --mini:rgba(255,255,255,.78); --pop-line:rgba(0,0,0,.08);
 }
 @media (prefers-color-scheme: dark){
   :root{
     --bg:#121413; --card:#1c1f1e; --text:#ecece9; --muted:#9a9c99; --line:#2c302e;
     --accent:#5cc3a4; --accent-soft:#1d3a32; --on-accent:#0d1f1a; --danger:#ff7b6e;
-    --shadow:0 6px 24px rgba(0,0,0,.5); --pop:rgba(38,42,40,.72); --sheet:rgba(30,33,32,.9); --pop-line:rgba(255,255,255,.1);
+    --shadow:0 6px 24px rgba(0,0,0,.5); --pop:rgba(38,42,40,.72); --sheet:rgba(30,33,32,.9); --mini:rgba(38,42,40,.78); --pop-line:rgba(255,255,255,.1);
   }
 }
 *{box-sizing:border-box}
@@ -111,6 +111,7 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .sr-item{display:block;width:100%;text-align:left;border:none;background:var(--card);border-radius:12px;padding:10px 12px;margin:0 0 8px;color:var(--text)}
 .sr-item .a{font-size:15px;font-weight:600}
 .sr-item .b{font-size:13px;color:var(--muted);margin-top:2px}
+.tr-s.found{background:rgba(255,200,0,.38);border-radius:3px}
 .sr-item mark{background:rgba(255,200,0,.35);color:inherit;border-radius:3px}
 .sr-item .a.plain{font-weight:400;line-height:1.6}
 .sr-item .sr-t{color:var(--accent);font-weight:600;font-variant-numeric:tabular-nums}
@@ -124,7 +125,7 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .item{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--line)}
 .item:first-child{border-top:none}
 .item{position:relative}
-.ep-seq{position:absolute;right:10px;bottom:5px;min-width:16px;padding:0 4px;border:1px solid var(--line);border-radius:4px;font-size:10px;line-height:14px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums;pointer-events:none}
+.ep-seq{position:absolute;right:10px;bottom:4px;min-width:16px;padding:0 4px;border:1px solid var(--line);border-radius:4px;font-size:10px;line-height:14px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums;pointer-events:none}
 .item.cur{background:var(--accent-soft)}
 .item-main{flex:1;min-width:0}
 .item-name{line-height:1.4}
@@ -139,6 +140,13 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .prog i{display:block;height:100%;background:var(--accent)}
 .info-btn{border:none;background:transparent;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none;margin-right:-8px;margin-left:-4px}
 .info-btn svg{width:22px;height:22px;fill:currentColor}
+/* 单集右边：两行两列（上：播放、「!」；下：上传、下载） */
+.item-acts{display:grid;grid-template-columns:repeat(2,30px);grid-auto-rows:28px;justify-items:center;align-items:center;flex:none;margin-right:-6px}
+.item-acts .info-btn,.item-acts .play-btn,.item-acts .cl-btn{width:30px;height:28px;margin:0;padding:0}
+.play-btn{border:none;background:transparent;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--accent);flex:none}
+.play-btn svg{width:22px;height:22px;fill:currentColor}
+.cl-ph{width:30px;height:28px}
+.item{padding-bottom:20px}
 .chk{flex:none;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--muted);display:flex;align-items:center;justify-content:center}
 .chk.on{background:var(--accent);border-color:var(--accent)}
 .chk.on::after{content:"";width:6px;height:11px;border:solid var(--on-accent);border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
@@ -155,8 +163,9 @@ body.selecting.show-page:not(.playing) .list-scroll,body.selecting.has-player .l
 
 /* 悬浮播放器 */
 .mini{
-  position:absolute;left:0;right:0;bottom:0;z-index:5;   /* 贴紧屏幕底部（底部留出 iPhone 横条的位置） */
-  background:var(--card);border:1px solid var(--line);border-bottom:none;border-radius:18px 18px 0 0;box-shadow:var(--shadow);
+  position:absolute;left:16px;right:16px;bottom:0;z-index:5;   /* 左右和文稿框一样宽，底部仍贴紧屏幕（留出 iPhone 横条的位置） */
+  background:var(--mini);-webkit-backdrop-filter:blur(22px) saturate(1.6);backdrop-filter:blur(22px) saturate(1.6);
+  border:1px solid var(--pop-line);border-bottom:none;border-radius:18px 18px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.14);
   padding:10px 12px calc(6px + env(safe-area-inset-bottom));
 }
 /* 专辑页（节目列表）：没在播放时不显示播放器 */
@@ -301,15 +310,13 @@ select.input{appearance:auto;-webkit-appearance:menulist}
 .cl-btn svg{width:22px;height:22px;fill:currentColor}
 .cl-btn.done{color:var(--accent)}
 .cl-btn.busy{color:#e09a10}
-.cl-btn.busy svg{animation:clup .95s ease-in-out infinite}
-.cl-btn.busy.down svg{animation-name:cldown}
-.cl-btn.busy::after{content:'';position:absolute;left:0;top:4px;width:28px;height:28px;border-radius:50%;pointer-events:none;
+.cl-btn.busy svg{animation:trpulse 1.4s ease-in-out infinite}   /* 和转文稿一样轻微地闪，表示在进行 */
+.cl-btn.busy::after{content:'';position:absolute;left:1px;top:0;width:28px;height:28px;border-radius:50%;pointer-events:none;
   background:conic-gradient(currentColor calc(var(--p, 0) * 1%), rgba(127,127,127,.25) 0);
   -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px));mask:radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px))}
-@keyframes clup{0%{transform:translateY(5px);opacity:.15}50%{opacity:1}100%{transform:translateY(-5px);opacity:.15}}
-@keyframes cldown{0%{transform:translateY(-5px);opacity:.15}50%{opacity:1}100%{transform:translateY(5px);opacity:.15}}
 /* 播放列表 */
 .opt.q{padding-right:116px}
+.q-no{flex:none;width:24px;height:24px;margin-right:12px;border-radius:50%;background:var(--accent);color:var(--on-accent);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
 .q-acts{position:absolute;right:4px;top:50%;transform:translateY(-50%);display:flex}
 .q-acts button{border:none;background:transparent;width:36px;height:40px;display:flex;align-items:center;justify-content:center;color:var(--muted);border-radius:50%}
 .q-acts button svg{width:20px;height:20px;fill:currentColor}
@@ -1070,6 +1077,7 @@ function takeQueued(){
   saveQueue();
   return ep;
 }
+var ICO_PLAY_S = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>', ICO_PAUSE_S = '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>';
 var ICO_UP = '<svg viewBox="0 0 24 24"><path d="M7.4 15.4 12 10.8l4.6 4.6L18 14l-6-6-6 6z"/></svg>', ICO_DOWN = '<svg viewBox="0 0 24 24"><path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg>', ICO_X = '<svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>';
 function qMove(i, d){ var j = i + d; if(j < 0 || j >= queue.length) return; var t = queue[i]; queue[i] = queue[j]; queue[j] = t; saveQueue(); renderQueue(); }
 function qShuffle(){ for(var i = queue.length - 1; i > 0; i--){ var j = Math.floor(Math.random() * (i + 1)), t = queue[i]; queue[i] = queue[j]; queue[j] = t; } saveQueue(); renderQueue(); toast('已打乱'); }
@@ -1093,9 +1101,9 @@ function renderQueue(){
   var ul = $('queueList'); ul.innerHTML = '';
   queue.forEach(function(k, i){
     var li = el('li', 'has-edit'), b = el('button', 'opt q'), g = el('span', 'grow');
-    g.appendChild(el('span', 'mk-note clamp2', (i + 1) + '. ' + titleOf(k)));
+    g.appendChild(el('span', 'mk-note clamp2', titleOf(k)));
     g.appendChild(el('small', 'line1', showLabel(showOf(k))));
-    b.appendChild(g);
+    b.appendChild(el('span', 'q-no', String(i + 1))); b.appendChild(g);
     b.onclick = function(){ queue.splice(i, 1); saveQueue(); closeSheet('queueSheet'); open(findEp(k), true); renderMini(); };
     var acts = el('span', 'q-acts');
     [[ICO_UP, '上移', i === 0, function(){ qMove(i, -1); }], [ICO_DOWN, '下移', i === queue.length - 1, function(){ qMove(i, 1); }],
@@ -1289,6 +1297,10 @@ function setPlayIcon(){
   $('playIcon').innerHTML = playing ? '<path d="M6 5h4v14H6zm8 0h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
   $('bPlay').setAttribute('aria-label', playing ? '暂停' : '播放');
   document.body.classList.toggle('playing', playing);
+  Array.prototype.forEach.call(document.querySelectorAll('.play-btn'), function(b){   // 列表里每集的播放按钮跟着变
+    var on = playing && cur && cur.key === b.dataset.k;
+    b.innerHTML = on ? ICO_PAUSE_S : ICO_PLAY_S; b.setAttribute('aria-label', on ? '暂停' : '播放');
+  });
 }
 
 audio.addEventListener('timeupdate', function(){ updateTimes(); recordNow(false); checkSleep(); });
@@ -2604,6 +2616,8 @@ function canonShow(name){
 function cloudImport(dir){
   return cloudApi({op:'list', prefix:dir}).then(function(j){
     var folder = dir.replace(/\/+$/, ''), show = folder.split('/').pop(), have = {}, n = 0, now = Date.now();
+    // 创作者 = 专辑文件夹的上一级（路径至少三层：根/作者/专辑）
+    var segs = folder.split('/'), author = segs.length >= 3 ? segs[segs.length - 2] : '';
     // 网页里已经有同一个专辑（名字写法不同但按统一规则是同一个），就直接放进那个专辑，不再多出一个
     var cs = canonShow(show), seenShow = {};
     episodes.forEach(function(e){ if(e.show) seenShow[e.show] = 1; });
@@ -2638,6 +2652,7 @@ function cloudImport(dir){
     // 文件夹里的封面图（cover / folder / front 等），没有就用文件夹里唯一的一张图
     var imgs = (j.files || []).filter(function(f){ return /\.(jpe?g|png|webp)$/i.test(f.key) && f.size > 0 && f.size < 12e6; });
     var pick = imgs.filter(function(f){ return /^(cover|folder|front|albumart|poster|封面)\.[a-z]+$/i.test(f.key.split('/').pop()); })[0] || (imgs.length === 1 ? imgs[0] : null);
+    if(author){ shows[show] = shows[show] || {}; if(!shows[show].author){ shows[show].author = author; shows[show].at = now; saveShows(); } }
     var res = {n:n, merged:merged, total:(j.files || []).length};
     if(!pick || (shows[show] && (shows[show].cover || shows[show].coverUrl))) return res;
     return cloudApi({op:'get', keys:[pick.key]}).then(function(g){
@@ -3052,6 +3067,14 @@ function render(){
   $('bNewAlbum').hidden = !home; $('bRss').hidden = !home; $('bFav').hidden = !home;
   // 搜索：首页是全局搜索，其他页面只搜所在的这个地方；换了页面就收起
   $('bSearch').hidden = selecting;
+  if(searchResume){
+    if(pageKey !== searchResume.key) searchResume.left = true;
+    else if(searchResume.left && !searchOpen){   // 退回到搜索前的页面：恢复搜索词和结果（不弹键盘）
+      searchOpen = true; searchQ = searchResume.q; searchResume = null;
+      $('searchIn').hidden = false; $('searchIn').value = searchQ; $('bSearch').classList.add('on');
+      samePage = true;
+    }
+  }
   if(searchOpen && !samePage) closeSearch(true);
   document.querySelector('header').classList.toggle('searching', searchOpen);
   $('searchIn').placeholder = home ? '搜索全部节目、单集、文稿' : isEp ? '搜索这一集的文稿' : isFav ? '搜索收藏' : '搜索这个专辑';
@@ -3159,6 +3182,9 @@ function renderFav(box){
   box.appendChild(sc);
 }
 /* ---------- 搜索（首页右上角放大镜，向左展开输入框）---------- */
+var searchResume = null, pendingLocate = null;
+// 点搜索结果进入别的页面前先记下搜索词，退回来时把搜索结果恢复出来
+function stashSearch(){ if(searchOpen && searchQ.trim()) searchResume = {q:searchQ, key:renderedKey, left:false}; }
 var searchOpen = false, searchQ = '', searchTimer = null, trAllReady = false, trAllLoading = false;
 function openSearch(){
   searchOpen = true; $('searchIn').hidden = false; $('bSearch').classList.add('on');
@@ -3231,11 +3257,11 @@ function buildSearch(scopeKeys){
     if(b){ var y = el('div', 'b ' + (hl ? 'clamp2' : 'line1')); if(hl) hilite(y, b, q); else y.textContent = b; it.appendChild(y); }
     it.onclick = fn; wrap.appendChild(it);
   }
-  if(shs.length){ sec('节目'); shs.slice(0, 20).forEach(function(x){ item(showLabel(x.name), x.keys.length + ' 集', function(){ closeSearch(true); goShow(x.name); }); }); }
-  if(eps.length){ sec('单集'); eps.slice(0, 40).forEach(function(k){ item(titleOf(k), scoped ? progressText(records[k]) : showLabel(showOf(k)), function(){ closeSearch(true); openEpPage(k); }); }); }
+  if(shs.length){ sec('节目'); shs.slice(0, 20).forEach(function(x){ item(showLabel(x.name), x.keys.length + ' 集', function(){ stashSearch(); closeSearch(true); goShow(x.name); }); }); }
+  if(eps.length){ sec('单集'); eps.slice(0, 40).forEach(function(k){ item(titleOf(k), scoped ? progressText(records[k]) : showLabel(showOf(k)), function(){ stashSearch(); closeSearch(true); openEpPage(k); }); }); }
   if(hits.length){ sec('文稿内容'); hits.forEach(function(h){ item(titleOf(h.key) + ' · ' + fmt(h.t), snippet(h.text, q), function(){
-    var ep = findEp(h.key); closeSearch(true);
-    if(ep) open(ep, true, h.t);
+    stashSearch(); closeSearch(true);   // 只定位到文稿里的这句，不切换播放
+    pendingLocate = {key:h.key, t:h.t};
     goEp(h.key);
   }, true); }); }
   if(!shs.length && !eps.length && !hits.length) wrap.appendChild(el('div', 'empty', trAllReady ? '没有找到「' + searchQ.trim() + '」。' : '正在搜索文稿…'));
@@ -3253,10 +3279,8 @@ function buildEpSearch(key){
     var it = el('button', 'sr-item'), x = el('div', 'a plain'); x.appendChild(el('span', 'sr-t', fmt(sg.t) + '　'));
     hilite(x, snippet(sg.text, q), q); it.appendChild(x);
     it.onclick = function(){
-      var ep = findEp(key);
-      if(!ep){ toast('文件缺失，没法播放'); return; }
-      closeSearch(); trTouch = 0; trFollow();   // 先收起搜索、回到文稿，再跳到那一句
-      open(ep, true, sg.t);
+      pendingLocate = {key:key, t:sg.t};   // 只定位，不播放
+      closeSearch();
     };
     wrap.appendChild(it);
   });
@@ -3447,18 +3471,31 @@ function renderShow(box){
 
     if(!isFeed) li.appendChild(el('span', 'ep-seq', String(idx + 1)));   // 右下角：这一集在列表里的位置（订阅的播客不显示）
     if(!selMode){
-      var cu = clBtn(k, 'up'), cd = clBtn(k, 'down');   // 上传 / 下载图标，和「!」在一起
-      if(cu) li.appendChild(cu);
-      if(cd) li.appendChild(cd);
+      // 右边两行：上面 播放 + 「!」，下面 上传 + 下载（没有的位置留空，别的不挪位）
+      var acts = el('div', 'item-acts');
+      var pb = el('button', 'play-btn');
+      var playing = ep && ep === cur && !audio.paused;
+      pb.dataset.k = k; pb.setAttribute('aria-label', playing ? '暂停' : '播放');
+      pb.innerHTML = playing ? ICO_PAUSE_S : ICO_PLAY_S;
+      pb.onclick = function(e){
+        e.stopPropagation();
+        var e2 = findEp(k);
+        if(!e2){ toast('文件缺失，没法播放'); return; }
+        if(e2 === cur){ if(audio.paused) play(); else audio.pause(); } else open(e2, true);
+      };
+      acts.appendChild(pb);
       var ib = el('button', 'info-btn');
       ib.setAttribute('aria-label', '详情');
       ib.innerHTML = '<svg viewBox="0 0 24 24"><path d="M11 15h2v2h-2zm0-8h2v6h-2zm.99-5C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/></svg>';
       ib.onclick = function(e){ e.stopPropagation(); showEpPop(k, ib); };
-      li.appendChild(ib);
+      acts.appendChild(ib);
+      acts.appendChild(clBtn(k, 'up') || el('span', 'cl-ph'));
+      acts.appendChild(clBtn(k, 'down') || el('span', 'cl-ph'));
+      li.appendChild(acts);
     }
     li.onclick = selMode ? function(){ if(Date.now() - selStamp > 600) toggleSel(k); }
                : function(){ openEpPage(k); };
-    onLongPress(li, function(){ if(!selMode) enterSel(k); }, function(target){ return target.closest && (target.closest('.info-btn') || target.closest('.cl-btn')); });
+    onLongPress(li, function(){ if(!selMode) enterSel(k); }, function(target){ return target.closest && target.closest('.item-acts'); });
     ul.appendChild(li);
   });
   scroll.appendChild(ul);
@@ -4237,7 +4274,18 @@ function toSimp(text){
 var HALLU = [/请不吝.{0,8}点赞/, /点赞.{0,6}订阅.{0,6}(转发|打赏)/, /明镜与点点/, /Amara\.org/i, /字幕(由|志愿者|制作|提供)/,
   /YoYo Television/i, /优优独播剧场/, /^(谢谢|感谢)(大家)?(观看|收看)[。！!.]?$/];
 function tKey(t){ return t.replace(/[\s，,。.！？!?、；;：:“”"'‘’]/g, ''); }
+// 「OK（好的）」这类日常外语词后面的中文翻译去掉（旧文稿、新识别的都在这里清）
+function stripCommonGloss(t){
+  try{
+    return String(t || '').replace(/(^|[^A-Za-z.'])([A-Za-z.']+(?:\s[A-Za-z.']+)?)\s*[（(]([^）)]{1,16})[）)]/g, function(m, pre, en, zh){
+      if(!/[\u4e00-\u9fa5]/.test(zh)) return m;
+      var w = en.split(/\s+/);
+      return isCommonEn(en) || isCommonEn(w[w.length - 1]) ? pre + en : m;
+    });
+  }catch(e){ return t; }
+}
 function cleanText(text){
+  text = stripCommonGloss(text);
   var parts = String(text || '').match(/[^。！？!?]+[。！？!?]*/g) || [], out = [], prev = '';
   parts.forEach(function(p){
     var k = tKey(p);
@@ -4395,8 +4443,8 @@ function pinyinLike(en){
 }
 // 人人都懂的日常外语词：只纠正写法，不附中文翻译
 var COMMON_EN = {};
-'ok okay bye hi hello hey yes no yeah yep nope thanks thank sorry wow cool oh ah uh um hmm sir madam please welcome party show vip app wifi tv pk dj cd dvd mv ktv pc ai gps usb sim id live happy bingo oops nice good sorry pass fans fan hot top bug'.split(' ').forEach(function(w){ COMMON_EN[w] = 1; });
-function isCommonEn(en){ return en.toLowerCase().replace(/[^a-z ]/g, ' ').trim().split(/\s+/).every(function(w){ return COMMON_EN[w]; }); }
+'ok okay k bye hi hello hey yes no yeah yep nope thanks thank sorry wow cool oh ah uh um hmm sir madam please welcome party show vip app wifi tv pk dj cd dvd mv ktv pc ai gps usb sim id live happy bingo oops nice good sorry pass fans fan hot top bug'.split(' ').forEach(function(w){ COMMON_EN[w] = 1; });
+function isCommonEn(en){ var t = en.toLowerCase().replace(/\./g, '').replace(/[^a-z ]/g, ' ').trim(); return !!t && t.split(/\s+/).every(function(w){ return COMMON_EN[w]; }); }
 function parseTerms(txt){
   var m = /\[[\s\S]*\]/.exec(txt || ''), arr = [];
   try{ arr = JSON.parse(m ? m[0] : '[]'); }catch(e){ arr = []; }
@@ -4699,9 +4747,9 @@ function goEp(key){
 function openEpPage(key){
   var ep = findEp(key);
   if(!ep && !hasTr[key]){ toast('文件缺失，点「＋」重新添加这一集'); return; }
-  if(ep && ep !== cur) open(ep, true);
-  else if(ep && audio.paused) play();          // 就是当前这一集但暂停着：接着播
-  goEp(key);
+  if(!cur && ep) open(ep, true);                // 什么都没在播：点哪集就播哪集
+  else if(ep && ep === cur && audio.paused) play();   // 就是当前这一集但暂停着：接着播
+  goEp(key);                                    // 已经有在播的别的集：只进文稿页看，不切换播放
 }
 function trRender(){
   showTrJob();
@@ -4800,6 +4848,16 @@ function renderEp(box){
   loc.hidden = !trUser;
   loc.onclick = function(){ trFollow(true); };
   box.appendChild(loc);
+  if(pendingLocate && pendingLocate.key === key && trSegs.length){   // 从搜索进来：滚到那一句并标出来，不播放，也不被「跟随」拉走
+    var pl = pendingLocate, li2 = 0; pendingLocate = null;
+    for(var qi = 0; qi < trSegs.length; qi++){ if(trSegs[qi].t <= pl.t + 0.5) li2 = qi; else break; }
+    var node = trNodes[li2];
+    if(node){
+      trUser = Date.now() + 600000; clearTimeout(trBackTimer);
+      loc.hidden = !(cur && cur.key === key);
+      setTimeout(function(){ trScrollTo(node, false); node.classList.add('found'); setTimeout(function(){ node.classList.remove('found'); }, 4500); }, 30);
+    }
+  }
 }
 /* ---- 修改文稿：点播放器上的笔进入编辑，点一段修改 ---- */
 var trEdit = false, trEditing = null;
@@ -4977,7 +5035,7 @@ function trTick(force, jump){
     trNodes[idx].classList.add('now');
     if(trUser && Date.now() - trUser > TR_BACK) trFollow();   // 回去的计时器可能被系统暂停了（切到别的软件时），这里按时间再兜底
     var following = cur && cur.key === key && !trUser && !trEdit;
-    if(jump) trScrollTo(trNodes[idx], false);          // 刚进入页面：直接跳到播放的位置
+    if(jump && !(trUser > Date.now())) trScrollTo(trNodes[idx], false);          // 刚进入页面：直接跳到播放的位置
     else if(following) trScrollTo(trNodes[idx], true);
   }
 }
