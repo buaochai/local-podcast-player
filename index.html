@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.3">
+<meta name="app-version" content="0.46.4">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -4998,7 +4998,7 @@ function musicPrompt(text){
     '   例子：「我是通过蔡明亮的电影知道葛兰、白光那个时候的歌曲的」——葛兰、白光是歌手，要列（artist，role 填「歌手」）；蔡明亮是导演（person，role 填「导演」）。同一句里有几个人，每个都要单独列。\n' +
     '4. 泛称（「音乐」「旋律」「歌曲」「古典乐」「爵士乐」）不算；拿不准就不要列。\n' +
     (kn ? '5. 参考（以前听过的节目里已经确定的）：' + kn + '。这些人按已知身份处理，不用再判断。\n' : '') +
-    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"kind":"song 或 album 或 artist 或 piece 或 person","title":"作品名（kind 是 artist / person 时填人名，用文稿里的写法）","orig":"作品名或人名的原文写法：外国的必须写成原文（如 Kayhan Kalhor、Kind of Blue），中文的写中文","artist":"创作者或演唱者（文稿里的写法），不知道就留空","artistOrig":"创作者或演唱者的原文写法，外国的必须写原文","role":"kind 是 artist / person 时写这个人的主业，其他留空","said":"文稿里提到它时原样的写法，必须和文稿里的文字一字不差","why":"文稿里能证明说话人在把它当音乐说的那几个字（如「这首歌」「专辑」「演奏」「歌曲」），必须是文稿里的原话","t":提到它的那一句的时间（秒，整数）}。\n' +
+    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"kind":"song 或 album 或 artist 或 piece 或 person","title":"作品名（kind 是 artist / person 时填人名，用文稿里的写法）","orig":"作品名或人名的原文写法：外国的必须写成原文（如 Kayhan Kalhor、Kind of Blue），中文的写中文","artist":"创作者或演唱者（文稿里的写法），不知道就留空","artistOrig":"创作者或演唱者的原文写法，外国的必须写原文","role":"kind 是 artist / person 时写这个人的主业，其他留空","ver":"文稿里明确提到的版本信息（年份、演奏者或指挥、录音/现场版本，如 1959、卡拉扬 1963），没提到就留空，不要猜","said":"文稿里提到它时原样的写法，必须和文稿里的文字一字不差","why":"文稿里能证明说话人在把它当音乐说的那几个字（如「这首歌」「专辑」「演奏」「歌曲」），必须是文稿里的原话","t":提到它的那一句的时间（秒，整数）}。\n' +
     '同一个作品或人只列一次；没有就输出 []。\n\n文稿：\n' + text;
 }
 function parseMusic(txt){
@@ -5012,8 +5012,9 @@ function parseMusic(txt){
     var id = (kind + '|' + title + '|' + artist).toLowerCase(); if(seen[id]) return; seen[id] = 1;
     var orig = clean(String(x.orig || '')).slice(0, 80), aorig = clean(String(x.artistOrig || '')).slice(0, 80), isP = kind === 'artist' || kind === 'person';
     // Apple Music 里要用原文搜（「卡扬卡霍」搜不到，Kayhan Kalhor 才行）
-    var term = isP ? (orig || title) : (((aorig || artist) ? (aorig || artist) + ' ' : '') + (orig || title)).trim();
-    out.push({kind:kind, title:title, orig:orig, artist:isP ? '' : artist, artistOrig:isP ? '' : aorig, said:clean(String(x.said || '')).slice(0, 80), why:clean(String(x.why || '')).slice(0, 60), role:clean(String(x.role || '')).slice(0, 20), t:Math.max(0, Math.floor(+x.t) || 0), url:'https://music.apple.com/search?term=' + encodeURIComponent(term)});
+    var ver = isP ? '' : clean(String(x.ver || '')).slice(0, 30);
+    var term = isP ? (orig || title) : (((aorig || artist) ? (aorig || artist) + ' ' : '') + (orig || title) + (ver ? ' ' + ver : '')).trim();
+    out.push({kind:kind, title:title, orig:orig, artist:isP ? '' : artist, artistOrig:isP ? '' : aorig, said:clean(String(x.said || '')).slice(0, 80), why:clean(String(x.why || '')).slice(0, 60), role:clean(String(x.role || '')).slice(0, 20), ver:ver, t:Math.max(0, Math.floor(+x.t) || 0), url:'https://music.apple.com/search?term=' + encodeURIComponent(term)});
   });
   return out;
 }
@@ -5132,14 +5133,16 @@ function openMusicSheet(key){
     var g = el('span', 'grow');
     var np = nameParts(m.title, m.orig), ap = nameParts(m.artist, m.artistOrig);
     g.appendChild(el('span', 'mk-note clamp2', np.main));
-    g.appendChild(el('small', 'line1', [np.zh, KIND[m.kind] || '', m.artist ? ap.main + (ap.zh ? '（' + ap.zh + '）' : '') : ''].filter(Boolean).join(' · ')));
+    g.appendChild(el('small', 'line1', [np.zh, KIND[m.kind] || '', m.ver || '', m.artist ? ap.main + (ap.zh ? '（' + ap.zh + '）' : '') : ''].filter(Boolean).join(' · ')));
     a.appendChild(g); a.appendChild(el('span', 'mu-go', 'Apple Music ↗'));
     row.appendChild(tb); row.appendChild(a);
     var li = el('li'); li.appendChild(row); ul.appendChild(li);
     var ent = m.kind === 'album' ? 'album' : m.kind === 'artist' ? 'musicArtist' : 'song';
-    var term = m.kind === 'artist' ? (m.orig || m.title) : (((m.artistOrig || m.artist) ? (m.artistOrig || m.artist) + ' ' : '') + (m.orig || m.title));
-    fetch('https://itunes.apple.com/search?limit=1&entity=' + ent + '&term=' + encodeURIComponent(term)).then(function(r){ return r.json(); }).then(function(j){
-      var x = j && j.results && j.results[0], u = x && (x.trackViewUrl || x.collectionViewUrl || x.artistLinkUrl);
+    var term = m.kind === 'artist' ? (m.orig || m.title) : (((m.artistOrig || m.artist) ? (m.artistOrig || m.artist) + ' ' : '') + (m.orig || m.title) + (m.ver ? ' ' + m.ver : ''));
+    var yr = (/(1[5-9]\d\d|20\d\d)/.exec(m.ver || '') || [])[1];
+    fetch('https://itunes.apple.com/search?limit=' + (yr ? 10 : 1) + '&entity=' + ent + '&term=' + encodeURIComponent(term)).then(function(r){ return r.json(); }).then(function(j){
+      var rs = (j && j.results) || [];
+      var x = (yr && rs.filter(function(z){ return String(z.releaseDate || '').slice(0, 4) === yr; })[0]) || rs[0], u = x && (x.trackViewUrl || x.collectionViewUrl || x.artistLinkUrl);
       if(u) a.href = u;
     }).catch(function(){});
   });
