@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.41.3">
+<meta name="app-version" content="0.41.4">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -194,7 +194,13 @@ body.show-page .list-scroll{padding-bottom:16px}
 .chip{border:1px solid var(--line);background:transparent;border-radius:999px;height:30px;padding:0 9px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:3px;flex:none;font-variant-numeric:tabular-nums}
 .chip svg{width:16px;height:16px;fill:currentColor}
 .chip.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
-.seek{width:100%;margin:8px 0 0;accent-color:var(--accent);height:20px}
+.seek{width:100%;margin:8px 0 0;height:20px;-webkit-appearance:none;appearance:none;background:transparent;display:block}
+.seek::-webkit-slider-runnable-track{height:4px;border-radius:2px;border:none;background:linear-gradient(to right,var(--accent) var(--pct,0%),var(--line) var(--pct,0%))}
+.seek::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:12px;height:12px;border-radius:50%;border:none;background:var(--accent);margin-top:-4px;box-shadow:none}
+.seek::-moz-range-track{height:4px;border-radius:2px;border:none;background:var(--line)}
+.seek::-moz-range-progress{height:4px;border-radius:2px;background:var(--accent)}
+.seek::-moz-range-thumb{width:12px;height:12px;border-radius:50%;border:none;background:var(--accent)}
+.seek:focus{outline:none}
 .mini-ctl{display:flex;align-items:center;justify-content:space-between;padding:0 6px}
 .ctl{border:none;background:transparent;border-radius:50%;width:46px;height:46px;display:flex;align-items:center;justify-content:center;flex-direction:column;font-size:10px;line-height:1;color:var(--text)}
 .ctl svg{width:24px;height:24px;fill:currentColor}
@@ -264,6 +270,10 @@ body.ep-page .mini-cover{display:none}
 body.ep-page .mini-top{gap:6px}
 body.ep-page .mini-title{display:none}   /* 集名已经在页面上面了 */
 body.ep-page .seek{margin:2px 0 0;height:16px}
+/* 文稿页右上角：搜索在前，首页在后（搜索框始终紧挨在搜索按钮左边） */
+body.ep-page #bHome{order:1}
+body.ep-page #bEpMore{order:2}
+body.ep-page #bAbout{order:3}
 body.ep-page .ctl{width:40px;height:38px}
 body.ep-page .ctl.play{width:42px;height:42px}
 body.ep-page .ctl.play svg{width:26px;height:26px}
@@ -1324,12 +1334,14 @@ function liveRow(){
   var pg = li.querySelector('.pg'); if(pg) pg.textContent = progressText(live);
   var bar = li.querySelector('.prog i'); if(bar) bar.style.width = Math.min(100, d ? audio.currentTime / d * 100 : 0) + '%';
 }
+function seekPct(){ var e = $('seek'), mx = +e.max || 0; e.style.setProperty('--pct', (mx ? Math.min(100, +e.value / mx * 100) : 0) + '%'); }
 function updateTimes(){
   liveRow();
   var d = isFinite(audio.duration) ? audio.duration : 0;
   if(!seeking){
     $('seek').max = Math.floor(d) || 0;
     $('seek').value = Math.floor(audio.currentTime);
+    seekPct();
     $('miniSub').textContent = fmt(audio.currentTime) + ' / ' + fmt(d);
   }
   if('mediaSession' in navigator && navigator.mediaSession.setPositionState && d){
@@ -1398,7 +1410,7 @@ function playFailed(ep){
 
 var seekEl = $('seek');
 seekEl.addEventListener('input', function(){
-  seeking = true;
+  seeking = true; seekPct();
   $('miniSub').textContent = fmt(+seekEl.value) + ' / ' + fmt(audio.duration);
 });
 seekEl.addEventListener('change', function(){ audio.currentTime = +seekEl.value; seeking = false; recordNow(true); });
