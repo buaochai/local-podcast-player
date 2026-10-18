@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.39.5">
+<meta name="app-version" content="0.39.6">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -113,6 +113,7 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .sr-item{display:block;width:100%;text-align:left;border:none;background:var(--card);border-radius:12px;padding:10px 12px;margin:0 0 8px;color:var(--text)}
 .sr-item .a{font-size:15px;font-weight:600}
 .sr-item .b{font-size:13px;color:var(--muted);margin-top:2px}
+.sr-item .c{font-size:11px;color:var(--muted);opacity:.75;margin-top:3px}
 .tr-s.found{background:rgba(255,200,0,.38);border-radius:3px}
 .sr-item mark{background:rgba(255,200,0,.35);color:inherit;border-radius:3px}
 .sr-item .a.plain{font-weight:400;line-height:1.6}
@@ -3334,19 +3335,20 @@ function buildSearch(scopeKeys){
   });
   var wrap = el('div', 'search-res');
   function sec(t){ wrap.appendChild(el('div', 'sr-sec', t)); }
-  function item(a, b, fn, hl){
+  function item(a, b, fn, hl, album){
     var it = el('button', 'sr-item'), x = el('div', 'a clamp2');
     hilite(x, a, q); it.appendChild(x);
     if(b){ var y = el('div', 'b ' + (hl ? 'clamp2' : 'line1')); if(hl) hilite(y, b, q); else y.textContent = b; it.appendChild(y); }
+    if(album) it.appendChild(el('div', 'c line1', album));   // 所在专辑（小字）
     it.onclick = fn; wrap.appendChild(it);
   }
   if(shs.length){ sec('节目'); shs.slice(0, 20).forEach(function(x){ item(showLabel(x.name), x.keys.length + ' 集', function(){ stashSearch(); closeSearch(true); goShow(x.name); }); }); }
-  if(eps.length){ sec('单集'); eps.slice(0, 40).forEach(function(k){ item(titleOf(k), scoped ? progressText(records[k]) : showLabel(showOf(k)), function(){ stashSearch(); closeSearch(true); openEpPage(k); }); }); }
+  if(eps.length){ sec('单集'); eps.slice(0, 40).forEach(function(k){ item(titleOf(k), scoped ? progressText(records[k]) : '', function(){ stashSearch(); closeSearch(true); openEpPage(k); }, false, showLabel(showOf(k))); }); }
   if(hits.length){ sec('文稿内容'); hits.forEach(function(h){ item(titleOf(h.key) + ' · ' + fmt(h.t), snippet(h.text, q), function(){
     stashSearch(); closeSearch(true);   // 只定位到文稿里的这句，不切换播放
     pendingLocate = {key:h.key, t:h.t};
     goEp(h.key);
-  }, true); }); }
+  }, true, showLabel(showOf(h.key))); }); }
   if(!shs.length && !eps.length && !hits.length) wrap.appendChild(el('div', 'empty', trAllReady ? '没有找到「' + searchQ.trim() + '」。' : '正在搜索文稿…'));
   return wrap;
 }
