@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.6">
+<meta name="app-version" content="0.46.7">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -5168,8 +5168,7 @@ function openMusicSheet(key){
     var g = el('span', 'grow');
     var np = nameParts(m.title, m.orig), ap = nameParts(m.artist, m.artistOrig);
     g.appendChild(el('span', 'mk-note clamp2', np.main));
-    if(np.zh) g.appendChild(el('span', 'mu-zh line1', np.zh));
-    var meta = [m.ver || '', m.artist ? ap.main + (ap.zh ? '（' + ap.zh + '）' : '') : ''].filter(Boolean).join(' · ');
+    var meta = [m.ver || '', m.artist ? ap.main : ''].filter(Boolean).join(' · ');   // 音乐列表只显示原文，不附中文译名
     if(meta) g.appendChild(el('small', 'line1', meta));
     a.appendChild(muIcon(m.kind)); a.appendChild(g); a.appendChild(el('span', 'mu-go', '↗'));
     row.appendChild(tb); row.appendChild(a);
