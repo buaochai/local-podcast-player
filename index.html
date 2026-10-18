@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.39.9">
+<meta name="app-version" content="0.39.10">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -15,13 +15,13 @@
 :root{
   --bg:#f6f5f2; --card:#ffffff; --text:#1d1d1f; --muted:#6b6b70; --line:#e4e2dd;
   --accent:#1f6f5c; --accent-soft:#e2f0eb; --on-accent:#ffffff; --danger:#c0392b;
-  --shadow:0 6px 24px rgba(0,0,0,.14); --pop:rgba(255,255,255,.72); --sheet:rgba(247,246,242,.9); --mini:rgba(255,255,255,.78); --pop-line:rgba(0,0,0,.08);
+  --shadow:0 6px 24px rgba(0,0,0,.14); --pop:rgba(255,255,255,.72); --sheet:rgba(247,246,242,.9); --mini:rgba(255,255,255,.78); --done:#2a7de1; --pop-line:rgba(0,0,0,.08);
 }
 @media (prefers-color-scheme: dark){
   :root{
     --bg:#121413; --card:#1c1f1e; --text:#ecece9; --muted:#9a9c99; --line:#2c302e;
     --accent:#5cc3a4; --accent-soft:#1d3a32; --on-accent:#0d1f1a; --danger:#ff7b6e;
-    --shadow:0 6px 24px rgba(0,0,0,.5); --pop:rgba(38,42,40,.72); --sheet:rgba(30,33,32,.9); --mini:rgba(38,42,40,.78); --pop-line:rgba(255,255,255,.1);
+    --shadow:0 6px 24px rgba(0,0,0,.5); --pop:rgba(38,42,40,.72); --sheet:rgba(30,33,32,.9); --mini:rgba(38,42,40,.78); --done:#5ea8ff; --pop-line:rgba(255,255,255,.1);
   }
 }
 *{box-sizing:border-box}
@@ -143,14 +143,14 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .prog i{display:block;height:100%;background:var(--accent)}
 .info-btn{border:none;background:transparent;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none;margin-right:-8px;margin-left:-4px}
 .info-btn svg{width:22px;height:22px;fill:currentColor}
-.info-btn.dl{color:var(--accent)}
+.info-btn.dl{color:var(--done)}   /* 已下载到本机：蓝色（和主题绿色拉开） */
 /* 单集右边：两行两列（上：播放、「!」；下：上传、下载） */
 .play-btn{border:none;background:transparent;border-radius:50%;width:36px;height:36px;margin-left:-8px;display:flex;align-items:center;justify-content:center;color:var(--accent);flex:none}
 .play-btn svg{width:26px;height:26px;fill:currentColor}
 /* 「!」浮窗里的上传 / 下载 */
 .pop-cl{display:flex;gap:8px;padding:8px 12px;border-bottom:1px solid var(--pop-line)}
 .pop-cl .cl-item{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;border:none;background:rgba(127,127,127,.12);border-radius:10px;padding:6px 4px;font-size:14px;color:var(--muted)}
-.pop-cl .cl-item.done{color:var(--accent)}
+.pop-cl .cl-item.done{color:var(--done)}
 .pop-cl .cl-item.busy{color:#e09a10}
 .pop-cl .cl-btn{width:24px;height:24px;margin:0;color:inherit;pointer-events:none}
 .pop-cl .cl-item .cl-btn.busy::after{left:-2px;top:-2px;width:28px;height:28px}   /* 圈要和 24px 的图标同心 */
@@ -315,7 +315,7 @@ select.input{appearance:auto;-webkit-appearance:menulist}
 /* 列表里的上传 / 下载图标：灰色 = 还没做，转动 = 正在做（带进度圈），彩色 = 已经有了 */
 .cl-btn{position:relative;border:none;background:transparent;width:28px;height:36px;margin-right:-3px;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none;padding:0}
 .cl-btn svg{width:22px;height:22px;fill:currentColor}
-.cl-btn.done{color:var(--accent)}
+.cl-btn.done{color:var(--done)}
 .cl-btn.busy{color:#e09a10}
 .cl-btn.busy svg{animation:trpulse 1.4s ease-in-out infinite}   /* 和转文稿一样轻微地闪，表示在进行 */
 .cl-btn.busy::after{content:'';position:absolute;left:1px;top:0;width:28px;height:28px;border-radius:50%;pointer-events:none;
