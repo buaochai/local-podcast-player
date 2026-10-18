@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.42.0">
+<meta name="app-version" content="0.42.1">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -238,9 +238,7 @@ li.has-edit{position:relative}
 .opt.mk .time{padding-top:1px}
 .opt.mk .mk-note{display:-webkit-box}
 .opt.mk .mk-quote{-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;font-size:15px;line-height:1.55;padding-left:8px;border-left:3px solid var(--accent)}   /* 收藏的文稿原文：左边一道竖线，像引用 */
-#selFav{position:fixed;z-index:26;display:flex;align-items:center;gap:6px;padding:9px 16px;border:none;border-radius:999px;background:var(--accent);color:var(--on-accent);font-size:15px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.28)}
-#selFav[hidden]{display:none}
-#selFav svg{width:18px;height:18px;fill:currentColor}
+#bMark.sel-ready{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}   /* 选中了文稿文字：点它收藏这段文字 */
 .opt.mk .mk-ctx{display:-webkit-box;-webkit-line-clamp:2;margin-top:3px;font-size:12px;line-height:1.5;color:var(--muted)}
 .mk-now{margin:8px 2px 0;font-size:12px;line-height:1.5;color:var(--muted)}
 .opt-edit{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:40px;height:40px;border:none;background:transparent;color:var(--muted);display:flex;align-items:center;justify-content:center;border-radius:50%}
@@ -834,7 +832,6 @@ input[type=file]{display:none}
 </div>
 
 <audio id="audio" preload="metadata"></audio>
-<button id="selFav" hidden><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.2L6 21z"/></svg>收藏这段</button>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1556,6 +1553,8 @@ function editMarkNote(key, m, done){
   }, {allowEmpty:true, maxlength:100});
 }
 $('bMark').onclick = function(){
+  var info = markSel || selTextInfo(); markSel = null;
+  if(info){ saveSelText(info); return; }
   if(!cur) return;
   markAt = audio.currentTime;
   $('markHead').textContent = '收藏 ' + fmt(markAt);
@@ -1585,37 +1584,34 @@ function saveMark(){
   toast('已收藏 ' + fmt(markAt));
 }
 $('bMarkSave').onclick = saveMark;
-/* ---- 文稿页：选中一段文字 → 收藏（收藏的内容就是这段文稿，时间点取选中第一句的时间）---- */
-var selFavTimer = 0, selFavInfo = null;
-function selFavCheck(){
-  var b = $('selFav'), sel = window.getSelection ? window.getSelection() : null;
-  selFavInfo = null;
-  if(view.page !== 'ep' || !sel || sel.isCollapsed || !sel.rangeCount || trEdit){ b.hidden = true; return; }
+/* ---- 文稿页：选中一段文字后，点播放器上的收藏按钮 → 收藏的就是这段文稿（不弹别的）---- */
+function selTextInfo(){
+  var sel = window.getSelection ? window.getSelection() : null;
+  if(view.page !== 'ep' || !sel || sel.isCollapsed || !sel.rangeCount || trEdit) return null;
   var rg = sel.getRangeAt(0), doc = document.querySelector('.tr-doc');
-  if(!doc || !doc.contains(rg.commonAncestorContainer)){ b.hidden = true; return; }
+  if(!doc || !doc.contains(rg.commonAncestorContainer)) return null;
   var text = String(sel).replace(/\s+/g, ' ').trim();
-  if(text.length < 2){ b.hidden = true; return; }
+  if(text.length < 2) return null;
   var first = -1;
   for(var i = 0; i < trNodes.length; i++){ if(trNodes[i].isConnected && rg.intersectsNode(trNodes[i])){ first = i; break; } }
-  if(first < 0 || !trSegs[first]){ b.hidden = true; return; }
-  selFavInfo = {key:view.key, t:trSegs[first].t, text:text.length > 500 ? text.slice(0, 500) + '…' : text};
-  // 放在选中文字的下面（上面是系统自带的「拷贝」菜单）；下面放不下就放上面
-  var r = rg.getBoundingClientRect(), bw = 120, left = Math.min(Math.max(12, r.left + r.width / 2 - bw / 2), window.innerWidth - bw - 12);
-  b.hidden = false;
-  var top = r.bottom + 12;
-  if(top + 46 > window.innerHeight - 150) top = Math.max(70, r.top - 62);
-  b.style.left = left + 'px'; b.style.top = top + 'px';
+  if(first < 0 || !trSegs[first]) return null;
+  return {key:view.key, t:trSegs[first].t, text:text.length > 500 ? text.slice(0, 500) + '…' : text};
 }
-document.addEventListener('selectionchange', function(){ clearTimeout(selFavTimer); selFavTimer = setTimeout(selFavCheck, 140); });
-['mousedown', 'touchstart'].forEach(function(ev){ $('selFav').addEventListener(ev, function(e){ e.preventDefault(); }, {passive:false}); });   // 点它不要让选中的文字消失
-$('selFav').onclick = function(){
-  var info = selFavInfo; if(!info) return;
+var markSel = null, selReadyTimer = 0;
+// 点下去的那一刻就把选中的内容记下来（手机上点按钮时选中状态可能马上被清掉）
+['touchstart', 'mousedown'].forEach(function(ev){ $('bMark').addEventListener(ev, function(){ markSel = selTextInfo(); }, {passive:true, capture:true}); });
+// 选中了文稿文字时，收藏按钮亮起来，表示点它会收藏这段文字
+document.addEventListener('selectionchange', function(){
+  clearTimeout(selReadyTimer);
+  selReadyTimer = setTimeout(function(){ $('bMark').classList.toggle('sel-ready', !!selTextInfo()); }, 120);
+});
+function saveSelText(info){
   var r0 = records[info.key];
-  if(r0 && (r0.marks || []).some(function(m){ return m.text === info.text; })){ toast('这段已经收藏过了'); }
+  if(r0 && (r0.marks || []).some(function(m){ return m.text === info.text; })) toast('这段已经收藏过了');
   else{ addMark(info.t, '', info.text, info.key); toast('已收藏这段文字（' + fmt(info.t) + '）'); }
   try{ window.getSelection().removeAllRanges(); }catch(e){}
-  $('selFav').hidden = true; selFavInfo = null;
-};
+  $('bMark').classList.remove('sel-ready');
+}
 $('markNote').addEventListener('keydown', function(e){ if(e.key === 'Enter') saveMark(); });
 
 /* ---------- 输入框面板 ---------- */
@@ -3289,9 +3285,8 @@ function render(){
   sc = box.querySelector('.list-scroll');
   if(sc) sc.scrollTop = top; else box.scrollTop = top;
   if(resumeTop != null){ if(sc) sc.scrollTop = resumeTop; else box.scrollTop = resumeTop; resumeTop = null; }   // 搜索结果退回来：回到刚才滚到的位置
-  if(!home && !isEp && !isFav && sc && prevKey.indexOf('ep:') === 0){   // 从文稿页退回专辑列表：回到刚才看的那一集，不是回到顶部
-    var row = sc.querySelector('li[data-k="' + prevKey.slice(3).replace(/(["\\])/g, '\\$1') + '"]');
-    if(row) sc.scrollTop = Math.max(0, row.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - sc.clientHeight / 3);
+  if(!home && !isEp && !isFav && sc && prevKey.indexOf('ep:') === 0 && showScrollMem && showScrollMem.show === view.show){   // 从文稿页退回专辑列表：原样回到进去前的滚动位置
+    sc.scrollTop = showScrollMem.top;
   }
   if(sc) sc.classList.toggle('scrolled', sc.scrollTop > 2);
   renderMini();
@@ -4935,7 +4930,9 @@ function loadTr(key){
     if(view.page === 'ep' && view.key === key) render();
   });
 }
+var showScrollMem = null;   // 进文稿页前，专辑列表滚到哪里
 function goEp(key){
+  if(view.page === 'show'){ var sc0 = $('view').querySelector('.list-scroll'); if(sc0) showScrollMem = {show:view.show, top:sc0.scrollTop}; }
   if(view.page === 'ep' && view.key === key){ render(); return; }
   var d0 = (history.state && history.state.d) || 0;
   if(view.page === 'ep') history.replaceState({ep:key, d:d0}, ''); else history.pushState({ep:key, d:d0 + 1}, '');
