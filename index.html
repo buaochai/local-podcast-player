@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.37.0">
+<meta name="app-version" content="0.37.1">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -2587,15 +2587,25 @@ var IMP_EXT = /\.(mp3|m4a|m4b|aac|wav|ogg|oga|opus|flac|mp4)$/i;
 // 同一专辑、同名的集算一集：去掉开头的序号（可能有两个）、标点、空格再比
 function normName(t){ return String(t || '').replace(/^(\s*\d{1,4}\s*[.．、]\s*)+/, '').replace(/[\s\u3000｜|·・:：,，.。!！?？_\-—"'“”‘’《》()（）\[\]【】]/g, '').toLowerCase(); }
 function normShow(t){ return String(t || '').replace(/[\s\u3000｜|·・]/g, '').toLowerCase(); }
+// 专辑名的统一规则：竖线（各种样子）、空格、「第2季 / 第二季」写法不同都算同一个专辑，所有地方（导入、合并）都用它判断
+function canonShow(name){
+  var ps = parseSeason(name || '');
+  return ps ? normShow(ps.base) + '#' + ps.season + '#' + normShow(ps.sub) : normShow(name);
+}
 function cloudImport(dir){
   return cloudApi({op:'list', prefix:dir}).then(function(j){
     var folder = dir.replace(/\/+$/, ''), show = folder.split('/').pop(), have = {}, n = 0, now = Date.now();
+    // 网页里已经有同一个专辑（名字写法不同但按统一规则是同一个），就直接放进那个专辑，不再多出一个
+    var cs = canonShow(show), seenShow = {};
+    episodes.forEach(function(e){ if(e.show) seenShow[e.show] = 1; });
+    Object.keys(records).forEach(function(k){ var r1 = records[k]; [r1.customShow, r1.tagShow, r1.show].forEach(function(x){ if(x) seenShow[x] = 1; }); });
+    Object.keys(seenShow).some(function(x){ if(x !== OTHER && canonShow(x) === cs){ show = x; return true; } return false; });
     Object.keys(records).forEach(function(k){ if(records[k].cloud) have[records[k].cloud.k] = 1; });
     // 这个专辑里已有的集（可能有文稿、没有音频）：按名字对上，把云端音频接到原来的记录上
-    var mine = {}, nsh = normShow(show), merged = 0;
+    var mine = {}, merged = 0;
     Object.keys(records).forEach(function(k){
       var r0 = records[k], al = r0.customShow || r0.tagShow || r0.show || '';
-      if(!r0 || normShow(al) !== nsh) return;
+      if(!r0 || canonShow(al) !== cs) return;
       var nk = normName(r0.title || stripExt(r0.name || ''));
       if(!nk) return;
       if(!mine[nk] || (mine[nk].cloud && !r0.cloud)) mine[nk] = {key:k, r:r0};   // 优先接到还没有云端音频的那条
