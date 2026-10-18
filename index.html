@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.39.0">
+<meta name="app-version" content="0.39.1">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -68,10 +68,8 @@ body.has-player .view{padding-bottom:184px}
 .view.fixed{overflow:hidden;display:flex;flex-direction:column;padding-bottom:0}
 body.has-player .view.fixed{padding-bottom:0}
 .list-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:16px}
-/* 列表 / 文稿往上滚时，上边缘和背景渐变过渡（没滚动时不显示，免得盖住框的边） */
-.list-scroll::before{content:'';position:sticky;top:0;display:block;height:26px;margin-bottom:-26px;z-index:3;pointer-events:none;opacity:0;transition:opacity .18s;
-  background:var(--bg);-webkit-mask-image:linear-gradient(to bottom,#000 25%,transparent);mask-image:linear-gradient(to bottom,#000 25%,transparent)}
-.list-scroll.scrolled::before{opacity:1}
+/* 列表 / 文稿往上滚时，上边缘渐渐淡出（直接在滚动区域上做遮罩，没有多出来的遮挡条；没滚动时不加，框的上边完整） */
+.list-scroll.scrolled{-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 18px);mask-image:linear-gradient(to bottom,transparent 0,#000 18px)}
 body.has-player .list-scroll{padding-bottom:184px}
 .view.fixed .pod-head{flex:none}
 
