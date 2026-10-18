@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.39.3">
+<meta name="app-version" content="0.39.4">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -3123,7 +3123,7 @@ function render(){
   if(searchResume){
     if(pageKey !== searchResume.key) searchResume.left = true;
     else if(searchResume.left && !searchOpen){   // 退回到搜索前的页面：恢复搜索词和结果（不弹键盘）
-      searchOpen = true; searchQ = searchResume.q; searchResume = null;
+      searchOpen = true; searchQ = searchResume.q; resumeTop = searchResume.top; searchResume = null;
       $('searchIn').hidden = false; $('searchIn').value = searchQ; $('bSearch').classList.add('on');
       samePage = true;
     }
@@ -3159,6 +3159,7 @@ function render(){
   if(home && searchOpen && searchQ.trim()) renderSearch(box); else if(home) renderHome(box); else if(isEp) renderEp(box); else if(isFav) renderFav(box); else renderShow(box);
   sc = box.querySelector('.list-scroll');
   if(sc) sc.scrollTop = top; else box.scrollTop = top;
+  if(resumeTop != null){ if(sc) sc.scrollTop = resumeTop; else box.scrollTop = resumeTop; resumeTop = null; }   // 搜索结果退回来：回到刚才滚到的位置
   if(!home && !isEp && !isFav && sc && prevKey.indexOf('ep:') === 0){   // 从文稿页退回专辑列表：回到刚才看的那一集，不是回到顶部
     var row = sc.querySelector('li[data-k="' + prevKey.slice(3).replace(/(["\\])/g, '\\$1') + '"]');
     if(row) sc.scrollTop = Math.max(0, row.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - sc.clientHeight / 3);
@@ -3240,9 +3241,14 @@ function renderFav(box){
   box.appendChild(sc);
 }
 /* ---------- 搜索（首页右上角放大镜，向左展开输入框）---------- */
-var searchResume = null, pendingLocate = null;
+var searchResume = null, pendingLocate = null, activeLocate = null;
 // 点搜索结果进入别的页面前先记下搜索词，退回来时把搜索结果恢复出来
-function stashSearch(){ if(searchOpen && searchQ.trim()) searchResume = {q:searchQ, key:renderedKey, left:false}; }
+var resumeTop = null;
+function stashSearch(){
+  if(!(searchOpen && searchQ.trim())) return;
+  var sc0 = $('view').querySelector('.list-scroll');
+  searchResume = {q:searchQ, key:renderedKey, left:false, top:sc0 ? sc0.scrollTop : $('view').scrollTop};
+}
 var searchOpen = false, searchQ = '', searchTimer = null, trAllReady = false, trAllLoading = false;
 function openSearch(){
   searchOpen = true; $('searchIn').hidden = false; $('bSearch').classList.add('on');
@@ -4912,14 +4918,17 @@ function renderEp(box){
   loc.hidden = !trUser;
   loc.onclick = function(){ trFollow(true); };
   box.appendChild(loc);
-  if(pendingLocate && pendingLocate.key === key && trSegs.length){   // 从搜索进来：滚到那一句并标出来，不播放，也不被「跟随」拉走
-    var pl = pendingLocate, li2 = 0; pendingLocate = null;
-    for(var qi = 0; qi < trSegs.length; qi++){ if(trSegs[qi].t <= pl.t + 0.5) li2 = qi; else break; }
-    var node = trNodes[li2];
-    if(node){
+  if(pendingLocate && pendingLocate.key === key && trSegs.length){ activeLocate = {key:key, t:pendingLocate.t, until:Date.now() + 6000}; pendingLocate = null; }
+  if(activeLocate && activeLocate.key === key && Date.now() < activeLocate.until && trSegs.length){   // 从搜索进来：滚到那一句并标出来，不播放，也不被「跟随」拉走
+    var al = activeLocate, li2 = 0;
+    for(var qi = 0; qi < trSegs.length; qi++){ if(trSegs[qi].t <= al.t + 0.5) li2 = qi; else break; }
+    var lnode = trNodes[li2];
+    if(lnode){
       trUser = Date.now() + 600000; clearTimeout(trBackTimer);
       loc.hidden = !(cur && cur.key === key);
-      setTimeout(function(){ trScrollTo(node, false); node.classList.add('found'); setTimeout(function(){ node.classList.remove('found'); }, 4500); }, 30);
+      var doLoc = function(){ if(!lnode.isConnected) return; trScrollTo(lnode, false); lnode.classList.add('found'); };
+      doLoc(); setTimeout(doLoc, 60); setTimeout(doLoc, 350);   // render() 稍后会把滚动位置设回去，所以多定位几次
+      setTimeout(function(){ lnode.classList.remove('found'); }, 5000);
     }
   }
 }
@@ -5017,6 +5026,7 @@ function trParas(tr){
 var TR_BACK = 8000, trUser = 0, trBackTimer = 0;
 function trUserScrolled(sb){
   if(!trSegs.length) return;
+  activeLocate = null;
   trUser = Date.now();
   clearTimeout(trBackTimer); trBackTimer = setTimeout(function(){ trFollow(true); }, TR_BACK);
   var node = trNodes[trLastIdx], loc = $('trLoc');
