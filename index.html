@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.45.2">
+<meta name="app-version" content="0.45.3">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -267,7 +267,7 @@ li.has-edit{position:relative}
 .ep-album{font-size:13px;color:var(--muted);margin:2px 2px 0}
 #bMusic{position:relative;opacity:.45}
 #bMusic.on{opacity:1;color:var(--accent)}   /* 提到了音乐：亮起来 */
-#bMusic b{position:absolute;top:3px;right:1px;min-width:15px;height:15px;padding:0 3px;border-radius:8px;background:var(--accent);color:var(--on-accent);font-size:10px;line-height:15px;font-weight:700;text-align:center}
+#bMusic b{position:absolute;top:5px;right:3px;min-width:11px;height:11px;padding:0 2px;border-radius:6px;background:var(--accent);color:var(--on-accent);font-size:8px;line-height:11px;font-weight:600;text-align:center}
 #bMusic b:empty{display:none}
 a.mu-main{display:flex;align-items:center;flex:1;min-width:0;text-decoration:none;color:var(--text)}
 .opt.mu{gap:10px;cursor:default}
@@ -4847,12 +4847,13 @@ function autoTerms(key){
 /* ---- 找出文稿里提到的音乐（歌曲 / 专辑 / 乐曲 / 音乐人），生成 Apple Music 链接 ---- */
 function musicPrompt(text){
   return '下面是一段中文播客的语音识别文稿，每行开头 [分:秒] 是这句话的时间。\n' +
-    '请找出文稿里【真的在作为音乐谈论】的具体音乐作品或音乐人。宁可漏掉，也不要错列。必须同时满足：\n' +
+    '请找出文稿里【真的在作为音乐谈论】的具体音乐作品或音乐人。拿不准的不要列，但说得明确的一定要列，不要漏。必须同时满足：\n' +
     '1. 说话人是在把它当作音乐来说：比如说「一首歌」「这张专辑」「演奏」「作曲」「唱」「听这首」，或正在播放、推荐、讲解它。\n' +
     '2. 只是名字碰巧和某首歌、某张专辑一样，但说话人说的是别的东西（一本书、一部电影、一个成语、一件瓷器、一个地名、一件事）的，不要列。\n' +
-    '3. 人名：只有说话人是在谈论这个人的音乐作品或音乐身份（歌手、乐手、作曲家、乐队、音乐制作人）时才列。作家、学者、演员、主持人、政治人物等，哪怕和音乐沾点边（唱过一首歌、爱好音乐、写过音乐评论），只要说话人不是在谈他的音乐，就不要列。\n' +
+    '3. 人名：先用你自己的知识判断这个人的主业。主业是歌手、乐手、作曲家、乐队、音乐制作人，并且说话人在谈他的歌曲、演唱、演奏时才列，要在 role 里写出他的主业。导演、作家、学者、演员、主持人、政治人物等，哪怕和音乐沾点边（唱过一首歌、爱好音乐、写过音乐评论、作品里用了某首歌），只要主业不是音乐，就不要列。\n' +
+    '   例子：「我是通过蔡明亮的电影知道葛兰、白光那个时候的歌曲的，特别喜欢那些歌曲」——葛兰、白光是歌手，说话人在谈她们的歌曲，要列（role 填「歌手」）；蔡明亮是导演，不列。同一句里有几个人，每个符合的都要单独列。\n' +
     '4. 泛称（「音乐」「旋律」「歌曲」「古典乐」「爵士乐」）不算；拿不准就不要列。\n' +
-    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"kind":"song 或 album 或 artist 或 piece","title":"作品名（kind 是 artist 时填人名）","artist":"创作者或演唱者，不知道就留空","said":"文稿里提到它时原样的写法，必须和文稿里的文字一字不差","why":"文稿里能证明说话人在把它当音乐说的那几个字（如「这首歌」「专辑」「演奏」），必须是文稿里的原话","t":提到它的那一句的时间（秒，整数）}。\n' +
+    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"kind":"song 或 album 或 artist 或 piece","title":"作品名（kind 是 artist 时填人名）","artist":"创作者或演唱者，不知道就留空","said":"文稿里提到它时原样的写法，必须和文稿里的文字一字不差","role":"kind 是 artist 时写这个人的主业（如 歌手、作曲家、钢琴家、乐队、导演、作家），其他情况留空","why":"文稿里能证明说话人在把它当音乐说的那几个字（如「这首歌」「专辑」「演奏」「歌曲」），必须是文稿里的原话","t":提到它的那一句的时间（秒，整数）}。\n' +
     '外国的作品和人名尽量写成原文（如 Kind of Blue、Miles Davis），方便去 Apple Music 搜索；同一个作品只列一次；没有就输出 []。\n\n文稿：\n' + text;
 }
 function parseMusic(txt){
@@ -4865,7 +4866,7 @@ function parseMusic(txt){
     if(!title || title.length > 80) return;
     var id = (title + '|' + artist).toLowerCase(); if(seen[id]) return; seen[id] = 1;
     var term = (kind === 'artist' ? title : (artist ? artist + ' ' : '') + title).trim();
-    out.push({kind:kind, title:title, artist:kind === 'artist' ? '' : artist, said:clean(String(x.said || '')).slice(0, 80), why:clean(String(x.why || '')).slice(0, 60), t:Math.max(0, Math.floor(+x.t) || 0), url:'https://music.apple.com/search?term=' + encodeURIComponent(term)});
+    out.push({kind:kind, title:title, artist:kind === 'artist' ? '' : artist, said:clean(String(x.said || '')).slice(0, 80), why:clean(String(x.why || '')).slice(0, 60), role:clean(String(x.role || '')).slice(0, 20), t:Math.max(0, Math.floor(+x.t) || 0), url:'https://music.apple.com/search?term=' + encodeURIComponent(term)});
   });
   return out;
 }
@@ -4889,8 +4890,10 @@ function musicTime(tr, m){ var i = musicIndex(tr, m); return i >= 0 ? tr.segment
 // 再核对一遍：这个名字附近的几句话里，有没有真的在说音乐的词。名字碰巧和歌名一样、或者只是个顺便提到的人，附近不会有这些词
 var MUSIC_WORDS = /歌|曲|专辑|唱|演奏|演唱|乐队|乐手|作曲|编曲|音乐人|音乐家|旋律|钢琴|吉他|小提琴|大提琴|萨克斯|鼓手|贝斯|交响|协奏|奏鸣|歌剧|爵士|摇滚|民谣|说唱|嘻哈|播放|放一|听一|首歌|单曲|歌词|歌手|录音|唱片|演唱会|音乐会|album|song|track|band|concert|jazz|piano|guitar/i;
 var MUSICIAN_WORDS = /歌手|音乐人|音乐家|乐队|乐手|作曲|编曲|演唱|演奏|唱片|专辑|首歌|的歌|唱过|主唱|歌曲|钢琴家|吉他手|鼓手|指挥|singer|musician|band|composer|album/i;
+var ROLE_OK = /歌手|歌唱|音乐|作曲|作词|编曲|乐手|乐队|主唱|指挥|演奏|钢琴|吉他|提琴|萨克斯|鼓|贝斯|制作人|DJ|说唱|singer|musician|composer|band|rapper|vocal|pianist|guitar/i;
 function musicContextOk(tr, m, i){
   if(i < 0) return false;   // 文稿里找不到原话，没法核对，不要
+  if(m.kind === 'artist' && 'role' in m && !ROLE_OK.test(m.role || '')) return false;   // 新结果里的人名必须写明主业是音乐；主业是导演、作家……或没写的不要（旧数据没有这一项，只按附近的词核对）
   var segs = tr.segments, re = m.kind === 'artist' ? MUSICIAN_WORDS : MUSIC_WORDS;
   function text(lo, hi){ var w = ''; for(var k = Math.max(0, lo); k <= Math.min(segs.length - 1, hi); k++) w += segs[k].text + ' '; return w; }
   // 模型给了「证明在说音乐」的原话：这句话要真的出现在附近，而且本身是音乐词
