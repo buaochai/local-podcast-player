@@ -1,5 +1,8 @@
 # 更新记录
 
+## 0.46.14
+- 选链接打分调整：唱片公司最可靠（权重最高）；年份常差一两年（口述年份、发行年、版权年不一样），差 2 年以内也给分；乐章统一成数字再对曲目名（Section Four / IV / 4 都当 4，对上「VI. Section 4」），并且去掉曲目名开头的曲目序号（避免把「IV. Section 3a」里的 IV 当成乐章 4）。
+
 ## 0.46.13
 - 外文原名用通行写法：识别出的全大写（MUSIC FOR EIGHTY MUSICIANS）改成首字母大写、介词小写（Music For Eighty Musicians → 提示词要求用 Music for 18 Musicians，数字用阿拉伯数字），缩写（NASA、BBC）和罗马数字不动。音乐和外文标注都适用。
 

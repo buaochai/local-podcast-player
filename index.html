@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.13">
+<meta name="app-version" content="0.46.14">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -5040,7 +5040,7 @@ function musicPrompt(text){
     '   例子：「我是通过蔡明亮的电影知道葛兰、白光那个时候的歌曲的」——葛兰、白光是歌手，要列（artist，role 填「歌手」）；蔡明亮是导演（person，role 填「导演」）。同一句里有几个人，每个都要单独列。\n' +
     '4. 泛称（「音乐」「旋律」「歌曲」「古典乐」「爵士乐」）不算；拿不准就不要列。\n' +
     (kn ? '5. 参考（以前听过的节目里已经确定的）：' + kn + '。这些人按已知身份处理，不用再判断。\n' : '') +
-    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"kind":"song 或 album 或 artist 或 piece 或 person","title":"作品名（kind 是 artist / person 时填人名，用文稿里的写法）","orig":"作品名或人名的原文写法：外国的必须写成原文，并用它通行的写法——首字母大写、介词小写（不要全大写），数字用阿拉伯数字（如 Kayhan Kalhor、Kind of Blue、Music for 18 Musicians），中文的写中文","artist":"创作者或演唱者（文稿里的写法），不知道就留空","artistOrig":"创作者或演唱者的原文写法，外国的必须写原文","role":"kind 是 artist / person 时写这个人的主业，其他留空","ver":"这个作品所放的版本信息：年份、唱片公司、演奏者或指挥、获奖等（如 1997 Nonesuch、卡拉扬 1963），没提到就留空，不要猜","part":"放的是其中哪个乐章或段落（如 Section IV、第二乐章），没提到就留空","said":"文稿里提到它时原样的写法，必须和文稿里的文字一字不差","why":"文稿里能证明说话人在把它当音乐说的那几个字（如「这首歌」「专辑」「演奏」「歌曲」），必须是文稿里的原话","t":提到它的那一句的时间（秒，整数）}。\n' +
+    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"kind":"song 或 album 或 artist 或 piece 或 person","title":"作品名（kind 是 artist / person 时填人名，用文稿里的写法）","orig":"作品名或人名的原文写法：外国的必须写成原文，并用它通行的写法——首字母大写、介词小写（不要全大写），数字用阿拉伯数字（如 Kayhan Kalhor、Kind of Blue、Music for 18 Musicians），中文的写中文","artist":"创作者或演唱者（文稿里的写法），不知道就留空","artistOrig":"创作者或演唱者的原文写法，外国的必须写原文","role":"kind 是 artist / person 时写这个人的主业，其他留空","ver":"这个作品所放的版本信息：年份、唱片公司、演奏者或指挥、获奖等（如 1997 Nonesuch、卡拉扬 1963），没提到就留空，不要猜","part":"放的是其中哪个乐章或段落，按说话人说的写，数字用阿拉伯数字（说的是 Section Four 就写 Section 4，第二乐章写 第2乐章），没提到就留空","said":"文稿里提到它时原样的写法，必须和文稿里的文字一字不差","why":"文稿里能证明说话人在把它当音乐说的那几个字（如「这首歌」「专辑」「演奏」「歌曲」），必须是文稿里的原话","t":提到它的那一句的时间（秒，整数）}。\n' +
     '版本信息经常在说出作品名【之后的几句话里】才详细介绍（「我要介绍的是 1997 年 Nonesuch 唱片的版本……现在就来听其中第四部分」），要把前后几句里说的这个版本的年份、唱片公司、演奏者、乐章合并填进 ver / part，但每项只写关键词，不要写成长句。\n' +
     '同一个作品或人只列一次；没有就输出 []。\n\n文稿：\n' + text;
 }
@@ -5171,6 +5171,22 @@ function musicRun(key){
 }
 // 用 iTunes Search 找这首音乐（人）的准确页面；结果要和名字对得上才用，查到的缓存在本机
 var MLINK_KEY = 'lpp.mlink.v1', mlink = load(MLINK_KEY, {});
+// 乐章 / 段落说法统一成数字：Section Four / IV / 4 / 第四部分 → 4
+function partNum(part){
+  if(!part) return 0;
+  var d = /\d+/.exec(part); if(d) return +d[0];
+  var W = {one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10, eleven:11, twelve:12, thirteen:13, fourteen:14, fifteen:15, first:1, second:2, third:3, fourth:4, fifth:5, sixth:6, seventh:7, eighth:8, ninth:9, tenth:10};
+  var w = /[A-Za-z]+/g, t, rm = null;
+  while((t = w.exec(part))){ var low = t[0].toLowerCase(); if(W[low]) return W[low]; if(/^[IVX]+$/.test(t[0])) rm = t[0]; }
+  if(rm){ var R = {I:1, V:5, X:10}, n = 0, prev = 0; rm.split('').reverse().forEach(function(c){ var v = R[c]; n += v < prev ? -v : v; prev = Math.max(prev, v); }); return n; }
+  var C = {'一':1, '二':2, '三':3, '四':4, '五':5, '六':6, '七':7, '八':8, '九':9}, c = /[一二三四五六七八九十]+/.exec(part);
+  if(c){
+    var z = c[0], ti = z.indexOf('十');
+    if(ti < 0) return C[z[0]] || 0;
+    return (ti === 0 ? 1 : C[z[0]] || 0) * 10 + (C[z[ti + 1]] || 0);
+  }
+  return 0;
+}
 function musicLink(m){
   var orig = (m.orig || m.title), isP = m.kind === 'artist', ver = m.ver || '', part = m.part || '';
   var ent = m.kind === 'album' ? 'album' : isP ? 'musicArtist' : 'song';
@@ -5179,17 +5195,23 @@ function musicLink(m){
   if(mlink[ck]) return Promise.resolve(mlink[ck]);
   var yr = (/(1[5-9]\d\d|20\d\d)/.exec(ver) || [])[1], want = normFind(orig);
   var words = ver.replace(/(1[5-9]\d\d|20\d\d)/g, ' ').split(/[\s,，、·/]+/).filter(function(w){ return /^[A-Za-z]{3,}$/.test(w); }).map(function(w){ return w.toLowerCase(); });
-  var pn = (/(\d+)|(?:section|part|movement)\s*(iv|iii|ii|i|vi|v)\b/i.exec(part) || []), partTok = (pn[1] || pn[2] || '').toLowerCase();
+  var partN = partNum(part);
   function has(str, q){ return normFind(str).indexOf(normFind(q)) >= 0; }
   function nameOk(x){
     var nm = isP ? [x.artistName] : m.kind === 'album' ? [x.collectionName] : [x.trackName, x.collectionName];
     return !!want && nm.some(function(n){ n = normFind(n || ''); return !!n && (n.indexOf(want) >= 0 || want.indexOf(n) >= 0); });
   }
-  function score(x){   // 版本描述里的年份、唱片公司、乐章，和这条结果对得上的越多越好
-    var sc = 0, cr = String(x.copyright || '').toLowerCase(), y = String(x.releaseDate || '').slice(0, 4);
-    if(yr && (y === yr || cr.indexOf(yr) >= 0 || cr.indexOf(String(+yr + 1)) >= 0)) sc += 3;
-    words.forEach(function(w){ if(cr.indexOf(w) >= 0 || has(x.collectionName || '', w) || has(x.artistName || '', w)) sc += 2; });
-    if(partTok && /\d/.test(partTok) ? new RegExp('(^|\\D)0?' + partTok + '(\\D|$)').test(x.trackName || '') : (partTok && has(x.trackName || '', partTok))) sc += 2;
+  function score(x){   // 唱片公司最可靠；年份常差一两年（口述的年份、发行年、版权年不一样），只给部分分；乐章按数字对曲目名
+    var sc = 0, cr = String(x.copyright || '').toLowerCase(), y = +String(x.releaseDate || '').slice(0, 4);
+    words.forEach(function(w){ if(cr.indexOf(w) >= 0 || has(x.collectionName || '', w) || has(x.artistName || '', w)) sc += 4; });
+    if(yr){
+      var ys = [y].concat((cr.match(/(?:1[5-9]|20)\d\d/g) || []).map(Number)).filter(Boolean), d = Math.min.apply(null, ys.map(function(v){ return Math.abs(v - +yr); }).concat([99]));
+      sc += d === 0 ? 2 : d <= 2 ? 1 : 0;
+    }
+    if(partN){
+      var tn = String(x.trackName || '').replace(/^\s*[ivxlc]+\.\s*/i, '');   // 去掉开头的曲目序号（VI. Section 4 里的 VI.）
+      if(new RegExp('(^|[^0-9a-z])0*' + partN + '(?![0-9a-z])', 'i').test(tn)) sc += 4;
+    }
     if(!isP && m.kind !== 'album' && x.trackName && has(x.trackName, orig)) sc += 1;
     return sc;
   }
