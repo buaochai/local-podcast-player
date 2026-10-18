@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.5">
+<meta name="app-version" content="0.46.6">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -271,6 +271,7 @@ li.has-edit{position:relative}
 #bMusic.on{opacity:1;color:var(--accent)}   /* 提到了音乐：亮起来 */
 #bMusic b{position:absolute;top:5px;right:3px;min-width:11px;height:11px;padding:0 2px;border-radius:6px;background:var(--accent);color:var(--on-accent);font-size:8px;line-height:11px;font-weight:600;text-align:center}
 #bMusic b:empty{display:none}
+div.mu-main{display:flex;align-items:center;flex:1;min-width:0;cursor:pointer}
 a.mu-main{display:flex;align-items:center;flex:1;min-width:0;text-decoration:none;color:var(--text)}
 .opt.mu{gap:10px;cursor:default}
 .mu-ico{flex:none;width:22px;height:22px;margin-right:10px;fill:var(--accent);opacity:.9}
@@ -3337,6 +3338,10 @@ function render(){
   $('bNewAlbum').hidden = !home; $('bRss').hidden = !home; $('bFav').hidden = !home;
   // 搜索：首页是全局搜索，其他页面只搜所在的这个地方；换了页面就收起
   $('bSearch').hidden = selecting;
+  if(pendingSearch && home){   // 从人物资料库来：直接在首页搜这个人
+    var ps = pendingSearch; pendingSearch = null;
+    openSearch(); searchQ = ps.q; searchAlts = ps.alts; $('searchIn').value = ps.q; $('searchIn').blur(); samePage = true;
+  }
   if(searchResume){
     if(pageKey !== searchResume.key) searchResume.left = true;
     else if(searchResume.left && !searchOpen){   // 退回到搜索前的页面：恢复搜索词和结果（不弹键盘）
@@ -3465,6 +3470,7 @@ function stashSearch(){
   var sc0 = $('view').querySelector('.list-scroll');
   searchResume = {q:searchQ, key:renderedKey, left:false, top:sc0 ? sc0.scrollTop : $('view').scrollTop};
 }
+var searchAlts = null, pendingSearch = null;   // searchAlts：文稿内容搜索时，几个写法任一命中都算（人物的中文名 / 原名）
 var searchOpen = false, searchQ = '', searchTimer = null, trAllReady = false, trAllLoading = false;
 function openSearch(){
   searchOpen = true; $('searchIn').hidden = false; $('bSearch').classList.add('on');
@@ -3478,7 +3484,7 @@ function openSearch(){
   }
 }
 function closeSearch(quiet){
-  searchOpen = false; searchQ = ''; $('searchIn').value = ''; $('searchIn').hidden = true; $('searchIn').blur();
+  searchOpen = false; searchQ = ''; searchAlts = null; $('searchIn').value = ''; $('searchIn').hidden = true; $('searchIn').blur();
   $('bSearch').classList.remove('on');
   document.querySelector('header').classList.remove('searching');
   if(!quiet) render();
@@ -3495,7 +3501,7 @@ document.addEventListener('click', function(e){
   closeSearch();
 });
 $('searchIn').addEventListener('input', function(){
-  searchQ = this.value; clearTimeout(searchTimer);
+  searchQ = this.value; searchAlts = null; clearTimeout(searchTimer);
   searchTimer = setTimeout(render, 150);
 });
 $('searchIn').addEventListener('keydown', function(e){ if(e.key === 'Escape') closeSearch(); else if(e.key === 'Enter') this.blur(); });
@@ -3524,30 +3530,31 @@ function buildSearch(scopeKeys){
     var r = records[k] || {}, hay = [titleOf(k), scoped ? '' : showOf(k), r.artist || '', (r.marks || []).map(function(m){ return m.note || ''; }).join(' ')].join('\n').toLowerCase();
     return hay.indexOf(q) >= 0;
   });
-  var hits = [], total = 0;
+  var hits = [], total = 0, qs = (!scoped && searchAlts && searchAlts.length) ? searchAlts.map(function(w){ return w.toLowerCase(); }) : [q];
   Object.keys(trCache).forEach(function(k){
     var tr = trCache[k]; if(!inScope[k] || !tr || !tr.segments || total >= 60) return;
     var n = 0;
     for(var i = 0; i < tr.segments.length && n < 3 && total < 60; i++){
-      if(tr.segments[i].text.toLowerCase().indexOf(q) >= 0){ hits.push({key:k, t:tr.segments[i].t, text:tr.segments[i].text}); n++; total++; }
+      var low = tr.segments[i].text.toLowerCase(), hq = qs.filter(function(w){ return low.indexOf(w) >= 0; })[0];
+      if(hq){ hits.push({key:k, t:tr.segments[i].t, text:tr.segments[i].text, q:hq}); n++; total++; }
     }
   });
   var wrap = el('div', 'search-res');
   function sec(t){ wrap.appendChild(el('div', 'sr-sec', t)); }
-  function item(a, b, fn, hl, album){
-    var it = el('button', 'sr-item'), x = el('div', 'a clamp2');
-    hilite(x, a, q); it.appendChild(x);
-    if(b){ var y = el('div', 'b ' + (hl ? 'clamp2' : 'line1')); if(hl) hilite(y, b, q); else y.textContent = b; it.appendChild(y); }
+  function item(a, b, fn, hl, album, hq){
+    var it = el('button', 'sr-item'), x = el('div', 'a clamp2'); hq = hq || q;
+    hilite(x, a, hq); it.appendChild(x);
+    if(b){ var y = el('div', 'b ' + (hl ? 'clamp2' : 'line1')); if(hl) hilite(y, b, hq); else y.textContent = b; it.appendChild(y); }
     if(album) it.appendChild(el('div', 'c line1', album));   // 所在专辑（小字）
     it.onclick = fn; wrap.appendChild(it);
   }
   if(shs.length){ sec('节目'); shs.slice(0, 20).forEach(function(x){ item(showLabel(x.name), x.keys.length + ' 集', function(){ stashSearch(); closeSearch(true); goShow(x.name); }); }); }
   if(eps.length){ sec('单集'); eps.slice(0, 40).forEach(function(k){ item(titleOf(k), scoped ? progressText(records[k]) : '', function(){ stashSearch(); closeSearch(true); openEpPage(k); }, false, showLabel(showOf(k))); }); }
-  if(hits.length){ sec('文稿内容'); hits.forEach(function(h){ item(titleOf(h.key) + ' · ' + fmt(h.t), snippet(h.text, q), function(){
+  if(hits.length){ sec('文稿内容'); hits.forEach(function(h){ item(titleOf(h.key) + ' · ' + fmt(h.t), snippet(h.text, h.q), function(){
     stashSearch(); closeSearch(true);   // 只定位到文稿里的这句，不切换播放
     pendingLocate = {key:h.key, t:h.t};
     goEp(h.key);
-  }, true, showLabel(showOf(h.key))); }); }
+  }, true, showLabel(showOf(h.key)), h.q); }); }
   if(!shs.length && !eps.length && !hits.length) wrap.appendChild(el('div', 'empty', trAllReady ? '没有找到「' + searchQ.trim() + '」。' : '正在搜索文稿…'));
   return wrap;
 }
@@ -4928,6 +4935,15 @@ function peopleHint(){
   var m = names(people.m), o = names(people.o);
   return (m ? '音乐人：' + m : '') + (m && o ? '；' : '') + (o ? '不是音乐人：' + o : '');
 }
+function peopleSearch(e){
+  var alts = [e.name, e.orig].filter(function(x, i, a){ return x && a.indexOf(x) === i; });
+  pendingSearch = {q:e.name, alts:alts};
+  closeSheet('peopleSheet'); closeSheet('about');
+  var d = (history.state && history.state.d) || 0;
+  if(view.page === 'home') setTimeout(render, 0);   // 等这次点击传完（document 上的「点别处收起搜索」会先跑）
+  else if(d) history.go(-d);
+  else { view = {page:'home'}; render(); }
+}
 function peopleMove(kind, id){
   var from = people[kind], to = people[kind === 'm' ? 'o' : 'm'];
   if(!from[id]) return;
@@ -4995,8 +5011,12 @@ function renderPeople(){
     if(pp.zh) g.appendChild(el('span', 'mu-zh line1', pp.zh));
     g.appendChild(el('small', 'line1', (e.role || (peopleTab === 'm' ? '音乐人' : '非音乐人')) + ' · 提到 ' + e.mentions.length + ' 次' + (e.works.length ? ' · ' + e.works.slice(0, 2).join('、') : '')));
     var main;
-    if(peopleTab === 'm'){ main = el('a', 'mu-main'); main.href = 'https://music.apple.com/search?term=' + encodeURIComponent(e.orig || e.name); main.target = '_blank'; main.rel = 'noopener'; main.appendChild(muIcon('artist')); main.appendChild(g); main.appendChild(el('span', 'mu-go', '↗')); }
-    else{ main = el('div', 'mu-main'); main.appendChild(g); }   // 非音乐人不放图标
+    main = el('div', 'mu-main'); main.onclick = function(){ peopleSearch(e); };   // 点一下：回首页搜这个人，看哪些地方提到
+    if(peopleTab === 'm'){
+      main.appendChild(muIcon('artist')); main.appendChild(g);
+      var go = el('a', 'mu-go', '↗'); go.href = 'https://music.apple.com/search?term=' + encodeURIComponent(e.orig || e.name); go.target = '_blank'; go.rel = 'noopener';
+      go.setAttribute('aria-label', '在 Apple Music 打开'); go.onclick = function(ev){ ev.stopPropagation(); }; main.appendChild(go);
+    }else main.appendChild(g);   // 非音乐人不放图标
     var mv = el('button', 'mu-t', peopleTab === 'm' ? '不是音乐人' : '是音乐人');
     mv.onclick = function(){ peopleMove(peopleTab, id); };
     row.appendChild(main); row.appendChild(mv); var li = el('li'); li.appendChild(row); box.appendChild(li);
