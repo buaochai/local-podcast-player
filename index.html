@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.18">
+<meta name="app-version" content="0.46.19">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -4997,16 +4997,12 @@ function nameParts(zh, orig){
 // 首页的音乐汇总：所有文稿里提到的音乐、音乐人、专辑，分三类看
 var musicAllTab = 'song', mlObserver = null;
 function musicAllCollect(){
-  var map = {};
+  var map = {}, items = [];
   Object.keys(trCache).forEach(function(k){
     var tr = trCache[k]; if(!tr || !tr.music || !tr.segments) return;
-    musicList(tr).forEach(function(m){
-      var kind = m.kind === 'artist' ? 'artist' : m.kind === 'album' ? 'album' : 'song';
-      var id = kind + '|' + normFind(m.orig || m.title) + '|' + normFind(m.artistOrig || m.artist || '');
-      var e = map[id] || (map[id] = {kind:kind, m:m, ments:[]});
-      e.ments.push({k:k, t:m.t});
-    });
+    musicList(tr).forEach(function(m){ items.push(Object.assign({}, m, {ments:[{k:k, t:m.t}]})); });
   });
+  musicMerge(items).forEach(function(x, i){ map[i] = {kind:x.kind === 'artist' ? 'artist' : x.kind === 'album' ? 'album' : 'song', m:x, ments:x.ments}; });
   return map;
 }
 // 跳到文稿里这个位置：正在播放就只跳转、不切换播放；没在播放就从这里开始播
@@ -5191,6 +5187,29 @@ function musicContextOk(tr, m, i){
   return re.test(text(i, i + 1).replace(m.said || '\u0000', ''));   // 名字本身里的字不算证据
 }
 // 给界面用：核对过的、带准确时间的列表（旧数据也过一遍；结果缓存在文稿对象上，不会存进数据库）
+// 同一首歌 / 同一个人只留一条：信息少的（没写创作者、版本）并进信息多的；创作者、版本、乐章明确不同的才算不同版本，各留一条
+function musicMerge(items){
+  function cls(m){ return m.kind === 'artist' ? 'artist' : m.kind === 'album' ? 'album' : 'song'; }
+  function names(m){ return [normFind(m.title), normFind(m.orig)].filter(Boolean); }
+  function same(a, b){ if(cls(a) !== cls(b)) return false; var x = names(a), y = names(b); return x.some(function(n){ return y.indexOf(n) >= 0; }); }
+  function arts(m){ return [normFind(m.artist), normFind(m.artistOrig)].filter(Boolean); }
+  function fits(b, a){   // b 的创作者 / 版本 / 乐章都是空的，或者和 a 一样
+    var ba = arts(b), aa = arts(a);
+    if(ba.length && !ba.some(function(n){ return aa.indexOf(n) >= 0; })) return false;
+    if(b.ver && normFind(b.ver) !== normFind(a.ver || '')) return false;
+    if(b.part && normFind(b.part) !== normFind(a.part || '')) return false;
+    return true;
+  }
+  function rank(m){ return (m.artist || m.artistOrig ? 1 : 0) + (m.ver ? 1 : 0) + (m.part ? 1 : 0); }
+  var out = [];
+  items.slice().sort(function(a, b){ return rank(b) - rank(a); }).forEach(function(it){
+    var ments = it.ments || [{t:it.t}], host = null;
+    for(var i = 0; i < out.length && !host; i++) if(same(out[i], it) && fits(it, out[i])) host = out[i];
+    if(host){ host.ments = host.ments.concat(ments); host.t = Math.min(host.t, it.t); }
+    else{ var c = Object.assign({}, it); c.ments = ments.slice(); out.push(c); }
+  });
+  return out;
+}
 function musicList(tr){
   if(!tr || !tr.music || !tr.segments) return [];
   var key = (tr.musicAt || 0) + ':' + tr.segments.length + ':' + tr.music.length;
@@ -5201,6 +5220,7 @@ function musicList(tr){
     if(!musicContextOk(tr, m, i)) return;
     var c = Object.assign({}, m); c.t = tr.segments[i].t; out.push(c);
   });
+  out = musicMerge(out);
   out.sort(function(a, b){ return a.t - b.t; });
   Object.defineProperty(tr, '_mvKey', {value:key, writable:true, enumerable:false, configurable:true});
   Object.defineProperty(tr, '_mv', {value:out, writable:true, enumerable:false, configurable:true});
