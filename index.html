@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.36.1">
+<meta name="app-version" content="0.36.2">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -2557,7 +2557,23 @@ function cloudImport(dir){
       n++;
     });
     if(n){ saveRecords(); syncCloudEps(); }
-    return {n:n, total:(j.files || []).length};
+    // 文件夹里的封面图（cover / folder / front 等），没有就用文件夹里唯一的一张图
+    var imgs = (j.files || []).filter(function(f){ return /\.(jpe?g|png|webp)$/i.test(f.key) && f.size > 0 && f.size < 12e6; });
+    var pick = imgs.filter(function(f){ return /^(cover|folder|front|albumart|poster|封面)\.[a-z]+$/i.test(f.key.split('/').pop()); })[0] || (imgs.length === 1 ? imgs[0] : null);
+    var res = {n:n, total:(j.files || []).length};
+    if(!pick || (shows[show] && (shows[show].cover || shows[show].coverUrl))) return res;
+    return cloudApi({op:'get', keys:[pick.key]}).then(function(g){
+      var url = g.urls && g.urls[pick.key];
+      return url ? fetch(url).then(function(r){ return r.blob(); }) : null;
+    }).then(function(blob){
+      if(!blob) return res;
+      var u = URL.createObjectURL(blob);
+      return thumb(u).then(function(d){
+        URL.revokeObjectURL(u);
+        if(d){ shows[show] = shows[show] || {}; shows[show].cover = d; saveShows(); cloudCover(show).catch(function(){}); res.cover = true; }
+        return res;
+      });
+    }).catch(function(){ return res; });
   });
 }
 var impPick = {};
@@ -2586,12 +2602,12 @@ $('bCloudImp').onclick = function(){
 };
 $('bImpGo').onclick = function(){
   var dirs = Object.keys(impPick); if(!dirs.length) return;
-  var btn = $('bImpGo'), total = 0; btn.disabled = true; btn.textContent = '正在导入…';
-  dirs.reduce(function(p, d){ return p.then(function(){ return cloudImport(d).then(function(r){ total += r.n; }); }); }, Promise.resolve()).then(function(){
+  var btn = $('bImpGo'), total = 0, covers = 0; btn.disabled = true; btn.textContent = '正在导入…';
+  dirs.reduce(function(p, d){ return p.then(function(){ return cloudImport(d).then(function(r){ total += r.n; if(r.cover) covers++; }); }); }, Promise.resolve()).then(function(){
     btn.textContent = '导入所选'; closeSheet('impSheet');
-    $('cloudImpStatus').textContent = total ? '导入了 ' + total + ' 集' : '没有新的音频（可能已经导入过）';
-    toast(total ? '已导入 ' + total + ' 集' : '没有新的音频，可能已经导入过');
-    if(total){ render(); cloudInfoRefresh(); }
+    var msg = total ? '导入了 ' + total + ' 集' + (covers ? '，并设置了封面' : '') : covers ? '没有新的音频，已补上封面' : '没有新的音频（可能已经导入过）';
+    $('cloudImpStatus').textContent = msg; toast(msg);
+    if(total || covers){ render(); cloudInfoRefresh(); }
   }, function(err){ btn.textContent = '导入所选'; btn.disabled = false; toast('导入失败：' + err.message, 5000); });
 };
 function cloudInfoRefresh(){ if(!$('about').hidden) $('bCloudTest').onclick(); }
