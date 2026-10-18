@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.35.6">
+<meta name="app-version" content="0.35.7">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -340,7 +340,11 @@ select.input{appearance:auto;-webkit-appearance:menulist}
 .ver-row{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:8px}
 .ver-row .ver-text{flex:1;min-width:0}
 .ver-row .btn{flex:none;min-width:64px}
-.ver-row .input{margin:6px 0 4px;padding:8px 10px;font-size:15px}
+.ver-row.imp{display:block}
+.imp-row{display:flex;gap:10px;align-items:center;margin:8px 0 2px}
+.imp-row .input{flex:1;min-width:0;height:40px;padding:0 12px;font-size:15px}
+.imp-row .btn{height:40px;padding:0 14px}
+.ver-row.imp .ver-status:empty{display:none}
 .ver-row .ver-num{font-weight:600}
 .ver-row .ver-status{font-size:13px;color:var(--muted)}
 .tools{display:flex;gap:8px;margin-top:8px}
@@ -731,13 +735,13 @@ input[type=file]{display:none}
       <h3>云端音频</h3>
       <p>把音频传到你自己的 Cloudflare R2：在线播放，多个设备都能听。音频由手机直接传给 R2，不经过 Cloudflare 后台。单集「!」→「上传到云端」，或打开下面的开关。</p>
       <label class="check"><input type="checkbox" id="cloudAutoChk"><span>添加音频时自动上传到云端</span></label>
-      <div class="ver-row">
-        <div class="ver-text">
-          <div class="ver-num">导入文件夹</div>
+      <div class="ver-row imp">
+        <div class="ver-num">导入文件夹</div>
+        <div class="imp-row">
           <input id="cloudDir" class="input" autocapitalize="off" spellcheck="false" placeholder="存储桶里的文件夹名，如 八分半">
-          <div class="ver-status" id="cloudImpStatus"></div>
+          <button class="btn" id="bCloudImp">导入</button>
         </div>
-        <button class="btn" id="bCloudImp">导入</button>
+        <div class="ver-status" id="cloudImpStatus"></div>
       </div>
       <div class="ver-row">
         <div class="ver-text">
