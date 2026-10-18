@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.38.0">
+<meta name="app-version" content="0.38.1">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -63,12 +63,12 @@ header .edge{margin-right:-8px}
 
 /* 内容区（唯一可以滚动的地方） */
 .view{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:16px;margin:0 -16px;padding-left:16px;padding-right:16px}   /* 两边撑到屏幕边缘，封面的阴影才不会被切掉 */
-body.has-player .view{padding-bottom:170px}
+body.has-player .view{padding-bottom:184px}
 /* 节目页：封面和标题固定，只有每一集的列表滚动 */
 .view.fixed{overflow:hidden;display:flex;flex-direction:column;padding-bottom:0}
 body.has-player .view.fixed{padding-bottom:0}
 .list-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:16px}
-body.has-player .list-scroll{padding-bottom:170px}
+body.has-player .list-scroll{padding-bottom:184px}
 .view.fixed .pod-head{flex:none}
 
 /* 首页：节目封面 */
@@ -163,10 +163,10 @@ body.selecting.show-page:not(.playing) .list-scroll,body.selecting.has-player .l
 
 /* 悬浮播放器 */
 .mini{
-  position:absolute;left:16px;right:16px;bottom:0;z-index:5;   /* 左右和文稿框一样宽，底部仍贴紧屏幕（留出 iPhone 横条的位置） */
+  position:absolute;left:16px;right:16px;bottom:max(10px, calc(env(safe-area-inset-bottom) - 12px));z-index:5;   /* 左右和文稿框一样宽，悬浮在屏幕底部上方一点点 */
   background:var(--mini);-webkit-backdrop-filter:blur(22px) saturate(1.6);backdrop-filter:blur(22px) saturate(1.6);
-  border:1px solid var(--pop-line);border-bottom:none;border-radius:18px 18px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.14);
-  padding:10px 12px calc(6px + env(safe-area-inset-bottom));
+  border:1px solid var(--pop-line);border-radius:22px;box-shadow:0 8px 30px rgba(0,0,0,.2);
+  padding:10px 12px 8px;
 }
 /* 专辑页（节目列表）：没在播放时不显示播放器 */
 body.show-page:not(.playing) .mini{display:none}
@@ -245,7 +245,7 @@ li.has-edit{position:relative}
 .ep-album{font-size:13px;color:var(--muted);margin:2px 2px 0}
 .ep-name,.ep-album{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 /* 文稿页的播放器：还在底部，但矮一点、没有封面 */
-body.ep-page .mini{padding:6px 10px calc(2px + env(safe-area-inset-bottom))}
+body.ep-page .mini{padding:6px 10px 4px}
 body.ep-page .mini-cover{display:none}
 body.ep-page .mini-top{gap:6px}
 body.ep-page .mini-title{display:none}   /* 集名已经在页面上面了 */
@@ -253,8 +253,8 @@ body.ep-page .seek{margin:2px 0 0;height:16px}
 body.ep-page .ctl{width:40px;height:38px}
 body.ep-page .ctl.play{width:42px;height:42px}
 body.ep-page .ctl.play svg{width:26px;height:26px}
-body.ep-page.has-player .list-scroll{padding-bottom:140px}
-body.ep-page.has-player .tr-loc{bottom:calc(140px + env(safe-area-inset-bottom))}
+body.ep-page.has-player .list-scroll{padding-bottom:152px}
+body.ep-page.has-player .tr-loc{bottom:calc(152px + env(safe-area-inset-bottom))}
 #bTrEdit{display:none}
 body.ep-page.can-edit #bTrEdit{display:flex}
 .tr-doc.editing .tr-p{outline:1px dashed var(--muted);outline-offset:4px;border-radius:4px;cursor:text}
@@ -3056,7 +3056,7 @@ function render(){
   var home = view.page === 'home', isEp = view.page === 'ep', isFav = view.page === 'fav';
   var pageKey = home ? 'home' : isEp ? 'ep:' + view.key : isFav ? 'fav:' + view.lvl + ':' + (view.show || view.key || '') : 'show:' + view.show;
   // 重画时保持滚动位置；换了页面就回到顶部
-  var samePage = pageKey === renderedKey;
+  var prevKey = renderedKey, samePage = pageKey === renderedKey;
   if(pageKey !== renderedKey){ selMode = false; selKeys = {}; }   // 换了页面就退出多选
   var top = pageKey !== renderedKey ? 0 : sc ? sc.scrollTop : box.scrollTop;
   renderedKey = pageKey;
@@ -3106,6 +3106,10 @@ function render(){
   if(home && searchOpen && searchQ.trim()) renderSearch(box); else if(home) renderHome(box); else if(isEp) renderEp(box); else if(isFav) renderFav(box); else renderShow(box);
   sc = box.querySelector('.list-scroll');
   if(sc) sc.scrollTop = top; else box.scrollTop = top;
+  if(!home && !isEp && !isFav && sc && prevKey.indexOf('ep:') === 0){   // 从文稿页退回专辑列表：回到刚才看的那一集，不是回到顶部
+    var row = sc.querySelector('li[data-k="' + prevKey.slice(3).replace(/(["\\])/g, '\\$1') + '"]');
+    if(row) sc.scrollTop = Math.max(0, row.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - sc.clientHeight / 3);
+  }
   renderMini();
   if(isEp) trTick(true, pageKey !== lastEpKey);
   lastEpKey = pageKey;
@@ -3456,6 +3460,7 @@ function renderShow(box){
     var k = ki[0], idx = ki[1];
     var ep = findEp(k), r = records[k];
     var li = el('li', 'item' + (ep && ep === cur ? ' cur' : '') + (ep ? '' : ' missing') + (selMode ? ' selmode' : '') + (selMode && selKeys[k] ? ' sel' : ''));
+    li.dataset.k = k;
     if(selMode) li.appendChild(el('span', 'chk' + (selKeys[k] ? ' on' : '')));
     var main = el('div', 'item-main');
     main.appendChild(el('div', 'item-name clamp2', titleOf(k)));
