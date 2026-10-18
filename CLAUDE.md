@@ -42,3 +42,4 @@
 - 单集「!」是悬浮半透明浮窗 `#epPop`（`showEpPop(键, 按钮)`：毛玻璃 `--pop`，贴着按钮定位，点 `#epPopBack` 或滑动关闭），常用操作在浮窗里，「详情与更多…」才打开原来的 `#epSheet`（`showEpMenu`）。订阅（RSS）的集不能上传云端（`cloudUploadAll` 过滤，`#bSelUp` 在订阅专辑里隐藏）。
 - 搜索框展开后，点输入框、搜索按钮、搜索结果以外的地方自动收回（`document` 的 click 监听）。
 - 列表里的上传 / 下载图标：`clBtn(键, 'up'|'down')` 生成 `.cl-btn`（灰 `todo` / 橙 `busy` 带 `--p` 进度圈 / 主题色 `done`），放在 `.info-btn` 左边；`clBusy[键]` 记录进行中，用 `clSet(键, op, 百分比|null)` 更新（直接改按钮 class，不重画列表）；`cloudUploadAll`、`downloadEp`、`cloudDownload` 的进度都要调它。不要再在行里加「已上传 / 云端 / 已下载」文字标记。播放列表按钮 `#bQueue` 固定在 `#bSleep` 左边，`renderQueue` 里有工具（`qAddAlbum`/`qShuffle`/倒序/清空）和每项的 `qMove` 上移下移。新加坡百炼 Key 要用工作空间专属地址（见 `AI_PROVIDERS.aliyun.help`）。
+- 导入 R2 文件夹：`cloudImport(文件夹)` 调 `r2.js` 的 `list`，每个音频建一条记录（`cloud.imp:true`，`customShow` = 文件夹名）；`cloudRemove` 对 `imp` 的只删记录、不删存储桶文件。`clIco(op, 状态)`：`done` 带圆圈、`todo` 只有箭头。`titleOf` 也会去掉「｜」。

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.34.1">
+<meta name="app-version" content="0.35.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -288,7 +288,7 @@ select.input{appearance:auto;-webkit-appearance:menulist}
 .pop-item.danger{color:var(--danger)}
 /* 所有弹出的菜单面板：悬浮、半透明毛玻璃，四周留边（和「!」浮窗一致） */
 .sheet{background:rgba(0,0,0,.22)}
-.sheet-box{width:calc(100% - 20px);margin:0 10px calc(10px + env(safe-area-inset-bottom));padding-bottom:0;max-height:84%;border-radius:22px;
+.sheet-box{width:calc(100% - 12px);margin:0 6px calc(6px + env(safe-area-inset-bottom));padding-bottom:0;max-height:84%;border-radius:22px;
   background:var(--pop);-webkit-backdrop-filter:blur(24px) saturate(1.8);backdrop-filter:blur(24px) saturate(1.8);border:1px solid var(--pop-line);box-shadow:0 12px 40px rgba(0,0,0,.28)}
 /* 列表里的上传 / 下载图标：灰色 = 还没做，转动 = 正在做（带进度圈），彩色 = 已经有了 */
 .cl-btn{position:relative;border:none;background:transparent;width:30px;height:36px;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none;padding:0}
@@ -731,6 +731,14 @@ input[type=file]{display:none}
       <label class="check"><input type="checkbox" id="cloudAutoChk"><span>添加音频时自动上传到云端</span></label>
       <div class="ver-row">
         <div class="ver-text">
+          <div class="ver-num">导入文件夹</div>
+          <input id="cloudDir" class="input" autocapitalize="off" spellcheck="false" placeholder="存储桶里的文件夹名，如 八分半">
+          <div class="ver-status" id="cloudImpStatus"></div>
+        </div>
+        <button class="btn" id="bCloudImp">导入</button>
+      </div>
+      <div class="ver-row">
+        <div class="ver-text">
           <div class="ver-num">云端存储</div>
           <div class="ver-status" id="cloudStatus">点右边按钮检查连接</div>
         </div>
@@ -944,7 +952,7 @@ function rawTitleOf(key){
   var ep = findEp(key), r = records[key];
   return (ep && ep.title) || (r && r.title) || stripExt(ep ? ep.name : r.name);
 }
-function titleOf(key){ return tidyTitle(rawTitleOf(key), dblAlbum(showOf(key))); }
+function titleOf(key){ return stripBar(tidyTitle(rawTitleOf(key), dblAlbum(showOf(key)))).replace(/\s*[｜|]\s*/g, ' '); }   // 「｜」任何地方都不显示
 /* ---------- 集名优化（只改显示；列表顺序仍按文件名排）---------- */
 // 序号 = 名字最前面、后面紧跟「.」的数字（「12个故事」「12 个故事」里的 12 不算序号）
 // 名字前有两个序号（第一个是为了排序加的）→ 去掉第一个；「0.」开头 →「发刊词：」；带「番外」的 →「番外：」开头
@@ -2399,6 +2407,13 @@ function cloudUploadOne(key, onProgress){
 // 列表里每一集的上传 / 下载图标。clBusy[键] = {op:'up'|'down', p:0-100}
 var clBusy = {};
 var ICO_ARR_UP = '<svg viewBox="0 0 24 24"><path d="M11 19V8.8l-4.6 4.6L5 12l7-7 7 7-1.4 1.4L13 8.8V19z"/></svg>', ICO_ARR_DOWN = '<svg viewBox="0 0 24 24"><path d="M11 5v10.2l-4.6-4.6L5 12l7 7 7-7-1.4-1.4L13 15.2V5z"/></svg>';
+// 做完的图标：箭头外面加一圈（和「!」一样的圆圈风格）；还没做的只有箭头
+var CL_RING = '<circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.8"/>';
+function clIco(op, st){
+  var path = op === 'up' ? 'M11 19V8.8l-4.6 4.6L5 12l7-7 7 7-1.4 1.4L13 8.8V19z' : 'M11 5v10.2l-4.6-4.6L5 12l7 7 7-7-1.4-1.4L13 15.2V5z';
+  return st === 'done' ? '<svg viewBox="0 0 24 24">' + CL_RING + '<g transform="translate(5.4 5.4) scale(.55)"><path fill="currentColor" d="' + path + '"/></g></svg>'
+    : '<svg viewBox="0 0 24 24"><path d="' + path + '"/></svg>';
+}
 // 不适用的返回空：订阅的播客不能上传；没有这一集的文件也没有云端的，什么都做不了
 function clState(k, op){
   var ep = findEp(k), r = records[k] || {}, b = clBusy[k];
@@ -2413,7 +2428,7 @@ function clBtn(k, op){
   var b = el('button', 'cl-btn ' + op + ' ' + st);
   b.dataset.k = k; b.dataset.op = op;
   b.setAttribute('aria-label', op === 'up' ? '上传到云端' : '下载到本机');
-  b.innerHTML = op === 'up' ? ICO_ARR_UP : ICO_ARR_DOWN;
+  b.innerHTML = clIco(op, st);
   if(st === 'busy') b.style.setProperty('--p', clBusy[k].p || 0);
   b.onclick = function(e){
     e.stopPropagation();
@@ -2431,6 +2446,7 @@ function clSet(k, op, p){
     if(b.dataset.k !== k) return;
     var st = clState(k, b.dataset.op);
     b.className = 'cl-btn ' + b.dataset.op + ' ' + st;
+    b.innerHTML = clIco(b.dataset.op, st);
     if(st === 'busy') b.style.setProperty('--p', clBusy[k].p); else b.style.removeProperty('--p');
   });
 }
@@ -2491,6 +2507,7 @@ function cloudDownload(key){
 function cloudRemove(key){
   var r = records[key];
   if(!r || !r.cloud) return Promise.resolve();
+  if(r.cloud.imp){ delete r.cloud; r.cat = Date.now(); saveRecords(); syncCloudEps(); return Promise.resolve(); }   // 自己拖进去的文件夹：只忘掉，不删存储桶里的文件
   return cloudApi({op:'delete', keys:[r.cloud.k]}).then(function(j){
     if(!j.deleted) throw new Error('云端没有删掉这个文件');
     delete r.cloud; r.cat = Date.now();
@@ -2502,6 +2519,34 @@ function cloudRemoveAsk(key){
   if(!confirm('从云端删除「' + titleOf(key) + '」的音频？' + (local ? '本机的文件和播放记录都还在。' : '本机没有这一集的文件，删了就听不到了。'))) return;
   cloudRemove(key).then(function(){ toast('已从云端删除'); render(); cloudInfoRefresh(); }, function(err){ toast('云端删除失败：' + err.message, 5000); });
 }
+// 导入存储桶里自己拖进去的文件夹：每个音频文件变成一集（专辑 = 文件夹名，集名 = 文件名），播放时在线取
+var IMP_EXT = /\.(mp3|m4a|m4b|aac|wav|ogg|oga|opus|flac|mp4)$/i;
+function cloudImport(dir){
+  return cloudApi({op:'list', prefix:dir}).then(function(j){
+    var folder = dir.replace(/\/+$/, ''), show = folder.split('/').pop(), have = {}, n = 0, now = Date.now();
+    Object.keys(records).forEach(function(k){ if(records[k].cloud) have[records[k].cloud.k] = 1; });
+    (j.files || []).filter(function(f){ return IMP_EXT.test(f.key) && f.size > 0; }).sort(function(a, b){ return a.key < b.key ? -1 : 1; }).forEach(function(f){
+      if(have[f.key]) return;
+      var name = f.key.split('/').pop(), key = name + '|' + f.size;
+      if(records[key] && records[key].cloud) return;
+      var r = records[key] || (records[key] = {name:name, size:f.size, duration:0, position:0, updated:0, added:now});
+      r.title = r.title || stripExt(name); r.show = r.show || show; r.customShow = r.customShow || show; r.ct = now;   // 专辑固定为文件夹名，下载后读到音频标签也不改
+      r.cloud = {k:f.key, size:f.size, type:mimeOf(name), imp:true}; r.cat = now;
+      n++;
+    });
+    if(n){ saveRecords(); syncCloudEps(); }
+    return {n:n, total:(j.files || []).length};
+  });
+}
+$('bCloudImp').onclick = function(){
+  var dir = $('cloudDir').value.trim(), st = $('cloudImpStatus');
+  if(!dir){ st.textContent = '先填文件夹名'; return; }
+  st.textContent = '正在读取…';
+  cloudImport(dir).then(function(r){
+    st.textContent = r.total ? '导入了 ' + r.n + ' 集' + (r.n < r.total ? '（其余已导入过或不是音频）' : '') : '这个文件夹里没有文件，检查一下名字（区分大小写）';
+    if(r.n){ render(); cloudInfoRefresh(); }
+  }, function(err){ st.textContent = '导入失败：' + err.message; });
+};
 function cloudInfoRefresh(){ if(!$('about').hidden) $('bCloudTest').onclick(); }
 
 /* ---------- 添加文件（保存进网页） ---------- */
@@ -3056,7 +3101,7 @@ function renderHome(box){
       wrap.appendChild(lw);
     }
     st.appendChild(wrap);
-    st.appendChild(el('div', 'pod-name clamp2', base));
+    st.appendChild(el('div', 'pod-name clamp2', showLabel(base)));
     st.appendChild(el('div', 'pod-meta line1', seasons.length + ' 季 · ' + keys + ' 集'));
     st.onclick = function(){ openSeries[base] = !openSeries[base]; render(); };
     grid.appendChild(st);

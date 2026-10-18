@@ -14,6 +14,7 @@
 //   {op:'get', keys:[...]}      → {urls:{key:url}} 临时播放 / 下载地址（12 小时有效）
 //   {op:'delete', keys:[...]}   → {deleted:n}      在这里直接删（很小的请求）
 //   {op:'usage'}                → {count, bytes}   云端已存多少
+//   {op:'list', prefix}         → {files:[{key,size}]} 列出存储桶里某个文件夹下的文件（用来导入自己拖进去的文件夹）
 var enc = new TextEncoder();
 var PUT_TTL = 3600, GET_TTL = 12 * 3600;
 
@@ -57,6 +58,9 @@ export async function presign(c, method, key, ttl, extra, now){
 }
 function prefixOf(uid){ return 'u/' + uid.slice(0, 16) + '/'; }
 function ownKey(uid, key){ return typeof key === 'string' && key.indexOf(prefixOf(uid)) === 0 && key.length < 300 && key.indexOf('..') < 0; }
+// 读：自己的目录，或者你自己拖进存储桶的文件夹（不在别人的 u/ 目录下）；写和删只能动自己的目录
+function canRead(uid, key){ return typeof key === 'string' && key.length < 300 && key.indexOf('..') < 0 && key.charAt(0) !== '/' && (key.indexOf('u/') !== 0 || key.indexOf(prefixOf(uid)) === 0); }
+function xmlDecode(t){ return t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&'); }
 function randomId(){ return hex(crypto.getRandomValues(new Uint8Array(10))); }
 
 export async function onRequestPost({request, env, data}){
@@ -79,7 +83,7 @@ export async function onRequestPost({request, env, data}){
   }
   if(op === 'get'){
     var keys = Array.isArray(body.keys) ? body.keys.slice(0, 200) : [], urls = {};
-    for(var i = 0; i < keys.length; i++) if(ownKey(uid, keys[i])) urls[keys[i]] = await presign(c, 'GET', keys[i], GET_TTL);
+    for(var i = 0; i < keys.length; i++) if(canRead(uid, keys[i])) urls[keys[i]] = await presign(c, 'GET', keys[i], GET_TTL);
     return json({urls: urls});
   }
   if(op === 'delete'){
@@ -90,6 +94,29 @@ export async function onRequestPost({request, env, data}){
       if(r && (r.ok || r.status === 404)) n++;
     }
     return json({deleted: n});
+  }
+  if(op === 'list'){
+    var pre = String(body.prefix || '').replace(/^\/+/, '');
+    if(pre && pre.charAt(pre.length - 1) !== '/') pre += '/';
+    if(!pre || !canRead(uid, pre)) return json({error: '文件夹名不对'}, 400);
+    var files = [], tk = '', pg = 0;
+    do{
+      var ex = {'list-type': '2', 'prefix': pre, 'max-keys': '1000'};
+      if(tk) ex['continuation-token'] = tk;
+      var rr = await fetch(await presign(c, 'GET', '', 300, ex)).catch(function(){ return null; });
+      if(!rr) return json({error: '连不上 R2'}, 502);
+      var tx = await rr.text();
+      if(rr.status === 403) return json({error: 'R2 拒绝访问：访问密钥不对，或令牌没有这个存储桶的权限'}, 403);
+      if(!rr.ok) return json({error: 'R2 返回 ' + rr.status}, 502);
+      var cre = /<Contents>([\s\S]*?)<\/Contents>/g, cm;
+      while((cm = cre.exec(tx))){
+        var kk = /<Key>([\s\S]*?)<\/Key>/.exec(cm[1]), sz = /<Size>(\d+)<\/Size>/.exec(cm[1]);
+        if(kk && sz) files.push({key: xmlDecode(kk[1]), size: +sz[1]});
+      }
+      var nt2 = /<NextContinuationToken>([^<]+)<\/NextContinuationToken>/.exec(tx);
+      tk = /<IsTruncated>true<\/IsTruncated>/.test(tx) && nt2 ? xmlDecode(nt2[1]) : '';
+    }while(tk && ++pg < 10);
+    return json({files: files});
   }
   if(op === 'usage'){
     var count = 0, bytes = 0, token = '', pages = 0;
