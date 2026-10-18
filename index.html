@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.39.8">
+<meta name="app-version" content="0.39.9">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -158,9 +158,9 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .chk.on{background:var(--accent);border-color:var(--accent)}
 .chk.on::after{content:"";width:6px;height:11px;border:solid var(--on-accent);border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
 .item.sel{background:var(--accent-soft)}
-.selbar{position:absolute;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:6;display:flex;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:10px}
+.selbar{position:absolute;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:6;display:flex;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:10px}
 .selbar[hidden]{display:none}
-.selbar .btn{flex:1;min-width:0;padding:8px 2px;font-size:15px;white-space:nowrap}
+.selbar .btn{flex:1;min-width:0;padding:8px 0;font-size:14px;white-space:nowrap}
 .selbar .btn:disabled{opacity:.4}
 body.selecting .mini{display:none}
 body.selecting .list-scroll{padding-bottom:90px}
@@ -417,6 +417,7 @@ input[type=file]{display:none}
 <div class="selbar" id="selBar" hidden>
   <button class="btn" id="bSelMove" disabled>移动</button>
   <button class="btn" id="bSelTr" disabled>转文字</button>
+  <button class="btn" id="bSelDown" disabled>下载</button>
   <button class="btn" id="bSelUp" disabled>传云端</button>
   <button class="btn danger" id="bSelDel" disabled>删除</button>
 </div>
@@ -2424,7 +2425,7 @@ function downloadEp(key){
   if(ep.cloud) return cloudDownload(key);
   toast('正在下载…', 60000);
   clSet(key, 'down', 0);
-  fetchBlobProgress(ep.url, ep.size, function(pc){ clSet(key, 'down', pc); }).then(function(blob){
+  return fetchBlobProgress(ep.url, ep.size, function(pc){ clSet(key, 'down', pc); }).then(function(blob){
     var row = {key:key, name:ep.name, size:blob.size, type:blob.type, blob:blob, added:Date.now(), rss:true, title:ep.title, show:feedEpMap[key] ? feedEpMap[key].f.title : ep.show, feed:ep.feed};
     return store('readwrite', function(st){ return st.put(row); }).then(function(){ return row; });
   }).then(function(row){
@@ -2641,7 +2642,7 @@ function cloudDownload(key){
   if(!ep || !ep.cloud || !r) return;
   toast('正在连接云端…', 60000);
   clSet(key, 'down', 0);
-  cloudResolve(ep).then(function(url){ return fetchBlobProgress(url, ep.size, function(pc){ clSet(key, 'down', pc); }); }).then(function(blob){
+  return cloudResolve(ep).then(function(url){ return fetchBlobProgress(url, ep.size, function(pc){ clSet(key, 'down', pc); }); }).then(function(blob){
     var row = {key:key, name:r.name, size:blob.size, type:blob.type, blob:blob, added:Date.now()};
     return store('readwrite', function(st){ return st.put(row); }).then(function(){ return row; });
   }).then(function(row){
@@ -3054,6 +3055,21 @@ function selOrdered(){
   return out;
 }
 $('bSelTr').onclick = function(){ var ks = selOrdered(); if(!ks.length) return; exitSel(); trBatch(ks); };
+// 多选下载：只下载还在云端 / 在线的集，按列表顺序一集一集来
+$('bSelDown').onclick = function(){
+  var ks = selOrdered().filter(function(k){ var e = findEp(k); return e && e.remote; });
+  if(!ks.length){ toast('选中的集都已经在手机里了'); return; }
+  exitSel();
+  var i = 0, ok = 0;
+  function nextOne(){
+    if(i >= ks.length){ toast('下载完成：' + ok + ' / ' + ks.length + ' 集', 4000); return; }
+    var k = ks[i++];
+    toast('正在下载 ' + i + ' / ' + ks.length + '…', 60000);
+    var pr = downloadEp(k);
+    return (pr || Promise.resolve()).then(function(){ if(hasFile(k)) ok++; }).then(nextOne);
+  }
+  nextOne();
+};
 $('bSelUp').onclick = function(){ var ks = selOrdered(); if(!ks.length) return; exitSel(); cloudUploadAll(ks); };
 $('bSelDel').onclick = function(){ var ks = Object.keys(selKeys); if(ks.length) showSelDelete(ks); };
 function showSelDelete(keys){
@@ -3172,7 +3188,7 @@ function render(){
   $('bSelUp').hidden = !!(view.page === 'show' && feedOfShow(view.show));   // 订阅的播客没有「传云端」
   document.body.classList.toggle('selecting', selecting);
   showTrJob();
-  $('bSelMove').disabled = $('bSelDel').disabled = $('bSelTr').disabled = $('bSelUp').disabled = !selCount();
+  $('bSelMove').disabled = $('bSelDel').disabled = $('bSelTr').disabled = $('bSelUp').disabled = $('bSelDown').disabled = !selCount();
   $('bSelAll').textContent = selCount() >= nKeys ? '取消全选' : '全选';
   $('title').textContent = selecting ? '已选 ' + selCount() + ' 集' : '';   // 顶部栏不放大标题
   document.body.classList.toggle('ep-page', isEp);
