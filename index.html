@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.41.4">
+<meta name="app-version" content="0.42.0">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -237,6 +237,10 @@ li.has-edit{position:relative}
 .opt.mk{padding-right:54px;align-items:flex-start}
 .opt.mk .time{padding-top:1px}
 .opt.mk .mk-note{display:-webkit-box}
+.opt.mk .mk-quote{-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;font-size:15px;line-height:1.55;padding-left:8px;border-left:3px solid var(--accent)}   /* 收藏的文稿原文：左边一道竖线，像引用 */
+#selFav{position:fixed;z-index:26;display:flex;align-items:center;gap:6px;padding:9px 16px;border:none;border-radius:999px;background:var(--accent);color:var(--on-accent);font-size:15px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.28)}
+#selFav[hidden]{display:none}
+#selFav svg{width:18px;height:18px;fill:currentColor}
 .opt.mk .mk-ctx{display:-webkit-box;-webkit-line-clamp:2;margin-top:3px;font-size:12px;line-height:1.5;color:var(--muted)}
 .mk-now{margin:8px 2px 0;font-size:12px;line-height:1.5;color:var(--muted)}
 .opt-edit{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:40px;height:40px;border:none;background:transparent;color:var(--muted);display:flex;align-items:center;justify-content:center;border-radius:50%}
@@ -830,6 +834,7 @@ input[type=file]{display:none}
 </div>
 
 <audio id="audio" preload="metadata"></audio>
+<button id="selFav" hidden><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.2L6 21z"/></svg>收藏这段</button>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1513,9 +1518,14 @@ function renderMarkList(ul, key, after, q){
   list.forEach(function(m){
     var li = el('li', 'has-edit'), b = el('button', 'opt mk');
     b.appendChild(el('span', 'time', fmt(m.t)));
-    var g = el('span', 'grow'), ctx = markContext(key, m.t);
-    g.appendChild(el('span', 'mk-note clamp2', m.note || '（没有写原因）'));
-    if(ctx) g.appendChild(el('small', 'mk-ctx clamp2', ctx));   // 文稿里这个时间点附近的话，小字
+    var g = el('span', 'grow'), ctx = m.text ? '' : markContext(key, m.t);
+    if(m.text){   // 收藏的文稿原文：正文显示这段话，原因（有的话）写在下面小字
+      g.appendChild(el('span', 'mk-note mk-quote', m.text));
+      if(m.note) g.appendChild(el('small', 'mk-ctx clamp2', m.note));
+    }else{
+      g.appendChild(el('span', 'mk-note clamp2', m.note || '（没有写原因）'));
+      if(ctx) g.appendChild(el('small', 'mk-ctx clamp2', ctx));   // 文稿里这个时间点附近的话，小字
+    }
     b.appendChild(g);
     b.onclick = function(){
       var ep = findEp(key);
@@ -1557,9 +1567,12 @@ $('bMark').onclick = function(){
   $('markListHead').hidden = !n;
   openSheet('markSheet');
 };
-function addMark(sec, note){
-  var r = records[cur.key] || (records[cur.key] = {name:cur.name, size:cur.size, duration:0, position:0, updated:0, show:cur.show, title:cur.title});
-  (r.marks = r.marks || []).push({t:Math.floor(sec), note:note || '', created:Date.now()});
+function addMark(sec, note, text, key){
+  var ck = key || cur.key, ep0 = findEp(ck) || cur;
+  var r = records[ck] || (records[ck] = {name:ep0.name, size:ep0.size, duration:0, position:0, updated:0, show:ep0.show, title:ep0.title});
+  var mk = {t:Math.floor(sec), note:note || '', created:Date.now()};
+  if(text) mk.text = text;   // 收藏的是文稿里选中的这段文字
+  (r.marks = r.marks || []).push(mk);
   r.mt = Date.now();
   saveRecords();
   renderMini(); render();
@@ -1572,6 +1585,37 @@ function saveMark(){
   toast('已收藏 ' + fmt(markAt));
 }
 $('bMarkSave').onclick = saveMark;
+/* ---- 文稿页：选中一段文字 → 收藏（收藏的内容就是这段文稿，时间点取选中第一句的时间）---- */
+var selFavTimer = 0, selFavInfo = null;
+function selFavCheck(){
+  var b = $('selFav'), sel = window.getSelection ? window.getSelection() : null;
+  selFavInfo = null;
+  if(view.page !== 'ep' || !sel || sel.isCollapsed || !sel.rangeCount || trEdit){ b.hidden = true; return; }
+  var rg = sel.getRangeAt(0), doc = document.querySelector('.tr-doc');
+  if(!doc || !doc.contains(rg.commonAncestorContainer)){ b.hidden = true; return; }
+  var text = String(sel).replace(/\s+/g, ' ').trim();
+  if(text.length < 2){ b.hidden = true; return; }
+  var first = -1;
+  for(var i = 0; i < trNodes.length; i++){ if(trNodes[i].isConnected && rg.intersectsNode(trNodes[i])){ first = i; break; } }
+  if(first < 0 || !trSegs[first]){ b.hidden = true; return; }
+  selFavInfo = {key:view.key, t:trSegs[first].t, text:text.length > 500 ? text.slice(0, 500) + '…' : text};
+  // 放在选中文字的下面（上面是系统自带的「拷贝」菜单）；下面放不下就放上面
+  var r = rg.getBoundingClientRect(), bw = 120, left = Math.min(Math.max(12, r.left + r.width / 2 - bw / 2), window.innerWidth - bw - 12);
+  b.hidden = false;
+  var top = r.bottom + 12;
+  if(top + 46 > window.innerHeight - 150) top = Math.max(70, r.top - 62);
+  b.style.left = left + 'px'; b.style.top = top + 'px';
+}
+document.addEventListener('selectionchange', function(){ clearTimeout(selFavTimer); selFavTimer = setTimeout(selFavCheck, 140); });
+['mousedown', 'touchstart'].forEach(function(ev){ $('selFav').addEventListener(ev, function(e){ e.preventDefault(); }, {passive:false}); });   // 点它不要让选中的文字消失
+$('selFav').onclick = function(){
+  var info = selFavInfo; if(!info) return;
+  var r0 = records[info.key];
+  if(r0 && (r0.marks || []).some(function(m){ return m.text === info.text; })){ toast('这段已经收藏过了'); }
+  else{ addMark(info.t, '', info.text, info.key); toast('已收藏这段文字（' + fmt(info.t) + '）'); }
+  try{ window.getSelection().removeAllRanges(); }catch(e){}
+  $('selFav').hidden = true; selFavInfo = null;
+};
 $('markNote').addEventListener('keydown', function(e){ if(e.key === 'Enter') saveMark(); });
 
 /* ---------- 输入框面板 ---------- */
@@ -2844,7 +2888,7 @@ function mergeInto(keep, other){
   else if(b.cloud && a.cloud && !b.cloud.imp && b.cloud.k !== a.cloud.k) jobs.push(cloudApi({op:'delete', keys:[b.cloud.k]}).catch(function(){}));   // 自己传的重复云端文件也清掉
   if(b.marks && b.marks.length){
     a.marks = a.marks || [];
-    b.marks.forEach(function(m){ if(!a.marks.some(function(x){ return Math.abs(x.t - m.t) < 1 && (x.note || '') === (m.note || ''); })) a.marks.push(m); });
+    b.marks.forEach(function(m){ if(!a.marks.some(function(x){ return Math.abs(x.t - m.t) < 1 && (x.note || '') === (m.note || '') && (x.text || '') === (m.text || ''); })) a.marks.push(m); });
     a.mt = now;
   }
   if((b.updated || 0) > (a.updated || 0)){ a.position = b.position; a.finished = b.finished; a.updated = b.updated; }
@@ -3284,7 +3328,7 @@ function favMatch(key, q){
   return titleOf(key).toLowerCase().indexOf(q) >= 0 || marksOf(key).some(function(m){ return markMatch(key, m, q); });
 }
 function markMatch(key, m, q){
-  return !q || (m.note || '').toLowerCase().indexOf(q) >= 0 || markContext(key, m.t).toLowerCase().indexOf(q) >= 0;
+  return !q || (m.note || '').toLowerCase().indexOf(q) >= 0 || (m.text || '').toLowerCase().indexOf(q) >= 0 || markContext(key, m.t).toLowerCase().indexOf(q) >= 0;
 }
 function renderFav(box){
   box.classList.add('fixed');
