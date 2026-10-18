@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.15">
+<meta name="app-version" content="0.46.16">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -436,10 +436,8 @@ input[type=file]{display:none}
   <button class="icon-btn" id="bMusicAll" aria-label="音乐" hidden><svg viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/></svg></button>
   <button class="icon-btn" id="bHist" aria-label="播放历史" hidden><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7z"/></svg></button>
   <button class="icon-btn" id="bFav" aria-label="收藏" hidden><svg viewBox="0 0 24 24"><path d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2zm0 15-5-2.18L7 18V5h10z"/></svg></button>
-  <button class="icon-btn" id="bRss" aria-label="订阅播客" hidden><svg viewBox="0 0 24 24"><path d="M6.18 15.64a2.18 2.18 0 1 1 0 4.36 2.18 2.18 0 0 1 0-4.36zM4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27zm0 5.66A9.9 9.9 0 0 1 13.9 20h-2.83A7.07 7.07 0 0 0 4 12.93z"/></svg></button>
   <button class="icon-btn" id="bNewAlbum" aria-label="新建专辑" hidden><svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"/></svg></button>
   <button class="txt-btn" id="bSel" hidden>选择</button>
-  <button class="icon-btn add" id="bAdd" aria-label="添加音频"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg></button>
   <button class="icon-btn" id="bHome" aria-label="首页" hidden><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg></button>
   <input class="search-in" id="searchIn" type="search" placeholder="搜索全部节目、单集、文稿" enterkeyhint="search" autocomplete="off" hidden>
   <button class="icon-btn" id="bSearch" aria-label="搜索" hidden><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15 15l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
@@ -818,6 +816,20 @@ input[type=file]{display:none}
         </div>
         <button class="btn" id="bUpdate">刷新</button>
       </div>
+      <div class="ver-row">
+        <div class="ver-text">
+          <div class="ver-num">导入音频文件</div>
+          <div class="ver-status">mp3、m4a 等，可以一次选多个</div>
+        </div>
+        <button class="btn primary" id="bAdd">选择</button>
+      </div>
+      <div class="ver-row">
+        <div class="ver-text">
+          <div class="ver-num">订阅播客（RSS）</div>
+          <div class="ver-status">填 RSS 地址，自动抓取节目列表</div>
+        </div>
+        <button class="btn" id="bRss">打开</button>
+      </div>
 
       <h3>AI 文稿</h3>
       <p>用你自己的 API Key，把音频识别成带时间的文字，再由文本模型自动分章节。语音识别支持阿里云百炼 Fun-ASR、OpenAI、Groq、硅基流动、Gemini、OpenRouter 和自定义接口；分章节支持 Claude、DeepSeek、通义千问、智谱、Kimi、豆包、混元、OpenAI、Gemini 等。</p>
@@ -898,9 +910,9 @@ input[type=file]{display:none}
 
       <h3>功能</h3>
       <ul>
-        <li>点右上角「＋」选音频文件（mp3、m4a 等），可以一次选多个；音频会保存在网页里，下次打开直接播放</li>
+        <li>点右上角「关于」→「导入音频文件」选音频（mp3、m4a 等），可以一次选多个；音频会保存在网页里，下次打开直接播放</li>
         <li>音频可以传到云端（你自己的 Cloudflare R2）：单集「!」→「上传到云端」，其他设备登录后就能在线听；「关于」里可以设置添加时自动上传</li>
-        <li>首页右上角的 RSS 图标可以订阅播客：填 RSS 地址，节目列表自动抓取，在线播放；单集「!」里可以下载到本机离线听</li>
+        <li>「关于」→「订阅播客（RSS）」可以订阅播客：填 RSS 地址，节目列表自动抓取，在线播放；单集「!」里可以下载到本机离线听</li>
         <li>按音频文件里的「专辑」信息自动分成不同的播客节目，并显示节目封面</li>
         <li>点节目封面进入节目，看到每一集的进度；点每一集右边的「!」查看文件信息和更多操作</li>
         <li>长按某一集（或点右上角「选择」）可以多选，选好后一起移动到专辑或删除</li>
@@ -1612,7 +1624,7 @@ function renderMarkList(ul, key, after, q){
     b.appendChild(g);
     b.onclick = function(){
       var ep = findEp(key);
-      if(!ep){ toast('文件缺失，点「＋」重新添加这一集'); return; }
+      if(!ep){ toast('文件缺失，在「关于」里导入文件，重新添加这一集'); return; }
       if(after) after();
       open(ep, true, m.t);
     };
@@ -2568,7 +2580,7 @@ function renderRssList(){
     return {label:f.title, note:(f.eps || []).length + ' 集' + (f.fetched ? ' · 更新于 ' + fmtDate(f.fetched) : ' · 还没抓取'), pick:function(){ closeSheet('rssSheet'); goShow(f.title); }};
   }));
 }
-$('bRss').onclick = function(){ renderRssList(); openSheet('rssSheet'); };
+$('bRss').onclick = function(){ closeSheet('about'); renderRssList(); openSheet('rssSheet'); };
 $('bRssAdd').onclick = function(){ subscribe($('rssUrl').value); };
 $('rssUrl').addEventListener('keydown', function(e){ if(e.key === 'Enter') subscribe(this.value); });
 $('bRssRefresh').onclick = function(){
@@ -3039,7 +3051,7 @@ $('bDup').onclick = function(){
 function cloudInfoRefresh(){ if(!$('about').hidden) $('bCloudTest').onclick(); }
 
 /* ---------- 添加文件（保存进网页） ---------- */
-$('bAdd').onclick = function(){ $('fileInput').click(); };
+$('bAdd').onclick = function(){ closeSheet('about'); $('fileInput').click(); };
 $('fileInput').addEventListener('change', function(e){
   var files = Array.prototype.slice.call(e.target.files || []);
   e.target.value = '';
@@ -3344,7 +3356,7 @@ function render(){
   var selecting = selMode && !home && !isEp && nKeys > 0;
   if(!selecting && selMode){ selMode = false; selKeys = {}; }
   $('bBack').hidden = home || selecting;
-  $('bNewAlbum').hidden = !home; $('bRss').hidden = !home; $('bFav').hidden = !home; $('bHist').hidden = !home; $('bMusicAll').hidden = !home;
+  $('bNewAlbum').hidden = !home; $('bFav').hidden = !home; $('bHist').hidden = !home; $('bMusicAll').hidden = !home;
   // 搜索：首页是全局搜索，其他页面只搜所在的这个地方；换了页面就收起
   $('bSearch').hidden = selecting;
   if(pendingSearch && home){   // 从人物资料库来：直接在首页搜这个人
@@ -3366,7 +3378,7 @@ function render(){
   $('bSel').hidden = home || isEp || isFav || selecting || !nKeys;
   $('bEpMore').hidden = !isEp; if(!isEp) $('bMusic').hidden = true; $('bHome').hidden = home || selecting;
   $('bSelAll').hidden = !selecting; $('bSelDone').hidden = !selecting;
-  $('bAdd').hidden = selecting || isEp || isFav; $('bAbout').hidden = selecting || isEp || isFav;
+  $('bAbout').hidden = selecting || isEp || isFav;
   $('selBar').hidden = !selecting;
   $('bSelUp').hidden = !!(view.page === 'show' && feedOfShow(view.show));   // 订阅的播客没有「传云端」
   document.body.classList.toggle('selecting', selecting);
@@ -3600,7 +3612,7 @@ var homeImgs = {};   // 首页封面图元素复用，重画时不重新加载�
 function renderHome(box){
   var list = allShows();
   if(!list.length){
-    var empty = el('div', 'empty', '还没有节目。点右上角「＋」添加播客音频，会按专辑自动分成不同节目，下次打开直接播放。');
+    var empty = el('div', 'empty', '还没有节目。点右上角「关于」→「导入音频文件」添加播客音频，会按专辑自动分成不同节目，下次打开直接播放。');
     empty.appendChild(el('br'));
     var b = el('button', 'btn primary', '添加音频');
     b.onclick = function(){ $('fileInput').click(); };
@@ -5601,7 +5613,7 @@ function goEp(key){
 // 点某一集：开始播放并进入文稿页
 function openEpPage(key){
   var ep = findEp(key);
-  if(!ep && !hasTr[key]){ toast('文件缺失，点「＋」重新添加这一集'); return; }
+  if(!ep && !hasTr[key]){ toast('文件缺失，在「关于」里导入文件，重新添加这一集'); return; }
   var busy = cur && !audio.paused;               // 此刻真的有声音在放
   if(ep && !busy){ if(ep === cur) play(); else playPicked(ep); }   // 没在放（没有 / 暂停了 / 放完了）：点哪集就播哪集
   goEp(key);                                    // 正在放别的集：只进文稿页看，不切换播放
