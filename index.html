@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.35">
+<meta name="app-version" content="0.46.36">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -133,6 +133,9 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .item{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--line)}
 .item:first-child{border-top:none}
 .item{position:relative}
+.dia-c{width:22px;height:22px;border-radius:50%;border:1.8px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;line-height:1;box-sizing:border-box}   /* 国粤切换：圆框里一个字，和旁边的图标一般大 */
+#bDialect.on{color:var(--accent)}
+#bDialect.on .dia-c{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 .ord-h{flex:none;width:24px;height:30px;display:flex;align-items:center;justify-content:center;color:var(--muted);touch-action:none;cursor:grab}
 .ord-h svg{width:16px;height:16px;fill:currentColor}
 .ord-ud{flex:none;display:flex;align-items:center;gap:2px}
@@ -457,7 +460,7 @@ input[type=file]{display:none}
   <input class="search-in" id="searchIn" type="search" placeholder="搜索全部节目、单集、文稿" enterkeyhint="search" autocomplete="off" hidden>
   <button class="icon-btn" id="bSearch" aria-label="搜索" hidden><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15 15l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
   <button class="icon-btn" id="bMusic" aria-label="提到的音乐" hidden><svg viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/></svg><b id="musicCount"></b></button>
-  <button class="txt-btn" id="bDialect" aria-label="国粤切换" hidden>粤</button>
+  <button class="icon-btn" id="bDialect" aria-label="国粤切换" hidden><span class="dia-c" id="diaTxt">粤</span></button>
   <button class="icon-btn" id="bEpMore" aria-label="更多" hidden><svg viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg></button>
   <button class="icon-btn" id="bAbout" aria-label="关于"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-11h2V7h-2zm0 8h2v-6h-2z"/></svg></button>
 </header>
@@ -5946,10 +5949,10 @@ function renderEp(box){
     pb.onclick = function(){ open(ep, true); render(); };
     top.appendChild(pb);
   }
-  var db = $('bDialect');   // 国粤切换：显示的是现在看的版本，点一下换成另一个（还没有国语版本时，点一下生成）
-  db.hidden = !(tr && tr.segments.length && tr.status === 'done' && (mandValid(tr) || dialectLike(tr)));
-  db.textContent = mv ? '国' : '粤'; db.classList.toggle('on', mv);
-  db.setAttribute('aria-label', mv ? '现在是国语版本，点一下看粤语原文' : mandValid(tr) ? '现在是粤语原文，点一下看国语版本' : '转成国语版本');
+  var db = $('bDialect');   // 国粤切换：显示的是现在看的版本，点一下换成另一个（生成国语版本在「⋯」→「转成国语版本」）
+  db.hidden = !(tr && tr.segments.length && tr.status === 'done' && mandValid(tr));   // 转成国语版本之前不显示（入口在「⋯」里）
+  $('diaTxt').textContent = mv ? '国' : '粤'; db.classList.toggle('on', mv);
+  db.setAttribute('aria-label', mv ? '现在是国语版本，点一下看粤语原文' : '现在是粤语原文，点一下看国语版本');
   db.onclick = function(){ mandToggle(key); };
   var cw = el('div', 'chap-wrap'); cw.id = 'chapWrap'; top.appendChild(cw); fillChapterBar(cw, key);
   // 识别完了就不显示「已识别几段」这类文字
@@ -6096,11 +6099,6 @@ $('bTrEditSave').onclick = function(){
 // 把一句句的识别结果排成段落，并补上标点（只影响显示，存的原文不变）
 var END_P = /[。！？!?…]$/, ANY_P = /[。！？!?，,；;：:…、」”"’）)》.]$/;
 /* ---- 方言（粤语）→ 国语版本：原文保留；国语版本按行存在 tr.mand（和 tr.segments 一一对应），文稿页顶部「粤 / 国」键切换 ---- */
-var CANTO_RE = /[嘅咗喺唔係佢哋冇咁啲嘢嚟俾睇嘥攞嗰噉啱喎嘞㗎咩乜]/g;
-function dialectLike(tr){   // 看着像粤语（有不少粤语专用字）；别的方言可以在「⋯」里手动转
-  var t = tr.segments.map(function(x){ return x.text; }).join(''), n = (t.match(CANTO_RE) || []).length;
-  return n >= 15 && n / Math.max(1, t.length) > 0.004;
-}
 function mandValid(tr){ return !!(tr && tr.mand && tr.mand.length === tr.segments.length); }   // 改过文稿的行数（编辑拆句）就作废
 function mandOn(key){ return !!(settings.mandView && settings.mandView[key] && mandValid(trCache[key])); }
 function mandPrompt(text){
