@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.29">
+<meta name="app-version" content="0.46.30">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -1204,7 +1204,7 @@ function epNum(title){
 }
 function pad6(n){ return String(n).padStart(6, '0'); }
 var orderCache = null;
-// 订阅专辑里集的默认顺序：订阅最近半年没更新 → 从早到晚；半年内有更新 → 最新在最上面（自己加的本地 / 云端文件不影响这个判断）
+// 订阅专辑里集的默认顺序：混进了本地 / 云端文件的，或订阅最近半年没更新 → 从早到晚（序号也就是第几集）；其余半年内有更新的 → 最新在最上面。「半年没更新」只看订阅自己的日期，自己加的文件不算更新
 function feedLayout(f){
   var lay = feedMatches().lay, ck = f.url;
   if(lay[ck]) return lay[ck];
@@ -1213,7 +1213,7 @@ function feedLayout(f){
   var rank = {}; idx.forEach(function(i, r){ rank[i] = r; });
   var latest = 0; eps.forEach(function(e){ if((e.pub || 0) > latest) latest = e.pub; });
   var stale = latest > 0 && Date.now() - latest > 182 * 86400000;
-  var asc = stale, pos = {}, list = [];   // 只看订阅自己最近一集的日期；自己加的文件不算更新
+  var asc = !!feedMatches().joined[f.title] || stale, pos = {}, list = [];   // 混进了本地 / 云端文件的，或订阅自己最近一集已经超过半年（只看订阅的日期，自己加的文件不算更新）→ 从早到晚
   eps.forEach(function(e, i){ pos[i] = asc ? rank[i] : N - 1 - rank[i]; });
   eps.forEach(function(e, i){ var n = epNum(e.t); if(n != null) list.push({pos:pos[i], n:n}); });
   list.sort(function(a, b){ return a.pos - b.pos; });
