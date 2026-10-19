@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.34">
+<meta name="app-version" content="0.46.35">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -457,6 +457,7 @@ input[type=file]{display:none}
   <input class="search-in" id="searchIn" type="search" placeholder="搜索全部节目、单集、文稿" enterkeyhint="search" autocomplete="off" hidden>
   <button class="icon-btn" id="bSearch" aria-label="搜索" hidden><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15 15l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
   <button class="icon-btn" id="bMusic" aria-label="提到的音乐" hidden><svg viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/></svg><b id="musicCount"></b></button>
+  <button class="txt-btn" id="bDialect" aria-label="国粤切换" hidden>粤</button>
   <button class="icon-btn" id="bEpMore" aria-label="更多" hidden><svg viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg></button>
   <button class="icon-btn" id="bAbout" aria-label="关于"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-11h2V7h-2zm0 8h2v-6h-2z"/></svg></button>
 </header>
@@ -3509,7 +3510,7 @@ function render(){
   $('bBack').hidden = (home && !(searchOpen && searchFromPeople)) || selecting || ordering;
   $('searchIn').placeholder = home ? '搜索全部节目、单集、文稿' : isEp ? '搜索这一集的文稿' : isFav ? '搜索收藏' : '搜索这个专辑';
   $('bSel').hidden = home || isEp || isFav || selecting || ordering || !nKeys;
-  $('bEpMore').hidden = !isEp; if(!isEp) $('bMusic').hidden = true; $('bHome').hidden = home || selecting || ordering;
+  $('bEpMore').hidden = !isEp; if(!isEp){ $('bMusic').hidden = true; $('bDialect').hidden = true; } $('bHome').hidden = home || selecting || ordering;
   $('bOrdCancel').hidden = !ordering;
   $('bSelAll').hidden = !(selecting || ordering); $('bSelDone').hidden = !(selecting || ordering);
   $('bAbout').hidden = selecting || ordering || isEp || isFav;
@@ -5636,7 +5637,7 @@ function tidyRun(key){
   (useLlm ? termify(key, new AbortController().signal) : trPut(tr).then(function(){ return 0; })).then(function(n){
     toast(text() !== before ? '已整理文稿' + (n ? '，标注外文 ' + n + ' 处' : '') : '已经是按最新规则整理的，没有要改的');
     if(useLlm && !ai.musicOff) return musicify(key, new AbortController().signal).catch(function(){});   // 顺便重新找一遍提到的音乐
-  }, function(err){
+  }).then(function(){ if(useLlm && tr.mand) return mandarinize(key, new AbortController().signal).catch(function(){}); }, function(err){
     trPut(tr);   // 外文标注失败，前面的整理照样保存
     toast('繁简和重复句已整理；外文标注失败：' + aiErrMsg(err), 5000);
   }).then(function(){ termBusy = null; render(); });
@@ -5924,7 +5925,8 @@ function renderEp(box){
   if(!ep) healEp(key);
   var running = !!(trJob && trJob.key === key), other = !!(trJob && trJob.key !== key);
   box.classList.add('fixed');
-  document.body.classList.toggle('can-edit', !!(tr && tr.segments.length && tr.status === 'done' && !running));
+  var mv = mandOn(key);   // 正在看国语版本
+  document.body.classList.toggle('can-edit', !!(tr && tr.segments.length && tr.status === 'done' && !running && !mv));
   if(!document.body.classList.contains('can-edit')) trEdit = false;
   $('bTrEdit').classList.toggle('on', trEdit);
   var top = el('div', 'ep-top'), au = authorOf(showOf(key), ep);
@@ -5944,6 +5946,11 @@ function renderEp(box){
     pb.onclick = function(){ open(ep, true); render(); };
     top.appendChild(pb);
   }
+  var db = $('bDialect');   // 国粤切换：显示的是现在看的版本，点一下换成另一个（还没有国语版本时，点一下生成）
+  db.hidden = !(tr && tr.segments.length && tr.status === 'done' && (mandValid(tr) || dialectLike(tr)));
+  db.textContent = mv ? '国' : '粤'; db.classList.toggle('on', mv);
+  db.setAttribute('aria-label', mv ? '现在是国语版本，点一下看粤语原文' : mandValid(tr) ? '现在是粤语原文，点一下看国语版本' : '转成国语版本');
+  db.onclick = function(){ mandToggle(key); };
   var cw = el('div', 'chap-wrap'); cw.id = 'chapWrap'; top.appendChild(cw); fillChapterBar(cw, key);
   // 识别完了就不显示「已识别几段」这类文字
   var stText = !loaded ? '正在读取文稿…' : running ? trJob.msg
@@ -5978,7 +5985,8 @@ function renderEp(box){
   }else if(tr && tr.segments.length){
     // 文稿排成一段段文字，不显示时间；每一句是一个 span，时间藏在里面，用来跟随播放和点句跳转
     var doc = el('div', 'tr-doc' + (trEdit ? ' editing' : '')); doc.id = 'trList';
-    trParas(tr).forEach(function(items){
+    var dtr = mv ? Object.assign({}, tr, {segments:tr.segments.map(function(sg, i){ return {t:sg.t, text:tr.mand[i]}; })}) : tr;   // 国语版本：时间不变，文字换成国语
+    trParas(dtr).forEach(function(items){
       var para = el('p', 'tr-p');
       para.onclick = function(e){ if(trEdit){ e.stopPropagation(); trEditPara(key, items); } };
       items.forEach(function(it, n){
@@ -6000,7 +6008,7 @@ function renderEp(box){
       trNodes.push(sp);
       return sp;
     }
-    trSegs = tr.segments;
+    trSegs = dtr.segments;
     scroll.appendChild(doc);
   }else{
     scroll.appendChild(el('div', 'empty', !loaded ? '正在读取文稿…' : running ? '识别中，识别出来的内容会在这里一段一段出现。' : !ep ? '文件缺失，没法识别。' : '这一集还没有文稿。点上面的「开始识别」，用 AI 把它转成带时间的文字。'));
@@ -6087,6 +6095,68 @@ $('bTrEditSave').onclick = function(){
 
 // 把一句句的识别结果排成段落，并补上标点（只影响显示，存的原文不变）
 var END_P = /[。！？!?…]$/, ANY_P = /[。！？!?，,；;：:…、」”"’）)》.]$/;
+/* ---- 方言（粤语）→ 国语版本：原文保留；国语版本按行存在 tr.mand（和 tr.segments 一一对应），文稿页顶部「粤 / 国」键切换 ---- */
+var CANTO_RE = /[嘅咗喺唔係佢哋冇咁啲嘢嚟俾睇嘥攞嗰噉啱喎嘞㗎咩乜]/g;
+function dialectLike(tr){   // 看着像粤语（有不少粤语专用字）；别的方言可以在「⋯」里手动转
+  var t = tr.segments.map(function(x){ return x.text; }).join(''), n = (t.match(CANTO_RE) || []).length;
+  return n >= 15 && n / Math.max(1, t.length) > 0.004;
+}
+function mandValid(tr){ return !!(tr && tr.mand && tr.mand.length === tr.segments.length); }   // 改过文稿的行数（编辑拆句）就作废
+function mandOn(key){ return !!(settings.mandView && settings.mandView[key] && mandValid(trCache[key])); }
+function mandPrompt(text){
+  return '下面是一段粤语（或其他方言）播客的识别文稿，每行开头 [序号] 是这一行的编号。\n' +
+    '请把每一行改写成意思相同的标准普通话书面表达（简体中文）：粤语的词汇和语法换成普通话的说法（如「喺」→「在」、「唔」→「不」、「佢哋」→「他们」、「咁」→「这么」、「嘅」→「的」），语气自然通顺。\n' +
+    '人名、地名、专有名词、英文原词保持原样；不要总结、不要增删内容，也不要合并或拆分行。\n' +
+    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"n":编号,"t":"改写后的这一行"}，每一行都要有。\n\n文稿：\n' + text;
+}
+function parseMand(txt){
+  var m = /\[[\s\S]*\]/.exec(txt || ''), arr = [], map = {};
+  try{ arr = JSON.parse(m ? m[0] : '[]'); }catch(e){ arr = []; }
+  (Array.isArray(arr) ? arr : []).forEach(function(x){ if(x && isFinite(x.n) && typeof x.t === 'string') map[+x.n] = clean(x.t); });
+  return map;
+}
+function mandarinize(key, signal, onProgress){
+  var tr = trCache[key];
+  if(!tr || !tr.segments.length) return Promise.reject(new Error('还没有文稿'));
+  var segs = tr.segments, chunks = [], cur = [], len = 0;
+  segs.forEach(function(sg, i){
+    if(len + sg.text.length > 2500 && cur.length){ chunks.push(cur); cur = []; len = 0; }
+    cur.push(i); len += sg.text.length + 6;
+  });
+  if(cur.length) chunks.push(cur);
+  var out = segs.map(function(sg){ return sg.text; }), done = 0;
+  return chunks.reduce(function(p, idxs){
+    return p.then(function(){
+      var text = idxs.map(function(i){ return '[' + i + '] ' + segs[i].text; }).join('\n');
+      return withRetry(function(){ return llmCall('你是精通粤语和普通话的播客文稿编辑。', mandPrompt(text), signal); }, signal, 3).then(function(txt){
+        var map = parseMand(txt);
+        idxs.forEach(function(i){ if(map[i]) out[i] = toSimp(map[i]); });
+        done++; if(onProgress) onProgress(done, chunks.length);
+      });
+    });
+  }, Promise.resolve()).then(function(){
+    tr.mand = out; tr.mandAt = Date.now();
+    return trPut(tr);
+  });
+}
+var mandBusy = null;
+function mandRun(key){
+  if(mandBusy || musicBusy || chapBusy || termBusy || trJob){ toast('正在处理，请稍等'); return; }
+  if(!llmReady()){ toast('先设置文本模型'); openAiSettings(); return; }
+  var tr = trCache[key]; if(!tr || !tr.segments.length) return;
+  mandBusy = key; toast('正在转成国语…', 60000);
+  mandarinize(key, new AbortController().signal, function(d, n){ toast('正在转成国语 ' + d + ' / ' + n, 60000); }).then(function(){
+    (settings.mandView = settings.mandView || {})[key] = true; saveSettings();
+    toast('已转成国语，顶部「国 / 粤」键可以切换');
+  }, function(err){ toast('转国语失败：' + aiErrMsg(err), 5000); }).then(function(){ mandBusy = null; render(); });
+}
+function mandToggle(key){
+  var tr = trCache[key];
+  if(!mandValid(tr)){ mandRun(key); return; }
+  settings.mandView = settings.mandView || {};
+  if(settings.mandView[key]) delete settings.mandView[key]; else settings.mandView[key] = true;
+  saveSettings(); render();
+}
 function trParas(tr){
   var segs = tr.segments, chT = (tr.chapters || []).map(function(c){ return c.t; }), ci = 0;
   var paras = [], cur = null, len = 0;
@@ -6235,6 +6305,9 @@ function showTrMore(key){
       closeSheet('trMoreSheet'); if(llmReady()) chapterRun(key); else openAiSettings();
     }});
     items.push({label:tr.musicAt ? '重新找提到的音乐' : '找提到的音乐', note:llmReady() ? '用 ' + lc.name + ' · ' + lc.model + '，找出歌曲、专辑、音乐人，生成 Apple Music 链接' : '要先设置文本模型', pick:function(){ closeSheet('trMoreSheet'); musicRun(key); }});
+    items.push({label:mandValid(tr) ? '重新转成国语' : '转成国语版本', note:llmReady() ? '粤语（或其他方言）文稿整理成国语的意思，原文保留，顶部「粤 / 国」键切换（用 ' + lc.name + ' · ' + lc.model + '）' : '要先设置文本模型', pick:function(){
+      closeSheet('trMoreSheet'); mandRun(key);
+    }});
     items.push({label:'整理文稿', note:'不用重新识别，按最新规则重新整理：繁体转简体、去掉乱编的套话和重复句' + (llmReady() && !ai.termsOff ? '、重新标注外文（用 ' + lc.name + '）' : ''), pick:function(){
       closeSheet('trMoreSheet'); tidyRun(key);
     }});

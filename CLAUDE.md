@@ -64,3 +64,4 @@
 - 编辑排序时右下角序号是输入框 `ordSeqInput`（0.46.32，字号 16px 再 `scale(.625)`，避免 iOS 聚焦放大页面）：填 N → 在 `episodeKeys` 顺序里挪到第 N 个再 `ordSave`（倒序显示时存反的）。
 - 百炼读不了在线集的地址（0.46.33）：`aliWithFallback` 遇到 400 `url error`（`aliUrlError`）→ `api/rss?resolve=`（`rss.js` 的 `resolveAudio`，手动跟跳转、`Range: bytes=0-0`，音频绝不经过后台）换最终地址重试 → 还不行就网页 `fetch` 音频成 blob 走普通上传（>300MB 提示先下载）。
 - 百炼的 flash 系列模型（`aliFlashModel`，不含 filetrans）是同步识别，网页用的是异步「录音文件识别」，用不了；`reqAli` 一开始就报错提示换 `fun-asr` / `fun-asr-2025-11-07`。点进专辑（`render()` 里 `prevKey !== pageKey`）滚到 `records[k].updated` 最大的那一集并居中。
+- 国粤切换（0.46.35）：`tr.mand`（和 `tr.segments` 逐行对应的国语文字，行数对不上就作废 `mandValid`）、`tr.mandAt`；`mandarinize`（文本模型，每块约 2500 字，`[序号] 文字` → JSON `[{n,t}]`，缺的行用原文）、`mandRun`、`mandToggle`；看哪个版本存在 `settings.mandView[键]`；文稿页顶部 `#bDialect`（「粤」/「国」，`dialectLike` 看粤语专用字多不多，或已有国语版本时显示）；`renderEp` 国语版本用 `dtr`（时间不变、文字换成国语）渲染，此时不能编辑；`tidyRun` 会顺带重转。
