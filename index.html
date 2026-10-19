@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.40">
+<meta name="app-version" content="0.46.41">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -26,7 +26,10 @@
 }
 *{box-sizing:border-box}
 /* 首页固定一屏：页面本身不滚动、不缩放，只有 .view 区域在内部滚动 */
-html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;touch-action:manipulation}
+html,body{margin:0;height:100%;overscroll-behavior:none;touch-action:manipulation}
+html{overflow-x:hidden;overflow-y:auto}
+html::after{content:'';display:block;height:calc(100% + 3px)}   /* 文档本身有 3px 可滚的范围（界面都在 fixed 的 body 里，看不出来），iOS 才会响应「点状态栏回到顶部」 */
+body{overflow:hidden}
 body{
   position:fixed; inset:0;
   display:flex; flex-direction:column;
@@ -6290,6 +6293,26 @@ function trResume(){
   trTouch = 0; trFollow();
   trTick(true, true);
 }
+/* 点手机顶部状态栏回到顶部：iOS 点状态栏时会让文档滚到最上面。界面是固定的一屏，真正滚动的是里面的列表，
+   所以让文档留 3px 的滚动范围（停在 3px 处），一旦在没有手指触摸时被滚回 0，就把当前能滚动的地方滚回顶部 */
+var lastTouchAt = 0;
+['touchstart', 'touchmove', 'touchend'].forEach(function(n){ document.addEventListener(n, function(){ lastTouchAt = Date.now(); }, {passive:true, capture:true}); });
+function docRest(){ if(window.scrollY !== 3) window.scrollTo(0, 3); }
+function scrollTopTarget(){
+  var sh = Array.prototype.filter.call(document.querySelectorAll('.sheet'), function(x){ return !x.hidden; }).pop();
+  if(sh) return sh.querySelector('.sheet-body') || sh;
+  return $('view').querySelector('.list-scroll') || $('view');
+}
+window.addEventListener('scroll', function(){
+  if(window.scrollY >= 2) return;
+  var byTouch = Date.now() - lastTouchAt < 600;
+  docRest();
+  if(byTouch) return;   // 手指在屏幕上拖出来的（橡皮筋），不算
+  var t = scrollTopTarget();
+  if(t && t.scrollTop > 0){ try{ t.scrollTo({top:0, behavior:'smooth'}); }catch(e){ t.scrollTop = 0; } }
+}, {passive:true});
+window.addEventListener('pageshow', docRest); window.addEventListener('load', docRest); window.addEventListener('resize', docRest);
+setTimeout(docRest, 300);
 document.addEventListener('visibilitychange', trResume);
 window.addEventListener('pageshow', trResume);
 window.addEventListener('focus', trResume);
