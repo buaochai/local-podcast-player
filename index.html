@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.39">
+<meta name="app-version" content="0.46.40">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -1512,7 +1512,11 @@ function stopPlayer(){
   cur = null;
   if('mediaSession' in navigator) navigator.mediaSession.metadata = null;
 }
+// 只有用户点播放（按钮、锁屏 / 耳机的播放键）或自动连播才算「要播放」；别的软件打断后系统自己把音频恢复了（没经过这里），马上再暂停，不自动续播
+var playIntent = 0;
+audio.addEventListener('play', function(){ if(Date.now() - playIntent > 3000) audio.pause(); });
 function play(){
+  playIntent = Date.now();
   var p = audio.play();
   if(p && p.catch) p.catch(function(){ /* 需要用户点击才能播放 */ });
 }
