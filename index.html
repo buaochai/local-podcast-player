@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.30">
+<meta name="app-version" content="0.46.31">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -1204,7 +1204,7 @@ function epNum(title){
 }
 function pad6(n){ return String(n).padStart(6, '0'); }
 var orderCache = null;
-// 订阅专辑里集的默认顺序：混进了本地 / 云端文件的，或订阅最近半年没更新 → 从早到晚（序号也就是第几集）；其余半年内有更新的 → 最新在最上面。「半年没更新」只看订阅自己的日期，自己加的文件不算更新
+// 订阅专辑里集的默认顺序只看订阅自己：最近一集已经超过半年 → 从早到晚；半年内有更新 → 最新在最上面；有没有混进本地 / 云端文件都不影响
 function feedLayout(f){
   var lay = feedMatches().lay, ck = f.url;
   if(lay[ck]) return lay[ck];
@@ -1213,7 +1213,7 @@ function feedLayout(f){
   var rank = {}; idx.forEach(function(i, r){ rank[i] = r; });
   var latest = 0; eps.forEach(function(e){ if((e.pub || 0) > latest) latest = e.pub; });
   var stale = latest > 0 && Date.now() - latest > 182 * 86400000;
-  var asc = !!feedMatches().joined[f.title] || stale, pos = {}, list = [];   // 混进了本地 / 云端文件的，或订阅自己最近一集已经超过半年（只看订阅的日期，自己加的文件不算更新）→ 从早到晚
+  var asc = stale || (!latest && !!f.serial), pos = {}, list = [];   // 只由订阅自己决定：最近一集已经超过半年 → 从早到晚；半年内有更新 → 最新在上。自己加的本地 / 云端文件不影响；订阅里一个日期都读不出来时，连载型（serial）从第一集往下排
   eps.forEach(function(e, i){ pos[i] = asc ? rank[i] : N - 1 - rank[i]; });
   eps.forEach(function(e, i){ var n = epNum(e.t); if(n != null) list.push({pos:pos[i], n:n}); });
   list.sort(function(a, b){ return a.pos - b.pos; });
@@ -2586,6 +2586,20 @@ function parseDur(t){
   if(p.some(isNaN)) return 0;
   return p.reduce(function(a, b){ return a * 60 + b; }, 0);
 }
+// 日期：先用 Date.parse；Safari 不认「2024-05-01 12:00:00」和「… CST」这类写法，再手动拆
+var MON3 = {jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7, sep:8, oct:9, nov:10, dec:11};
+function parseDate(str){
+  str = String(str || '').trim(); if(!str) return 0;
+  var t = Date.parse(str); if(t) return t;
+  t = Date.parse(str.replace(/^(\d{4}-\d{2}-\d{2})[ ]+(\d{2}:\d{2}(?::\d{2})?)/, '$1T$2')); if(t) return t;
+  var m = /(\d{1,2})\s+([A-Za-z]{3})[a-z]*\.?\s+(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?\s*(?:(?:GMT|UTC|UT)?\s*([+-]\d{2}):?(\d{2})|(GMT|UTC|UT|Z)|([A-Z]{3,4}))?/.exec(str);
+  if(m && MON3[m[2].toLowerCase()] != null){
+    var off = m[7] ? (+m[7] < 0 || /^-/.test(m[7]) ? -1 : 1) * (Math.abs(+m[7]) * 60 + +m[8]) : /^(CST)$/.test(m[10] || '') ? 480 : 0;   // CST 按中国标准时间算
+    return Date.UTC(+m[3], MON3[m[2].toLowerCase()], +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)) - off * 60000;
+  }
+  var y = /^(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})/.exec(str);
+  return y ? Date.UTC(+y[1], +y[2] - 1, +y[3]) : 0;
+}
 function parseFeed(xml, url){
   var doc = new DOMParser().parseFromString(xml, 'text/xml');
   if(doc.getElementsByTagName('parsererror').length) throw new Error('读不懂这个 RSS（不是有效的 XML）');
@@ -2601,7 +2615,7 @@ function parseFeed(xml, url){
     var it = items[i], enc = xmlKid(it, ['enclosure']), u = enc && enc.getAttribute('url');
     if(!u) continue;   // 没有音频的条目（文章）跳过
     var e = {id:xmlText(xmlKid(it, ['guid'])) || u, t:clean(xmlText(xmlKid(it, ['title']))) || '未命名', u:u, len:+enc.getAttribute('length') || 0,
-      dur:parseDur(xmlText(xmlKid(it, ['itunes:duration']))), pub:Date.parse(xmlText(xmlKid(it, ['pubDate']))) || 0,
+      dur:parseDur(xmlText(xmlKid(it, ['itunes:duration']))), pub:parseDate(xmlText(xmlKid(it, ['pubDate', 'dc:date', 'published', 'updated']))),
       d:htmlToText(xmlText(xmlKid(it, ['itunes:summary', 'description', 'content:encoded']))).slice(0, 200)};
     if(seen[e.id]) continue;
     seen[e.id] = true;
