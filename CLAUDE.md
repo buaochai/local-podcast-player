@@ -66,3 +66,4 @@
 - 百炼的 flash 系列模型（`aliFlashModel`，不含 filetrans）是同步识别，网页用的是异步「录音文件识别」，用不了；`reqAli` 一开始就报错提示换 `fun-asr` / `fun-asr-2025-11-07`。点进专辑（`render()` 里 `prevKey !== pageKey`）滚到 `records[k].updated` 最大的那一集并居中。
 - 国粤切换（0.46.35）：`tr.mand`（和 `tr.segments` 逐行对应的国语文字，行数对不上就作废 `mandValid`）、`tr.mandAt`；`mandarinize`（文本模型，每块约 2500 字，`[序号] 文字` → JSON `[{n,t}]`，缺的行用原文）、`mandRun`、`mandToggle`；看哪个版本存在 `settings.mandView[键]`；文稿页顶部 `#bDialect`（圆框里「粤」/「国」，`.dia-c`；只在已有国语版本时显示，生成入口只在「⋯」里）；`renderEp` 国语版本用 `dtr`（时间不变、文字换成国语）渲染，此时不能编辑；`tidyRun` 会顺带重转。
 - 不自动续播（0.46.40）：所有「要播放」都必须走 `play()`（会记 `playIntent`），`audio` 的 `play` 事件如果距上次 `play()` 超过 3 秒就立刻 `pause()`——防止被别的软件打断后系统自己恢复播放。不要在别处直接调 `audio.play()`。
+- 试过「点状态栏回顶部」（0.46.41）但用户不要，0.46.42 已去掉；页面仍是 `html{overflow:hidden}` 固定一屏，别再加。**改 `sw.js` 的版本号时先读后写**（不要 `open(f,'w').write(open(f).read()…)`，会把文件清空；0.46.2–0.46.41 就是这样丢了离线缓存），改完要确认 `sw.js` 不是空的。
