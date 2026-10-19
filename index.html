@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.27">
+<meta name="app-version" content="0.46.28">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -1122,7 +1122,7 @@ function nameBits(name, authors){
 function feedMatches(){
   if(matchCache) return matchCache;
   var loc = {}, joined = {}, urls = Object.keys(feeds);
-  matchCache = {loc:loc, hid:{}, joined:joined};
+  matchCache = {loc:loc, hid:{}, joined:joined, lay:{}};
   if(!urls.length) return matchCache;
   function strip(name, author){   // 专辑名里带着作者名（「作者 专辑」「专辑｜作者」）的，去掉作者名再比
     var n = normName(name), a = normName(author || '');
@@ -1133,6 +1133,7 @@ function feedMatches(){
     var la = (shows[ep.show] && shows[ep.show].author) || (ep.tags && (ep.tags.albumArtist || ep.tags.artist)) || '';
     for(var i = 0; i < urls.length; i++){
       var f = feeds[urls[i]], fa = f.author || '', na = normName(la), nb = normName(fa);
+      if(normName(ep.show) === normName(f.title)){ loc[ep.key] = {f:f}; joined[f.title] = true; return; }   // 专辑名完全一样（包括自己「移动到专辑」放进来的）：不比作者
       var authors = !!(na && nb);
       if(authors && na.indexOf(nb) < 0 && nb.indexOf(na) < 0) continue;   // 作者对不上，不是同一个节目
       var ka = strip(ep.show, authors ? fa : la || fa), kb = strip(f.title, authors ? la : fa || la), ra = normName(ep.show), rb = normName(f.title);
@@ -1208,12 +1209,22 @@ function epNum(title){
 }
 function pad6(n){ return String(n).padStart(6, '0'); }
 var orderCache = null;
-function feedOrder(f){   // 这个订阅里有集号的集：{dir:1 升序 / -1 降序, list:[{i,n}]}；集号太少就不插
-  var list = [];
-  (f.eps || []).forEach(function(e, i){ var n = epNum(e.t); if(n != null) list.push({i:i, n:n}); });
-  if(list.length < 2) return null;
-  return {dir: list[0].n > list[list.length - 1].n ? -1 : 1, list:list};
+// 订阅专辑里集的默认顺序：混进了本地 / 云端文件的，或者最近半年没更新的 → 从早到晚；半年内有更新的 → 最新在最上面
+function feedLayout(f){
+  var lay = feedMatches().lay, ck = f.url;
+  if(lay[ck]) return lay[ck];
+  var eps = f.eps || [], N = eps.length, idx = eps.map(function(e, i){ return i; });
+  idx.sort(function(a, b){ return (eps[a].pub || 0) - (eps[b].pub || 0) || b - a; });   // 从早到晚；没有日期的按订阅里的顺序倒过来（订阅一般是新的在前）
+  var rank = {}; idx.forEach(function(i, r){ rank[i] = r; });
+  var latest = 0; eps.forEach(function(e){ if((e.pub || 0) > latest) latest = e.pub; });
+  var stale = latest > 0 && Date.now() - latest > 182 * 86400000;
+  var asc = !!feedMatches().joined[f.title] || stale, pos = {}, list = [];
+  eps.forEach(function(e, i){ pos[i] = asc ? rank[i] : N - 1 - rank[i]; });
+  eps.forEach(function(e, i){ var n = epNum(e.t); if(n != null) list.push({pos:pos[i], n:n}); });
+  list.sort(function(a, b){ return a.pos - b.pos; });
+  return lay[ck] = {N:N, pos:pos, asc:asc, list:list, dir:list.length >= 2 ? (list[0].n > list[list.length - 1].n ? -1 : 1) : 0};
 }
+function feedAsc(show){ var f = feedOfShow(show); return !!f && feedLayout(f).asc; }
 var MK_SVG = {
   cloud:'<svg viewBox="0 0 24 24"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>',
   phone:'<svg viewBox="0 0 24 24"><path d="M17 1H7a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2zm0 17H7V5h10z"/></svg>',
@@ -1231,21 +1242,20 @@ function epMarks(k, ep, r){
   list.forEach(function(x){ var i = el('i'); i.innerHTML = MK_SVG[x[0]]; i.setAttribute('aria-label', x[1]); box.appendChild(i); });
   return box;
 }
-function sortNameOf(key){   // 订阅专辑里：订阅的集按订阅顺序，补充的本地文件按集号插到合适的位置，没集号的放最后
+function sortNameOf(key){   // 订阅专辑里：订阅的集按日期排（方向见 feedLayout），补充的本地文件按集号插到合适的位置，没集号的放最后
+  var w = feedEpMap[key];
+  if(w) return pad6(2 * feedLayout(w.f).pos[w.i] + 2) + ' ' + w.e.t;
   var m = feedMatches().loc[key];
-  if(!m){
-    var w = feedEpMap[key];
-    return w && feedMatches().joined[w.f.title] ? pad6(2 * w.i + 2) + ' ' + w.e.t : fileNameOf(key);
-  }
-  var ep = findEp(key), n = epNum(ep ? ep.title || stripExt(ep.name) : ''), fo = feedOrder(m.f);
-  if(n == null || !fo) return '999999 ' + fileNameOf(key);
+  if(!m) return fileNameOf(key);
+  var ep = findEp(key), n = epNum(ep ? ep.title || stripExt(ep.name) : ''), lay = feedLayout(m.f);
+  if(n == null || !lay.dir) return '999999 ' + fileNameOf(key);
   var j = null;
-  for(var q = 0; q < fo.list.length; q++){
-    var x = fo.list[q];
-    if(fo.dir > 0 ? x.n > n : x.n < n){ j = x.i; break; }   // 订阅顺序里第一个排在它后面的集，插在它前面
+  for(var q = 0; q < lay.list.length; q++){
+    var x = lay.list[q];
+    if(lay.dir > 0 ? x.n > n : x.n < n){ j = x.pos; break; }   // 显示顺序里第一个排在它后面的集，插在它前面
   }
-  var base = j == null ? 2 * (m.f.eps || []).length + 2 : 2 * j + 1;
-  return pad6(base) + '.' + pad6(fo.dir > 0 ? n : 99999 - n) + ' ' + fileNameOf(key);
+  var base = j == null ? 2 * lay.N + 2 : 2 * j + 1;
+  return pad6(base) + '.' + pad6(lay.dir > 0 ? n : 99999 - n) + ' ' + fileNameOf(key);
 }
 function fileNameOf(key){
   var ep = findEp(key);
@@ -3969,7 +3979,7 @@ function renderShow(box){
 
     var mks = epMarks(k, ep, r), tail = el('span', 'ep-tail');   // 右下角：小标志（云端 / 手机 / RSS）+ 位置号，排在一起
     if(mks){ tail.appendChild(mks); li.classList.add('mk' + mks.children.length); }
-    if(!isFeed) tail.appendChild(el('span', 'ep-seq', String(idx + 1)));   // 这一集在列表里的位置（订阅的播客不显示）
+    if(!isFeed || feedMatches().joined[view.show]) tail.appendChild(el('span', 'ep-seq', String(idx + 1)));   // 这一集在列表里的位置（纯订阅的播客不显示，混进了本地 / 云端文件的显示）
     if(tail.children.length) li.appendChild(tail);
     if(ordMode){
       li.classList.add('ordmode');
