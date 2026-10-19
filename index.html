@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.22">
+<meta name="app-version" content="0.46.23">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -1103,6 +1103,9 @@ var epMap = {}, epMapLen = -1, epMapArr = null;
 function epDirty(){ epMapLen = -1; matchCache = null; }
 /* ---- 自己加的文件和订阅（RSS）属于同一个专辑：作者一致、专辑名一致或一方带着作者名 → 放进订阅的专辑里（补订阅里没有的集），订阅的集右下角标云 ---- */
 var matchCache = null;
+function nameBits(name, authors){
+  return String(name || '').split(/[·・｜|\-—–:：\/\s]+/).map(normName).filter(function(w){ return w.length >= 2 && authors.indexOf(w) < 0; });
+}
 function feedMatches(){
   if(matchCache) return matchCache;
   var loc = {}, joined = {}, urls = Object.keys(feeds);
@@ -1122,6 +1125,11 @@ function feedMatches(){
       var ka = strip(ep.show, authors ? fa : la || fa), kb = strip(f.title, authors ? la : fa || la), ra = normName(ep.show), rb = normName(f.title);
       var same = ka === kb || ra === rb;
       var part = !same && Math.min(ka.length, kb.length) >= (authors ? 2 : 4) && (ka.indexOf(kb) >= 0 || kb.indexOf(ka) >= 0);
+      if(!same && !part){   // 「梁文道·八分半」和「八分半」：按分隔符拆成几块，去掉作者名那块，一边的块是另一边的子集就算同一个专辑
+        var pa = nameBits(ep.show, [na, nb]), pb = nameBits(f.title, [na, nb]);
+        var sub = function(x, y){ return x.length && x.every(function(w){ return y.indexOf(w) >= 0; }); };
+        part = sub(pa, pb) || sub(pb, pa);
+      }
       if(same || part){ loc[ep.key] = {f:f}; joined[f.title] = true; return; }
     }
   });
@@ -1176,8 +1184,38 @@ function tidyTitle(t, dbl){
   if(m){ var rest = m[1].replace(/^发刊词[：:\s]*/, '').trim(); return rest ? '发刊词：' + rest : '发刊词'; }
   return s;
 }
-function sortNameOf(key){   // 加进订阅专辑里的本地文件排在订阅的集后面，按文件名
-  return feedMatches().loc[key] ? '99999 ' + fileNameOf(key) : fileNameOf(key);
+// 集号：标题开头的序号、「第N期 / 集 / 回 / 话」、EP12 / Vol.12；年月日开头的不算
+function epNum(title){
+  var t = String(title || '').replace(/^\s+/, '');
+  if(/^\d{4}\s*[.\-\/年]\s*\d/.test(t)) return null;
+  var m = /^(?:ep\.?|vol\.?|no\.?|第)?\s*(\d{1,4})\s*(?:期|集|话|回)?\s*(?:[.．、:：\-—_\s]|$)/i.exec(t) || /第\s*(\d{1,4})\s*(?:期|集|回|话)/.exec(t) || /(?:ep|vol)\.?\s*(\d{1,4})/i.exec(t);
+  if(m) return +m[1];
+  var c = /第\s*([一二三四五六七八九十百零]+)\s*(?:期|集|回|话)/.exec(t);
+  return c ? partNum(c[1]) || null : null;
+}
+function pad6(n){ return String(n).padStart(6, '0'); }
+var orderCache = null;
+function feedOrder(f){   // 这个订阅里有集号的集：{dir:1 升序 / -1 降序, list:[{i,n}]}；集号太少就不插
+  var list = [];
+  (f.eps || []).forEach(function(e, i){ var n = epNum(e.t); if(n != null) list.push({i:i, n:n}); });
+  if(list.length < 2) return null;
+  return {dir: list[0].n > list[list.length - 1].n ? -1 : 1, list:list};
+}
+function sortNameOf(key){   // 订阅专辑里：订阅的集按订阅顺序，补充的本地文件按集号插到合适的位置，没集号的放最后
+  var m = feedMatches().loc[key];
+  if(!m){
+    var w = feedEpMap[key];
+    return w && feedMatches().joined[w.f.title] ? pad6(2 * w.i + 2) + ' ' + w.e.t : fileNameOf(key);
+  }
+  var ep = findEp(key), n = epNum(ep ? ep.title || stripExt(ep.name) : ''), fo = feedOrder(m.f);
+  if(n == null || !fo) return '999999 ' + fileNameOf(key);
+  var j = null;
+  for(var q = 0; q < fo.list.length; q++){
+    var x = fo.list[q];
+    if(fo.dir > 0 ? x.n > n : x.n < n){ j = x.i; break; }   // 订阅顺序里第一个排在它后面的集，插在它前面
+  }
+  var base = j == null ? 2 * (m.f.eps || []).length + 2 : 2 * j + 1;
+  return pad6(base) + '.' + pad6(fo.dir > 0 ? n : 99999 - n) + ' ' + fileNameOf(key);
 }
 function fileNameOf(key){
   var ep = findEp(key);
