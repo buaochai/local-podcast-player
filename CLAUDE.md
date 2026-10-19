@@ -55,3 +55,4 @@
 - 音乐列表（`openMusicSheet`）只显示原文（`nameParts().main`），不附中文译名；人物资料库仍在原名下显示中文小字。
 - 首页顶部栏（0.46.15）：`#bMusicAll`（音乐汇总 `#musicAllSheet`，`musicAllCollect` 汇总所有文稿的 `musicList`，三个标签 song/artist/album，`gotoMention` 跳文稿位置：有 `cur` 在播就只 `pendingLocate`+`goEp`，否则 `open(ep,true,t)`）、`#bHist`（播放历史 `#histSheet`）都在 `#bFav` 左边，只在首页显示；「关于」里不再有播放历史入口。
 - 0.46.16 起顶部栏不再有 `#bRss` 和 `#bAdd` 图标，两个按钮在「关于」最上面（id 不变，点了先收起「关于」）；顶部栏现在是：识别进度、全选、完成、音乐汇总、播放历史、收藏、新建专辑、选择、首页、搜索、更多、关于。
+- 本地文件和订阅集对上（0.46.21）：`feedMatches()`（缓存，`epDirty`/`saveFeeds` 清）按专辑名 `normName`、作者不冲突、`matchTitleKey` 集名一致，给出 `loc[本地键]={rk,f,e,i}` 和 `hid[订阅集键]`；对上的本地文件 `showOf` 返回订阅专辑名、`sortNameOf` 按订阅里的位置排，`allShows` / 搜索里藏掉对应的在线集（`rssHidden`），列表右下角 `.ep-cloud` 小云（有 `.ep-seq` 时在它左边）。

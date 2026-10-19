@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.20">
+<meta name="app-version" content="0.46.21">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -133,6 +133,9 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .item{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--line)}
 .item:first-child{border-top:none}
 .item{position:relative}
+.ep-cloud{position:absolute;right:10px;bottom:5px;width:16px;height:14px;pointer-events:none;display:flex;align-items:center;justify-content:center}
+.ep-cloud svg{width:15px;height:15px;fill:var(--muted);opacity:.75}
+.ep-seq ~ .ep-cloud{right:34px}
 .ep-seq{position:absolute;right:10px;bottom:5px;min-width:16px;padding:0 4px;border:1px solid var(--line);border-radius:4px;font-size:10px;line-height:14px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums;pointer-events:none}
 .item.cur{background:var(--accent-soft)}
 .item-main{flex:1;min-width:0}
@@ -1097,7 +1100,35 @@ function onLongPress(node, fn, ignore){
 
 /* ---------- 节目与每一集 ---------- */
 var epMap = {}, epMapLen = -1, epMapArr = null;
-function epDirty(){ epMapLen = -1; }
+function epDirty(){ epMapLen = -1; matchCache = null; }
+/* ---- 自己加的文件和订阅（RSS）里的同一集对上：专辑名一致、作者不冲突、集名一致 → 并成一条（留本地文件），排在订阅里的位置，右下角标云 ---- */
+var matchCache = null;
+function matchTitleKey(t){ return normName(String(t || '').replace(/\.[^.]+$/, '').replace(/^(\s*(ep\.?|第)?\s*\d{1,4}\s*(期|集)?\s*[.．、:：\-—_]*\s*)+/i, '')); }
+function feedMatches(){
+  if(matchCache) return matchCache;
+  var loc = {}, hid = {}, urls = Object.keys(feeds);
+  matchCache = {loc:loc, hid:hid};
+  if(!urls.length) return matchCache;
+  var byTitle = {};
+  urls.forEach(function(u){ byTitle[normName(feeds[u].title)] = feeds[u]; });
+  episodes.forEach(function(ep){
+    if(ep.rss || ep.remote || !ep.show) return;
+    var f = byTitle[normName(ep.show)]; if(!f) return;
+    var a = normName((shows[ep.show] && shows[ep.show].author) || (ep.tags && (ep.tags.albumArtist || ep.tags.artist)) || ''), b = normName(f.author || '');
+    if(a && b && a.indexOf(b) < 0 && b.indexOf(a) < 0) return;   // 作者对不上，不算同一个节目
+    var tk = matchTitleKey(ep.title || stripExt(ep.name)); if(!tk) return;
+    var best = null;
+    (f.eps || []).forEach(function(e, i){
+      var rk = rssKey(e); if(hid[rk]) return;
+      var ek = matchTitleKey(e.t); if(!ek) return;
+      var exact = ek === tk, part = Math.min(ek.length, tk.length) >= 6 && (ek.indexOf(tk) >= 0 || tk.indexOf(ek) >= 0);
+      if((exact || part) && (!best || (exact && !best.exact))) best = {rk:rk, f:f, e:e, i:i, exact:exact};
+    });
+    if(best){ hid[best.rk] = 1; loc[ep.key] = best; }
+  });
+  return matchCache;
+}
+function rssHidden(k){ return !!feedMatches().hid[k]; }
 function findEp(key){
   // episodes 增删后（长度变了、或整个换掉）重建索引；同长度替换元素的地方要调 epDirty()
   if(epMapLen !== episodes.length || epMapArr !== episodes){
@@ -1109,6 +1140,7 @@ function findEp(key){
 function hasFile(key){ var ep = findEp(key); return !!(ep && !ep.remote); }
 function showOf(key){
   var ep = findEp(key), r = records[key];
+  var m = feedMatches().loc[key]; if(m) return m.f.title;
   return (ep && ep.show) || (r && r.show) || OTHER;
 }
 function rawTitleOf(key){
@@ -1145,6 +1177,10 @@ function tidyTitle(t, dbl){
   if(m){ var rest = m[1].replace(/^发刊词[：:\s]*/, '').trim(); return rest ? '发刊词：' + rest : '发刊词'; }
   return s;
 }
+function sortNameOf(key){   // 对上了订阅里某一集的本地文件，按订阅里的位置排
+  var m = feedMatches().loc[key];
+  return m ? String(m.i).padStart(5, '0') + ' ' + m.e.t : fileNameOf(key);
+}
 function fileNameOf(key){
   var ep = findEp(key);
   return ep ? ep.name : records[key].name;
@@ -1153,7 +1189,7 @@ function fileNameOf(key){
 function allShows(){
   var map = {}, seen = {};
   function add(key){
-    if(seen[key]) return;
+    if(seen[key] || rssHidden(key)) return;
     seen[key] = true;
     var name = showOf(key);
     var s = map[name] || (map[name] = {name:name, keys:[], loaded:0, updated:0});
@@ -1179,7 +1215,7 @@ function allShows(){
 function episodeKeys(show){
   var s = allShows().filter(function(x){ return x.name === show; })[0];
   if(!s) return [];
-  return s.keys.sort(function(a, b){ return byName(fileNameOf(a), fileNameOf(b)); });
+  return s.keys.sort(function(a, b){ return byName(sortNameOf(a), sortNameOf(b)); });
 }
 // 同一个节目里有文件的集，用来切上一集 / 下一集
 function playlist(){
@@ -2422,7 +2458,7 @@ function makeEp(name, size, blob){
 var FEEDS_KEY = 'lpp.feeds.v1';
 var feeds = load(FEEDS_KEY, {});
 var feedEpMap = {};   // 集的键 → {f, e}
-function saveFeeds(){ save(FEEDS_KEY, feeds); syncSoon(); }
+function saveFeeds(){ matchCache = null; save(FEEDS_KEY, feeds); syncSoon(); }
 function rssKey(e){ return 'rss|' + (e.id || e.u); }
 function feedOfShow(name){
   for(var u in feeds) if(feeds[u].title === name) return feeds[u];
@@ -3341,6 +3377,7 @@ $('bNewAlbum').onclick = function(){
 var renderedKey = '', lastEpKey = '';
 function render(){
   if(!ready) return;
+  matchCache = null;   // 导入、改名、移动之后重新对一遍订阅里的集
   // 文稿页上的这一集已经被删光了：退回上一页
   if(view.page === 'ep' && !records[view.key] && !findEp(view.key) && !hasTr[view.key]){
     if(history.state && history.state.ep){ history.back(); return; }   // popstate 会重画
@@ -3550,7 +3587,7 @@ function buildSearch(scopeKeys){
   var q = searchQ.trim().toLowerCase(), scoped = !!scopeKeys;
   var shs = scoped ? [] : allShows().filter(function(x){ return x.name.toLowerCase().indexOf(q) >= 0 || (authorOf(x.name) || '').toLowerCase().indexOf(q) >= 0; });
   var keys = scopeKeys ? scopeKeys.slice() : Object.keys(records);
-  if(!scoped) episodes.forEach(function(e){ if(keys.indexOf(e.key) < 0) keys.push(e.key); });
+  if(!scoped) episodes.forEach(function(e){ if(keys.indexOf(e.key) < 0 && !rssHidden(e.key)) keys.push(e.key); });
   var inScope = {}; keys.forEach(function(k){ inScope[k] = 1; });
   var eps = keys.filter(function(k){
     var r = records[k] || {}, hay = [titleOf(k), scoped ? '' : showOf(k), r.artist || '', (r.marks || []).map(function(m){ return m.note || ''; }).join(' ')].join('\n').toLowerCase();
@@ -3795,6 +3832,7 @@ function renderShow(box){
     if(!ep) li.appendChild(el('span', 'tag', '文件缺失'));
 
     if(!isFeed) li.appendChild(el('span', 'ep-seq', String(idx + 1)));   // 右下角：这一集在列表里的位置（订阅的播客不显示）
+    if(feedMatches().loc[k]){ var cm = el('span', 'ep-cloud'); cm.innerHTML = '<svg viewBox="0 0 24 24"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>'; cm.setAttribute('aria-label', '订阅里也有这一集'); li.appendChild(cm); }
     if(!selMode){
       // 左边播放按钮，右边「!」；上传 / 下载放进「!」的浮窗里
       var pb = el('button', 'play-btn');
