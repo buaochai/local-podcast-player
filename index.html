@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.28">
+<meta name="app-version" content="0.46.29">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -163,11 +163,6 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .prog i{display:block;height:100%;background:var(--accent)}
 .info-btn{border:none;background:transparent;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none;margin-right:-8px;margin-left:-4px}
 .info-btn svg{width:22px;height:22px;fill:currentColor}
-.info-btn .bg{fill:transparent}
-.info-btn .rg,.info-btn .gl{fill:var(--muted)}
-.info-btn.up-on .ib-l .bg,.info-btn.dn-on .ib-r .bg,.info-btn.up-on .ib-l .rg,.info-btn.dn-on .ib-r .rg{fill:var(--done)}
-.info-btn.up-on:not(.dn-on) .ib-r .bg,.info-btn.up-on:not(.dn-on) .ib-r .rg,.info-btn.dn-on:not(.up-on) .ib-l .bg,.info-btn.dn-on:not(.up-on) .ib-l .rg{fill:rgba(127,133,130,.55)}   /* 只有一半时，另一半是浅灰实心 */
-.info-btn.up-on .gl,.info-btn.dn-on .gl{fill:#fff}   /* 左半边 = 已上传云端，右半边 = 已下载到本机（蓝色，和主题绿色拉开） */
 /* 单集右边：两行两列（上：播放、「!」；下：上传、下载） */
 .play-btn{border:none;background:transparent;border-radius:50%;width:36px;height:36px;margin-left:-8px;display:flex;align-items:center;justify-content:center;color:var(--accent);flex:none}
 .play-btn svg{width:26px;height:26px;fill:currentColor}
@@ -1209,7 +1204,7 @@ function epNum(title){
 }
 function pad6(n){ return String(n).padStart(6, '0'); }
 var orderCache = null;
-// 订阅专辑里集的默认顺序：混进了本地 / 云端文件的，或者最近半年没更新的 → 从早到晚；半年内有更新的 → 最新在最上面
+// 订阅专辑里集的默认顺序：订阅最近半年没更新 → 从早到晚；半年内有更新 → 最新在最上面（自己加的本地 / 云端文件不影响这个判断）
 function feedLayout(f){
   var lay = feedMatches().lay, ck = f.url;
   if(lay[ck]) return lay[ck];
@@ -1218,7 +1213,7 @@ function feedLayout(f){
   var rank = {}; idx.forEach(function(i, r){ rank[i] = r; });
   var latest = 0; eps.forEach(function(e){ if((e.pub || 0) > latest) latest = e.pub; });
   var stale = latest > 0 && Date.now() - latest > 182 * 86400000;
-  var asc = !!feedMatches().joined[f.title] || stale, pos = {}, list = [];
+  var asc = stale, pos = {}, list = [];   // 只看订阅自己最近一集的日期；自己加的文件不算更新
   eps.forEach(function(e, i){ pos[i] = asc ? rank[i] : N - 1 - rank[i]; });
   eps.forEach(function(e, i){ var n = epNum(e.t); if(n != null) list.push({pos:pos[i], n:n}); });
   list.sort(function(a, b){ return a.pos - b.pos; });
@@ -1326,10 +1321,8 @@ function takeQueued(){
   return ep;
 }
 // 「!」左半边 = 已上传云端（订阅的播客不能上传，下载到手机后左右两半都算有）；右半边 = 已下载到手机
-function infoUp(k){ return !!(records[k] && records[k].cloud) || !!(feedEpMap[k] && hasFile(k)); }
 var INFO_RING = 'M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z', INFO_GLYPH = 'M11 15h2v2h-2zm0-8h2v6h-2z';
-function infoHalf(cls, clip){ return '<g clip-path="url(#' + clip + ')" class="' + cls + '"><circle class="bg" cx="12" cy="12" r="10"/><path class="rg" d="' + INFO_RING + '"/><path class="gl" d="' + INFO_GLYPH + '"/></g>'; }
-var INFO_SVG = '<svg viewBox="0 0 24 24"><defs><clipPath id="ibL"><rect x="0" y="0" width="12.2" height="24"/></clipPath><clipPath id="ibR"><rect x="11.8" y="0" width="12.2" height="24"/></clipPath></defs>' + infoHalf('ib-l', 'ibL') + infoHalf('ib-r', 'ibR') + '</svg>';
+var INFO_SVG = '<svg viewBox="0 0 24 24"><path d="' + INFO_RING + '"/><path d="' + INFO_GLYPH + '"/></svg>';   // 单色，不再用颜色区分上传 / 下载状态（状态在右下角小标志和「!」浮窗里）
 var ICO_PLAY_S = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>', ICO_PAUSE_S = '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>';
 var ICO_UP = '<svg viewBox="0 0 24 24"><path d="M7.4 15.4 12 10.8l4.6 4.6L18 14l-6-6-6 6z"/></svg>', ICO_DOWN = '<svg viewBox="0 0 24 24"><path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg>', ICO_X = '<svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>';
 // 用户主动换一集来听：正在听、还没听完的这一集，放到播放列表最前面（这集听完马上接着它），被选的这集从列表里拿掉
@@ -2899,7 +2892,6 @@ function clBtn(k, op){
 // 开始 / 更新 / 结束（p 为 null）一个集的上传或下载，并直接刷新列表里对应的图标（不用整页重画）
 function clSet(k, op, p){
   if(p == null) delete clBusy[k]; else clBusy[k] = {op:op, p:Math.max(0, Math.min(100, p))};
-  Array.prototype.forEach.call(document.querySelectorAll('.info-btn[data-k]'), function(b){ if(b.dataset.k !== k) return; b.classList.toggle('dn-on', hasFile(k)); b.classList.toggle('up-on', infoUp(k)); });
   Array.prototype.forEach.call(document.querySelectorAll('.cl-btn'), function(b){
     if(b.dataset.k !== k) return;
     var st = clState(k, b.dataset.op);
@@ -4004,7 +3996,7 @@ function renderShow(box){
         if(e2 === cur){ if(audio.paused) play(); else audio.pause(); } else playPicked(e2);
       };
       li.insertBefore(pb, li.firstChild);
-      var ib = el('button', 'info-btn' + (infoUp(k) ? ' up-on' : '') + (hasFile(k) ? ' dn-on' : '')); ib.dataset.k = k;   // 「!」左半边：已上传云端；右半边：已下载到本机
+      var ib = el('button', 'info-btn'); ib.dataset.k = k;
       ib.setAttribute('aria-label', '详情');
       ib.innerHTML = INFO_SVG;
       ib.onclick = function(e){ e.stopPropagation(); showEpPop(k, ib); };
