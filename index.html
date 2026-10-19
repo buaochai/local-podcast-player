@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.38">
+<meta name="app-version" content="0.46.39">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -154,7 +154,7 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .item.mk2 .prog{margin-right:38px}
 .item.selmode.mk1 .prog{margin-right:52px}
 .item.selmode.mk2 .prog{margin-right:66px}
-.ep-seq{flex:none;min-width:16px;padding:0 4px;border:1px solid var(--line);border-radius:4px;font-size:10px;line-height:14px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums;pointer-events:none}
+.ep-seq{flex:none;min-width:16px;padding:2px 4px 0;border:1px solid var(--line);border-radius:4px;font-size:10px;line-height:12px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums;pointer-events:none}
 .item.cur{background:var(--accent-soft)}
 .item-main{flex:1;min-width:0}
 .item-name{line-height:1.4}
@@ -211,6 +211,8 @@ body.show-page .list-scroll{padding-bottom:16px}
 .mini-sub{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .chip{border:1px solid var(--line);background:transparent;border-radius:999px;height:30px;padding:0 9px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:3px;flex:none;font-variant-numeric:tabular-nums}
 .chip svg{width:16px;height:16px;fill:currentColor}
+#bSpeed{padding-top:3px}   /* 只有数字的框：数字比行框偏高，往下压一点才在正中 */
+#bQueue svg{transform:translateY(-1.2px)}   /* 播放列表图标的图形本身偏下 */
 .chip span:empty{display:none}   /* 没有数字 / 文字时不占位（不然图标会往左偏） */
 .chip.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 .seek{width:100%;margin:8px 0 0;height:20px;-webkit-appearance:none;appearance:none;background:transparent;display:block}
