@@ -61,3 +61,4 @@
 - 订阅专辑默认顺序（0.46.28）：`feedLayout(f)` 按 `e.pub` 排出每集的显示位置：只看订阅自己最近一集（`e.pub`）：最近半年（182 天）没更新 → 从早到晚，否则最新在最上面；有没有混进本地 / 云端文件都不影响；日期一个都没有且 `f.serial` → 从早到晚；`sortNameOf` 订阅的集用 `pad6(2*pos+2)`，补充集按集号插在相邻位置。混进了文件的订阅专辑也显示 `.ep-seq`。
 - 单集右边的「!」（`INFO_SVG`）现在是单色，不再用 `.up-on` / `.dn-on` 区分上传下载状态（0.46.29 去掉了 `infoUp` 和相关 CSS）；状态看 `epMarks` 小标志和 `#epPop` 里的 `.pop-cl`。
 - RSS 日期解析 `parseDate`（0.46.31）：Date.parse → 「YYYY-MM-DD HH:mm:ss」换成 T → 手拆 RFC822（CST 按 +0800）→ 只有年月日；条目日期取 pubDate / dc:date / published / updated。Safari 对不少写法返回 NaN，别直接用 Date.parse。
+- 编辑排序时右下角序号是输入框 `ordSeqInput`（0.46.32，字号 16px 再 `scale(.625)`，避免 iOS 聚焦放大页面）：填 N → 在 `episodeKeys` 顺序里挪到第 N 个再 `ordSave`（倒序显示时存反的）。

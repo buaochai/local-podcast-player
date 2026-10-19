@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.31">
+<meta name="app-version" content="0.46.32">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -141,6 +141,9 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .item.ordmode .prog{margin-right:44px}
 .item.dragging{position:relative;z-index:6;background:var(--card);box-shadow:0 6px 18px rgba(0,0,0,.18);border-radius:10px;transition:none}
 .ep-tail{position:absolute;right:10px;bottom:5px;height:14px;display:flex;align-items:center;gap:4px;pointer-events:none}   /* 小标志和位置号排在一起：位置号几位数都紧挨着，间距一样 */
+.ord-seq{position:relative;flex:none;width:30px;height:15px}
+.ord-seq input{position:absolute;right:0;bottom:0;width:48px;height:24px;padding:0;margin:0;font-size:16px;text-align:center;border:1px solid var(--accent);border-radius:7px;background:var(--card);color:var(--text);transform:scale(.625);transform-origin:right bottom;pointer-events:auto;-webkit-appearance:none;appearance:none;font-variant-numeric:tabular-nums}   /* 16px 是为了 iOS 点进去不放大页面，再缩到 10px 大小，和普通序号一样 */
+.item.ordmode .ep-tail{pointer-events:auto}
 .ep-marks{height:14px;display:flex;align-items:center;gap:4px;color:var(--muted)}
 .ep-marks i{display:flex;width:11px;height:11px}
 .ep-marks svg{width:11px;height:11px;fill:currentColor;opacity:.8}
@@ -3869,6 +3872,30 @@ function ordSave(shown){
   (settings.orderMt = settings.orderMt || {})[view.show] = Date.now();
   saveSettings(); syncSoon();
 }
+// 序号输入框：填 N 就把这一集挪到序号 N 的位置（序号是列表默认顺序里的位置，倒序显示时也一样）
+function ordSeqInput(k, idx, total){
+  var wrap = el('span', 'ord-seq'), inp = el('input');
+  inp.type = 'text'; inp.inputMode = 'numeric'; inp.setAttribute('pattern', '[0-9]*'); inp.autocomplete = 'off'; inp.value = String(idx + 1);
+  inp.setAttribute('aria-label', '序号，输入数字跳到那个位置');
+  inp.onfocus = function(){ inp.select(); };
+  inp.onclick = function(e){ e.stopPropagation(); };
+  inp.onkeydown = function(e){ if(e.key === 'Enter'){ e.preventDefault(); inp.blur(); } };
+  inp.onchange = function(){
+    var n = parseInt(inp.value, 10);
+    if(!isFinite(n)){ inp.value = String(idx + 1); return; }
+    n = Math.max(1, Math.min(total, n));
+    if(n === idx + 1){ inp.value = String(n); return; }
+    var stored = episodeKeys(view.show), i = stored.indexOf(k);
+    if(i < 0) return;
+    stored.splice(i, 1); stored.splice(n - 1, 0, k);
+    ordSave(settings.rev && settings.rev[view.show] ? stored.slice().reverse() : stored);
+    render();
+    var li = $('view').querySelector('li[data-k="' + k.replace(/(["\\])/g, '\\$1') + '"]');
+    if(li) li.scrollIntoView({block:'nearest'});
+  };
+  wrap.appendChild(inp);
+  return wrap;
+}
 function ordMove(k, d){
   var shown = ordShown(), i = shown.indexOf(k), j = i + d;
   if(i < 0 || j < 0 || j >= shown.length) return;
@@ -3985,7 +4012,8 @@ function renderShow(box){
 
     var mks = epMarks(k, ep, r), tail = el('span', 'ep-tail');   // 右下角：小标志（云端 / 手机 / RSS）+ 位置号，排在一起
     if(mks){ tail.appendChild(mks); li.classList.add('mk' + mks.children.length); }
-    if(!isFeed || feedMatches().joined[view.show]) tail.appendChild(el('span', 'ep-seq', String(idx + 1)));   // 这一集在列表里的位置（纯订阅的播客不显示，混进了本地 / 云端文件的显示）
+    if(ordMode) tail.appendChild(ordSeqInput(k, idx, keys.length));   // 编辑排序时序号是输入框：填几就跳到第几
+    else if(!isFeed || feedMatches().joined[view.show]) tail.appendChild(el('span', 'ep-seq', String(idx + 1)));   // 这一集在列表里的位置（纯订阅的播客不显示，混进了本地 / 云端文件的显示）
     if(tail.children.length) li.appendChild(tail);
     if(ordMode){
       li.classList.add('ordmode');
