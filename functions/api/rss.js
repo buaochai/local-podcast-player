@@ -22,9 +22,27 @@ async function image(target){
   return new Response(buf, {headers: {'Content-Type': type, 'Cache-Control': 'private, max-age=86400'}});
 }
 
+// 音频地址：很多播客的音频地址要跳转好几次（统计服务 → 托管平台），百炼只认最后能直接下载的那个地址。
+// 这里只顺着跳转找到最终地址（每一跳只请求第 1 个字节），音频本身不经过这里。
+async function resolveAudio(target){
+  var cur;
+  try{ cur = new URL(target); }catch(e){ return json({error: '音频地址不对'}, 400); }
+  for(var i = 0; i < 8; i++){
+    if(!/^https?:$/.test(cur.protocol)) return json({error: '音频地址要以 http 或 https 开头'}, 400);
+    var res;
+    try{ res = await fetch(cur.toString(), {headers: {'User-Agent': 'Mozilla/5.0 (local-podcast-player)', 'Range': 'bytes=0-0'}, redirect: 'manual'}); }catch(e){ return json({error: '连不上这个音频地址'}, 502); }
+    var loc = res.headers.get('Location');
+    if(res.body) try{ res.body.cancel(); }catch(e){}
+    if(res.status >= 300 && res.status < 400 && loc){ cur = new URL(loc, cur); continue; }
+    return json({url: cur.toString(), status: res.status, type: res.headers.get('Content-Type') || ''});
+  }
+  return json({error: '音频地址跳转太多次'}, 502);
+}
+
 export async function onRequestGet({request}){
   var q = new URL(request.url).searchParams;
   if(q.get('img')) return image(q.get('img'));
+  if(q.get('resolve')) return resolveAudio(q.get('resolve'));
   var target = q.get('url') || '', u;
   try{ u = new URL(target); }catch(e){ return json({error: 'RSS 地址不对'}, 400); }
   if(!/^https?:$/.test(u.protocol)) return json({error: 'RSS 地址要以 http 或 https 开头'}, 400);

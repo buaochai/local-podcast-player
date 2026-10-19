@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.32">
+<meta name="app-version" content="0.46.33">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -4869,11 +4869,35 @@ function segmentsOf(resp, chunk, route){
   if(route.chat){ var timed = parseTimed(text, chunk.t0, chunk.dur); if(timed && timed.length) return timed; }
   return spreadText(text.replace(/\[(?:\d{1,2}:)?\d{1,3}:\d{2}\]/g, ''), chunk.t0, chunk.dur);
 }
+// 在线的集交给百炼直接读地址；百炼说「url error」（读不到）时：先让后台把跳转解开换成最终地址再试，
+// 还不行就由网页把音频下载下来，直接传给百炼
+function aliUrlError(err){ return !!(err && err.status === 400 && err.step === '提交识别任务' && /url|InvalidParameter/i.test(err.msg || err.message || '')); }
+function aliWithFallback(pp, chunk, signal){
+  if(!chunk.url) return reqAli(pp.blob, pp.fmt, signal, null);
+  return reqAli(pp.blob, pp.fmt, signal, chunk.url).catch(function(err){
+    if(!aliUrlError(err)) throw err;
+    return fetch('api/rss?resolve=' + encodeURIComponent(chunk.url), {cache:'no-store', redirect:'manual'}).then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; }).then(function(j){
+      var final = j && j.url && j.url !== chunk.url ? j.url : '';
+      var again = final ? reqAli(null, pp.fmt, signal, final) : Promise.reject(err);
+      return again.catch(function(err2){
+        if(!aliUrlError(err2) && final) throw err2;
+        // 地址本身百炼读不了：网页下载后上传
+        return fetch(chunk.url, {signal:signal}).then(function(r){
+          if(!r.ok) throw err;
+          return r.blob();
+        }, function(){ err.msg = '百炼读不了这个音频地址，网页也下载不了（这个平台不允许）。可以先「下载」到本机再识别'; throw err; }).then(function(blob){
+          if(blob.size > 300e6) throw new Error('音频太大（' + Math.round(blob.size / 1e6) + 'MB），先「下载」到本机再识别');
+          return sniffAudio(blob).then(function(kind){ return reqAli(blob, kind === 'mp4' ? 'm4a' : 'mp3', signal, null); });
+        });
+      });
+    });
+  });
+}
 function sendChunk(chunk, plan, route, signal){
   var blob = chunk.url ? null : chunk.blob();   // 有 url 的是在线的集，百炼直接用地址
   var prep = !blob ? Promise.resolve({fmt:chunk.fmt}) : plan.conv ? toWav(blob).then(function(w){ return {blob:w, fmt:'wav'}; }) : Promise.resolve({blob:blob, fmt:chunk.fmt});
   return prep.then(function(pp){
-    var call = route.ali ? reqAli(pp.blob, pp.fmt, signal, chunk.url) : route.chat ? reqChat(pp.blob, pp.fmt, chunk.dur, signal) : reqWhisper(pp.blob, pp.fmt, route, signal, route.timed);
+    var call = route.ali ? aliWithFallback(pp, chunk, signal) : route.chat ? reqChat(pp.blob, pp.fmt, chunk.dur, signal) : reqWhisper(pp.blob, pp.fmt, route, signal, route.timed);
     return call.then(function(resp){
       var segs = segmentsOf(resp, chunk, route);
       if(ai.lang === 'zh' || !ai.lang) segs.forEach(function(x){ x.text = toSimp(x.text); });
