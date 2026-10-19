@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.24">
+<meta name="app-version" content="0.46.25">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -1128,7 +1128,7 @@ function feedMatches(){
     return a && n.length > a.length + 1 ? n.split(a).join('') : n;
   }
   episodes.forEach(function(ep){
-    if(ep.rss || ep.remote || !ep.show || ep.show === OTHER) return;
+    if(ep.rss || !ep.show || ep.show === OTHER) return;   // 订阅的集不参与；本地文件和导入的云端文件都参与
     var la = (shows[ep.show] && shows[ep.show].author) || (ep.tags && (ep.tags.albumArtist || ep.tags.artist)) || '';
     for(var i = 0; i < urls.length; i++){
       var f = feeds[urls[i]], fa = f.author || '', na = normName(la), nb = normName(fa);
@@ -1136,8 +1136,8 @@ function feedMatches(){
       if(authors && na.indexOf(nb) < 0 && nb.indexOf(na) < 0) continue;   // 作者对不上，不是同一个节目
       var ka = strip(ep.show, authors ? fa : la || fa), kb = strip(f.title, authors ? la : fa || la), ra = normName(ep.show), rb = normName(f.title);
       var same = ka === kb || ra === rb;
-      var part = !same && Math.min(ka.length, kb.length) >= (authors ? 2 : 4) && (ka.indexOf(kb) >= 0 || kb.indexOf(ka) >= 0);
-      if(!same && !part){   // 「梁文道·八分半」和「八分半」：按分隔符拆成几块，去掉作者名那块，一边的块是另一边的子集就算同一个专辑
+      var part = false;   // 不再按「一个名字包含另一个」判断（「八分半」包含「八分」，但是两个不同的专辑）
+      if(!same){   // 「梁文道·八分半」和「八分半」：按分隔符拆成几块，去掉作者名那块，一边的块是另一边的子集就算同一个专辑
         var pa = nameBits(ep.show, [na, nb]), pb = nameBits(f.title, [na, nb]);
         var sub = function(x, y){ return x.length && x.every(function(w){ return y.indexOf(w) >= 0; }); };
         part = sub(pa, pb) || sub(pb, pa);
@@ -3342,7 +3342,7 @@ function chain(list, fn){ return list.reduce(function(p, k){ return p.then(funct
 $('bSel').onclick = function(){ enterSel(null); };
 $('bSelDone').onclick = function(){ if(ordMode){ ordMode = false; render(); } else exitSel(); };
 $('bSelAll').onclick = function(){
-  if(ordMode){ if(settings.order) delete settings.order[view.show]; saveSettings(); render(); return; }   // 编辑排序时这个键是「默认顺序」
+  if(ordMode){ if(settings.order) delete settings.order[view.show]; (settings.orderMt = settings.orderMt || {})[view.show] = Date.now(); saveSettings(); syncSoon(); render(); return; }   // 编辑排序时这个键是「默认顺序」
   var keys = episodeKeys(view.show);
   if(selCount() >= keys.length) selKeys = {}; else keys.forEach(function(k){ selKeys[k] = true; });
   render();
@@ -3828,7 +3828,8 @@ function ordSave(shown){
   var rev = !!(settings.rev && settings.rev[view.show]);
   settings.order = settings.order || {};
   settings.order[view.show] = rev ? shown.slice().reverse() : shown.slice();
-  saveSettings();
+  (settings.orderMt = settings.orderMt || {})[view.show] = Date.now();
+  saveSettings(); syncSoon();
 }
 function ordMove(k, d){
   var shown = ordShown(), i = shown.indexOf(k), j = i + d;
@@ -6197,7 +6198,9 @@ function syncPayload(){
   });
   var fs = {};
   Object.keys(feeds).forEach(function(u){ fs[u] = {title:feeds[u].title, at:feeds[u].at || 0}; });
-  return {app:'local-podcast-player', records:records, shows:sh, ai:ai, feeds:fs, people:people, del:syncCfg.del || {}};
+  var od = {};
+  Object.keys(settings.orderMt || {}).forEach(function(n){ od[n] = {k:(settings.order && settings.order[n]) || [], mt:settings.orderMt[n]}; });
+  return {app:'local-podcast-player', records:records, shows:sh, ai:ai, feeds:fs, people:people, order:od, del:syncCfg.del || {}};
 }
 function peopleMerge(R){
   if(!R || !R.people) return false;
@@ -6215,8 +6218,21 @@ function peopleMerge(R){
   if(ch) save(PEOPLE_KEY, people);
   return ch;
 }
+function orderMerge(R){   // 每个专辑自己排的顺序：谁改得晚听谁的（空列表 = 恢复默认）
+  if(!R || !R.order) return false;
+  var ch = false; settings.orderMt = settings.orderMt || {}; settings.order = settings.order || {};
+  Object.keys(R.order).forEach(function(n){
+    var b = R.order[n]; if(!b || !Array.isArray(b.k)) return;
+    if((b.mt || 0) <= (settings.orderMt[n] || 0)) return;
+    settings.orderMt[n] = b.mt;
+    if(b.k.length) settings.order[n] = b.k; else delete settings.order[n];
+    ch = true;
+  });
+  if(ch) saveSettings();
+  return ch;
+}
 function syncMerge(R){
-  var changed = peopleMerge(R), del = syncCfg.del = syncCfg.del || {};
+  var changed = peopleMerge(R) | orderMerge(R), del = syncCfg.del = syncCfg.del || {};
   Object.keys(R.del || {}).forEach(function(k){ if((R.del[k] || 0) > (del[k] || 0)) del[k] = R.del[k]; });
   var rr = R.records || {};
   Object.keys(rr).forEach(function(k){
