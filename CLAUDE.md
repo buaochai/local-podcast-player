@@ -63,3 +63,4 @@
 - RSS 日期解析 `parseDate`（0.46.31）：Date.parse → 「YYYY-MM-DD HH:mm:ss」换成 T → 手拆 RFC822（CST 按 +0800）→ 只有年月日；条目日期取 pubDate / dc:date / published / updated。Safari 对不少写法返回 NaN，别直接用 Date.parse。
 - 编辑排序时右下角序号是输入框 `ordSeqInput`（0.46.32，字号 16px 再 `scale(.625)`，避免 iOS 聚焦放大页面）：填 N → 在 `episodeKeys` 顺序里挪到第 N 个再 `ordSave`（倒序显示时存反的）。
 - 百炼读不了在线集的地址（0.46.33）：`aliWithFallback` 遇到 400 `url error`（`aliUrlError`）→ `api/rss?resolve=`（`rss.js` 的 `resolveAudio`，手动跟跳转、`Range: bytes=0-0`，音频绝不经过后台）换最终地址重试 → 还不行就网页 `fetch` 音频成 blob 走普通上传（>300MB 提示先下载）。
+- 百炼的 flash 系列模型（`aliFlashModel`，不含 filetrans）是同步识别，网页用的是异步「录音文件识别」，用不了；`reqAli` 一开始就报错提示换 `fun-asr` / `fun-asr-2025-11-07`。点进专辑（`render()` 里 `prevKey !== pageKey`）滚到 `records[k].updated` 最大的那一集并居中。

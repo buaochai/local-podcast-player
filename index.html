@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.33">
+<meta name="app-version" content="0.46.34">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -3540,6 +3540,11 @@ function render(){
   if(resumeTop != null){ if(sc) sc.scrollTop = resumeTop; else box.scrollTop = resumeTop; resumeTop = null; }   // 搜索结果退回来：回到刚才滚到的位置
   if(!home && !isEp && !isFav && sc && prevKey.indexOf('ep:') === 0 && showScrollMem && showScrollMem.show === view.show){   // 从文稿页退回专辑列表：原样回到进去前的滚动位置
     sc.scrollTop = showScrollMem.top;
+  }else if(!home && !isEp && !isFav && sc && prevKey !== pageKey && !(searchOpen && searchQ.trim())){   // 刚点进专辑：直接滚到上次听的那一集
+    var lastK = null, lastT = 0;
+    episodeKeys(view.show).forEach(function(k){ var r = records[k]; if(r && r.updated > lastT){ lastT = r.updated; lastK = k; } });
+    var lli = lastK && sc.querySelector('li[data-k="' + lastK.replace(/(["\\])/g, '\\$1') + '"]');
+    if(lli) sc.scrollTop = Math.max(0, sc.scrollTop + lli.getBoundingClientRect().top - sc.getBoundingClientRect().top - (sc.clientHeight - lli.offsetHeight) / 2);
   }
   if(sc) sc.classList.toggle('scrolled', sc.scrollTop > 2);
   renderMini();
@@ -4754,7 +4759,10 @@ function aliWait(ms, signal){
 }
 // 百炼说「这段没有可识别的人声」（纯音乐、静音）：当作这一段没有文字
 var ALI_EMPTY = /HAVE_NO_WORDS|NO_VALID_FRAGMENT|NO_VALID_AUDIO|SUCCESS_WITH_NO_VALID/i;
+// 百炼的 flash 系列（fun-asr-flash 等）是同步识别模型，不支持网页用的「录音文件识别」（异步提交任务）；提交时只会报 url error 之类让人误会的错
+function aliFlashModel(m){ return /flash/i.test(m || '') && !/filetrans/i.test(m || ''); }
 function reqAli(blob, fmt, signal, srcUrl){
+  if(aliFlashModel(aiModel())) return Promise.reject(new Error('「' + aiModel() + '」是同步识别的模型，不支持录音文件识别。请在 AI 设置里把模型换成 fun-asr（或 fun-asr-2025-11-07）'));
   var start = Date.now();
   function poll(id, n){
     if(Date.now() - start > 3600000) throw new Error('百炼一个小时都没识别完，请稍后重试');
