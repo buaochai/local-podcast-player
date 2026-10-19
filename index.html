@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.36">
+<meta name="app-version" content="0.46.37">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -315,7 +315,7 @@ body.ep-page .ctl{width:40px;height:38px}
 body.ep-page .ctl.play{width:42px;height:42px}
 body.ep-page .ctl.play svg{width:26px;height:26px}
 body.ep-page.has-player .list-scroll{padding-bottom:152px}
-body.ep-page.has-player .tr-loc{bottom:calc(152px + env(safe-area-inset-bottom))}
+body.ep-page.has-player .tr-loc{bottom:calc(158px + env(safe-area-inset-bottom))}
 #bTrEdit{display:none}
 body.ep-page.can-edit #bTrEdit{display:flex}
 .tr-doc.editing .tr-p{outline:1px dashed var(--muted);outline-offset:4px;border-radius:4px;cursor:text}
@@ -326,9 +326,9 @@ textarea.input{resize:vertical;line-height:1.7;min-height:200px}
 .tr-s{border-radius:4px;-webkit-box-decoration-break:clone;box-decoration-break:clone;transition:background .2s,color .2s}
 .tr-s.now{background:var(--accent-soft);color:var(--accent)}
 .view.fixed{position:relative}
-.tr-loc{position:absolute;right:14px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:4;width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--accent);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;padding:0}
+.tr-loc{position:absolute;right:14px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:4;width:40px;height:40px;border-radius:50%;border:1px solid var(--pop-line);background:var(--mini);-webkit-backdrop-filter:blur(14px) saturate(1.4);backdrop-filter:blur(14px) saturate(1.4);color:var(--accent);box-shadow:0 4px 14px rgba(0,0,0,.1);opacity:.78;display:flex;align-items:center;justify-content:center;padding:0}   /* 毛玻璃、半透明、小一点：浮在文字上，不抢眼 */
 .tr-loc[hidden]{display:none}
-.tr-loc svg{width:24px;height:24px;fill:currentColor}
+.tr-loc svg{width:21px;height:21px;fill:currentColor}
 .check{display:flex;gap:10px;align-items:flex-start;margin:12px 0 0;font-size:14px;line-height:1.5;color:var(--muted)}
 .check input{width:18px;height:18px;margin:1.5px 0 0;flex:none;accent-color:var(--accent)}
 select.input{appearance:auto;-webkit-appearance:menulist}
