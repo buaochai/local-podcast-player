@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.42">
+<meta name="app-version" content="0.46.43">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -330,6 +330,14 @@ textarea.input{resize:vertical;line-height:1.7;min-height:200px}
 .view.fixed{position:relative}
 .tr-loc{position:absolute;right:14px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:4;width:40px;height:40px;border-radius:50%;border:1px solid var(--pop-line);background:var(--mini);-webkit-backdrop-filter:blur(14px) saturate(1.4);backdrop-filter:blur(14px) saturate(1.4);color:var(--accent);box-shadow:0 4px 14px rgba(0,0,0,.1);opacity:.78;display:flex;align-items:center;justify-content:center;padding:0}   /* 毛玻璃、半透明、小一点：浮在文字上，不抢眼 */
 .tr-loc[hidden]{display:none}
+/* 回到顶部：右边缘一个毛玻璃小圆钮，列表 / 文稿往下滚了才出现；文稿页里叠在定位球上面 */
+#bTop{position:fixed;right:14px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:4;width:40px;height:40px;border-radius:50%;border:1px solid var(--pop-line);background:var(--mini);-webkit-backdrop-filter:blur(14px) saturate(1.4);backdrop-filter:blur(14px) saturate(1.4);color:var(--accent);box-shadow:0 4px 14px rgba(0,0,0,.1);opacity:.78;display:flex;align-items:center;justify-content:center;padding:0}
+#bTop[hidden]{display:none}
+#bTop svg{width:22px;height:22px;fill:currentColor}
+body.has-player:not(.show-page):not(.ep-page) #bTop{bottom:calc(152px + env(safe-area-inset-bottom))}
+body.ep-page #bTop{bottom:calc(68px + env(safe-area-inset-bottom))}
+body.ep-page.has-player #bTop{bottom:calc(206px + env(safe-area-inset-bottom))}
+body.selecting #bTop{display:none}
 .tr-loc svg{width:21px;height:21px;fill:currentColor}
 .check{display:flex;gap:10px;align-items:flex-start;margin:12px 0 0;font-size:14px;line-height:1.5;color:var(--muted)}
 .check input{width:18px;height:18px;margin:1.5px 0 0;flex:none;accent-color:var(--accent)}
@@ -951,6 +959,7 @@ input[type=file]{display:none}
 </div>
 
 <audio id="audio" preload="metadata"></audio>
+<button id="bTop" aria-label="回到顶部" hidden><svg viewBox="0 0 24 24"><path d="M7.4 15.4 12 10.8l4.6 4.6L18 14l-6-6-6 6z"/></svg></button>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -3479,6 +3488,15 @@ $('bNewAlbum').onclick = function(){
 };
 
 var renderedKey = '', lastEpKey = '';
+// 回到顶部小圆钮：当前能滚动的地方（列表 / 文稿 / 首页）滚过一屏左右就出现
+function topTarget(){ return $('view').querySelector('.list-scroll') || $('view'); }
+function topUpdate(){ var t = topTarget(); $('bTop').hidden = !(t && t.scrollTop > 400); }
+document.addEventListener('scroll', function(e){ var t = e.target; if(t && t.classList && (t.classList.contains('list-scroll') || t.id === 'view')) topUpdate(); }, true);
+$('bTop').onclick = function(){
+  var t = topTarget(); if(!t) return;
+  trTouch = Date.now();   // 在文稿页：当成手动滑动，暂停跟随播放（右边的定位球可以一键回到播放位置）
+  try{ t.scrollTo({top:0, behavior:'smooth'}); }catch(e){ t.scrollTop = 0; }
+};
 function render(){
   if(!ready) return;
   matchCache = null;   // 导入、改名、移动之后重新对一遍订阅里的集
@@ -3560,6 +3578,7 @@ function render(){
   renderMini();
   if(isEp) trTick(true, pageKey !== lastEpKey);
   lastEpKey = pageKey;
+  topUpdate();
 }
 /* ---------- 收藏页：专辑 → 集 → 时间点 ---------- */
 var FAV_CHEV = '<svg viewBox="0 0 24 24"><path d="M9.4 6 8 7.4 12.6 12 8 16.6 9.4 18l6-6z"/></svg>';
