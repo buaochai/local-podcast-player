@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.23">
+<meta name="app-version" content="0.46.24">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -133,9 +133,21 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .item{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--line)}
 .item:first-child{border-top:none}
 .item{position:relative}
-.ep-cloud{position:absolute;right:10px;bottom:5px;width:16px;height:14px;pointer-events:none;display:flex;align-items:center;justify-content:center}
-.ep-cloud svg{width:15px;height:15px;fill:var(--muted);opacity:.75}
-.ep-seq ~ .ep-cloud{right:34px}
+.ord-h{flex:none;width:24px;height:30px;display:flex;align-items:center;justify-content:center;color:var(--muted);touch-action:none;cursor:grab}
+.ord-h svg{width:16px;height:16px;fill:currentColor}
+.ord-ud{flex:none;display:flex;align-items:center;gap:2px}
+.ord-b{border:none;background:transparent;width:26px;height:30px;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.ord-b svg{width:16px;height:16px;fill:currentColor}
+.item.ordmode .prog{margin-right:44px}
+.item.dragging{position:relative;z-index:6;background:var(--card);box-shadow:0 6px 18px rgba(0,0,0,.18);border-radius:10px;transition:none}
+.ep-marks{position:absolute;right:10px;bottom:5px;height:14px;display:flex;align-items:center;gap:4px;pointer-events:none;color:var(--muted)}
+.ep-marks i{display:flex;width:11px;height:11px}
+.ep-marks svg{width:11px;height:11px;fill:currentColor;opacity:.8}
+.ep-seq ~ .ep-marks{right:40px}
+.item.mk1 .prog{margin-right:20px}
+.item.mk2 .prog{margin-right:34px}
+.item.selmode.mk1 .prog{margin-right:48px}
+.item.selmode.mk2 .prog{margin-right:62px}
 .ep-seq{position:absolute;right:10px;bottom:5px;min-width:16px;padding:0 4px;border:1px solid var(--line);border-radius:4px;font-size:10px;line-height:14px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums;pointer-events:none}
 .item.cur{background:var(--accent-soft)}
 .item-main{flex:1;min-width:0}
@@ -1201,6 +1213,23 @@ function feedOrder(f){   // 这个订阅里有集号的集：{dir:1 升序 / -1 
   if(list.length < 2) return null;
   return {dir: list[0].n > list[list.length - 1].n ? -1 : 1, list:list};
 }
+var MK_SVG = {
+  cloud:'<svg viewBox="0 0 24 24"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>',
+  phone:'<svg viewBox="0 0 24 24"><path d="M17 1H7a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2zm0 17H7V5h10z"/></svg>',
+  rss:'<svg viewBox="0 0 24 24"><path d="M6.18 15.64a2.18 2.18 0 1 1 0 4.36 2.18 2.18 0 0 1 0-4.36zM4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27zm0 5.66A9.9 9.9 0 0 1 13.9 20h-2.83A7.07 7.07 0 0 0 4 12.93z"/></svg>'
+};
+function epMarks(k, ep, r){
+  var list = [];
+  if(ep && ep.rss) list.push(['rss', '订阅']);
+  else{
+    if((r && r.cloud) || (ep && ep.cloud)) list.push(['cloud', '在云端']);
+    if(hasFile(k)) list.push(['phone', '在本机']);
+  }
+  if(!list.length) return null;
+  var box = el('span', 'ep-marks');
+  list.forEach(function(x){ var i = el('i'); i.innerHTML = MK_SVG[x[0]]; i.setAttribute('aria-label', x[1]); box.appendChild(i); });
+  return box;
+}
 function sortNameOf(key){   // 订阅专辑里：订阅的集按订阅顺序，补充的本地文件按集号插到合适的位置，没集号的放最后
   var m = feedMatches().loc[key];
   if(!m){
@@ -1251,7 +1280,14 @@ function allShows(){
 function episodeKeys(show){
   var s = allShows().filter(function(x){ return x.name === show; })[0];
   if(!s) return [];
-  return s.keys.sort(function(a, b){ return byName(sortNameOf(a), sortNameOf(b)); });
+  var ks = s.keys.sort(function(a, b){ return byName(sortNameOf(a), sortNameOf(b)); });
+  var custom = settings.order && settings.order[show];   // 自己拖过的顺序：先按它排，没记录的新集排在后面
+  if(custom && custom.length){
+    var pos = {}; custom.forEach(function(k, i){ pos[k] = i; });
+    var inL = ks.filter(function(k){ return k in pos; }).sort(function(a, b){ return pos[a] - pos[b]; });
+    return inL.concat(ks.filter(function(k){ return !(k in pos); }));
+  }
+  return ks;
 }
 // 同一个节目里有文件的集，用来切上一集 / 下一集
 function playlist(){
@@ -3297,15 +3333,16 @@ function showEpMenu(key){
 }
 
 /* ---------- 多选 ---------- */
-var selMode = false, selKeys = {}, selStamp = 0;
+var selMode = false, selKeys = {}, selStamp = 0, ordMode = false;   // ordMode：专辑页「编辑排序」，拖动或点上下箭头换位置
 function selCount(){ return Object.keys(selKeys).length; }
 function enterSel(key){ selMode = true; selKeys = {}; if(key) selKeys[key] = true; selStamp = key ? Date.now() : 0; render(); }   // 长按进入时，松手那一下不算点击
 function exitSel(){ selMode = false; selKeys = {}; render(); }
 function toggleSel(key){ if(selKeys[key]) delete selKeys[key]; else selKeys[key] = true; render(); }
 function chain(list, fn){ return list.reduce(function(p, k){ return p.then(function(){ return fn(k); }); }, Promise.resolve()); }
 $('bSel').onclick = function(){ enterSel(null); };
-$('bSelDone').onclick = exitSel;
+$('bSelDone').onclick = function(){ if(ordMode){ ordMode = false; render(); } else exitSel(); };
 $('bSelAll').onclick = function(){
+  if(ordMode){ if(settings.order) delete settings.order[view.show]; saveSettings(); render(); return; }   // 编辑排序时这个键是「默认顺序」
   var keys = episodeKeys(view.show);
   if(selCount() >= keys.length) selKeys = {}; else keys.forEach(function(k){ selKeys[k] = true; });
   render();
@@ -3424,11 +3461,11 @@ function render(){
   var pageKey = home ? 'home' : isEp ? 'ep:' + view.key : isFav ? 'fav:' + view.lvl + ':' + (view.show || view.key || '') : 'show:' + view.show;
   // 重画时保持滚动位置；换了页面就回到顶部
   var prevKey = renderedKey, samePage = pageKey === renderedKey;
-  if(pageKey !== renderedKey){ selMode = false; selKeys = {}; }   // 换了页面就退出多选
+  if(pageKey !== renderedKey){ selMode = false; selKeys = {}; ordMode = false; }   // 换了页面就退出多选
   var top = pageKey !== renderedKey ? 0 : sc ? sc.scrollTop : box.scrollTop;
   renderedKey = pageKey;
   var nKeys = home || isEp || isFav ? 0 : episodeKeys(view.show).length;
-  var selecting = selMode && !home && !isEp && nKeys > 0;
+  var selecting = selMode && !home && !isEp && nKeys > 0, ordering = ordMode && view.page === 'show' && nKeys > 0;
   if(!selecting && selMode){ selMode = false; selKeys = {}; }
   $('bBack').hidden = home || selecting;
   $('bNewAlbum').hidden = !home; $('bFav').hidden = !home; $('bHist').hidden = !home; $('bMusicAll').hidden = !home;
@@ -3448,18 +3485,18 @@ function render(){
   }
   if(searchOpen && !samePage) closeSearch(true);
   document.querySelector('header').classList.toggle('searching', searchOpen);
-  $('bBack').hidden = (home && !(searchOpen && searchFromPeople)) || selecting;
+  $('bBack').hidden = (home && !(searchOpen && searchFromPeople)) || selecting || ordering;
   $('searchIn').placeholder = home ? '搜索全部节目、单集、文稿' : isEp ? '搜索这一集的文稿' : isFav ? '搜索收藏' : '搜索这个专辑';
-  $('bSel').hidden = home || isEp || isFav || selecting || !nKeys;
-  $('bEpMore').hidden = !isEp; if(!isEp) $('bMusic').hidden = true; $('bHome').hidden = home || selecting;
-  $('bSelAll').hidden = !selecting; $('bSelDone').hidden = !selecting;
-  $('bAbout').hidden = selecting || isEp || isFav;
+  $('bSel').hidden = home || isEp || isFav || selecting || ordering || !nKeys;
+  $('bEpMore').hidden = !isEp; if(!isEp) $('bMusic').hidden = true; $('bHome').hidden = home || selecting || ordering;
+  $('bSelAll').hidden = !(selecting || ordering); $('bSelDone').hidden = !(selecting || ordering);
+  $('bAbout').hidden = selecting || ordering || isEp || isFav;
   $('selBar').hidden = !selecting;
   $('bSelUp').hidden = !!(view.page === 'show' && feedOfShow(view.show));   // 订阅的播客没有「传云端」
   document.body.classList.toggle('selecting', selecting);
   showTrJob();
   $('bSelMove').disabled = $('bSelDel').disabled = $('bSelTr').disabled = $('bSelUp').disabled = $('bSelDown').disabled = !selCount();
-  $('bSelAll').textContent = selCount() >= nKeys ? '取消全选' : '全选';
+  $('bSelAll').textContent = ordering ? '默认顺序' : selCount() >= nKeys ? '取消全选' : '全选';
   $('title').textContent = selecting ? '已选 ' + selCount() + ' 集' : '';   // 顶部栏不放大标题
   document.body.classList.toggle('ep-page', isEp);
   document.body.classList.toggle('show-page', !home && !isEp);
@@ -3785,6 +3822,46 @@ function showNameLines(name){
   return sub ? [showLabel(sub), main.trim()] : [main.trim()];
 }
 var headImg = null;   // 专辑页封面图元素复用（播放时每隔几秒会重画，不复用会一直闪）
+// 编辑排序：显示顺序（倒序时是反的）换位置后，存成这个专辑自己的顺序（倒序时再反回去）
+function ordShown(){ var ks = episodeKeys(view.show); return settings.rev && settings.rev[view.show] ? ks.slice().reverse() : ks; }
+function ordSave(shown){
+  var rev = !!(settings.rev && settings.rev[view.show]);
+  settings.order = settings.order || {};
+  settings.order[view.show] = rev ? shown.slice().reverse() : shown.slice();
+  saveSettings();
+}
+function ordMove(k, d){
+  var shown = ordShown(), i = shown.indexOf(k), j = i + d;
+  if(i < 0 || j < 0 || j >= shown.length) return;
+  shown.splice(i, 1); shown.splice(j, 0, k);
+  ordSave(shown); render();
+}
+function ordDrag(handle, li){
+  var startY = 0, ul = null, timer = null, py = 0, sc = null;
+  function settle(){   // 拖到别的行的中线以外就交换位置，同时修正偏移，让这一行始终跟着手指
+    var prev = li.previousElementSibling, next = li.nextElementSibling;
+    if(prev){ var pr = prev.getBoundingClientRect(); if(py < pr.top + pr.height / 2){ ul.insertBefore(li, prev); startY -= pr.height; } }
+    if(next){ var nr = next.getBoundingClientRect(); if(py > nr.top + nr.height / 2){ ul.insertBefore(li, next.nextSibling); startY += nr.height; } }
+    li.style.transform = 'translateY(' + (py - startY) + 'px)';
+  }
+  function move(e){ if(!li.classList.contains('dragging')) return; py = e.clientY; settle(); }
+  function end(){
+    window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end);
+    if(!li.classList.contains('dragging')) return;
+    clearInterval(timer); li.classList.remove('dragging'); li.style.transform = '';
+    var shown = Array.prototype.map.call(ul.children, function(x){ return x.dataset.k; });
+    ordSave(shown); render();
+  }
+  handle.addEventListener('pointerdown', function(e){   // 换位置时这一行会被移走再插回，指针捕获会丢，所以在 window 上监听
+    e.preventDefault(); ul = li.parentNode; sc = $('view').querySelector('.list-scroll');
+    startY = py = e.clientY; li.classList.add('dragging');
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end);
+    timer = setInterval(function(){   // 拖到列表上下边缘时自动滚动
+      if(!sc) return; var r = sc.getBoundingClientRect(), v = py < r.top + 50 ? -10 : py > r.bottom - 50 ? 10 : 0;
+      if(!v) return; var before = sc.scrollTop; sc.scrollTop += v; var d = sc.scrollTop - before; if(d){ startY -= d; settle(); }
+    }, 16);
+  });
+}
 function renderShow(box){
   var keys = episodeKeys(view.show), isFeed = !!feedOfShow(view.show), rev = !!(settings.rev && settings.rev[view.show]);
   if(!keys.length && !isCustom(view.show)){ view = {page:'home'}; history.replaceState(null, ''); render(); return; }
@@ -3823,7 +3900,7 @@ function renderShow(box){
   eb.onclick = function(){ editAlbum(view.show); };
   acts.appendChild(eb);
   // 排序：默认「顺序」，可以切成「倒序」（每个专辑各自记住；只改显示，上一集 / 下一集照旧按顺序）
-  var sb = el('button', 'btn', rev ? '倒序' : '顺序');
+  var sb = el('button', 'btn', rev ? '倒序' : '顺序'); onLongPress(sb, function(){ ordMode = true; render(); });   // 长按：编辑排序
   sb.setAttribute('aria-label', '切换排序');
   sb.onclick = function(){
     var m = settings.rev = settings.rev || {};
@@ -3868,8 +3945,19 @@ function renderShow(box){
     if(!ep) li.appendChild(el('span', 'tag', '文件缺失'));
 
     if(!isFeed) li.appendChild(el('span', 'ep-seq', String(idx + 1)));   // 右下角：这一集在列表里的位置（订阅的播客不显示）
-    if(ep && ep.rss && feedMatches().joined[view.show]){ var cm = el('span', 'ep-cloud'); cm.innerHTML = '<svg viewBox="0 0 24 24"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>'; cm.setAttribute('aria-label', '来自订阅'); li.appendChild(cm); }   // 订阅 + 自己添加混在一个专辑里时，订阅的集标云
-    if(!selMode){
+    var mks = epMarks(k, ep, r);   // 右下角小标：云端（存在 R2）/ 手机（本地文件）/ RSS（订阅）
+    if(mks){ li.appendChild(mks); li.classList.add('mk' + mks.children.length); }
+    if(ordMode){
+      li.classList.add('ordmode');
+      var oh = el('span', 'ord-h'); oh.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4 7h16v2H4zm0 4h16v2H4zm0 4h16v2H4z"/></svg>'; oh.setAttribute('aria-label', '拖动排序');
+      ordDrag(oh, li); li.insertBefore(oh, li.firstChild);
+      var ud = el('span', 'ord-ud');
+      [['up', 'M7.4 15.4 12 10.8l4.6 4.6L18 14l-6-6-6 6z', -1], ['down', 'M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z', 1]].forEach(function(x){
+        var ab = el('button', 'ord-b'); ab.innerHTML = '<svg viewBox="0 0 24 24"><path d="' + x[1] + '"/></svg>'; ab.setAttribute('aria-label', x[0] === 'up' ? '上移' : '下移');
+        ab.onclick = function(e){ e.stopPropagation(); ordMove(k, x[2]); }; ud.appendChild(ab);
+      });
+      li.appendChild(ud);
+    }else if(!selMode){
       // 左边播放按钮，右边「!」；上传 / 下载放进「!」的浮窗里
       var pb = el('button', 'play-btn');
       var playing = ep && ep === cur && !audio.paused;
@@ -3888,9 +3976,9 @@ function renderShow(box){
       ib.onclick = function(e){ e.stopPropagation(); showEpPop(k, ib); };
       li.appendChild(ib);
     }
-    li.onclick = selMode ? function(){ if(Date.now() - selStamp > 600) toggleSel(k); }
+    li.onclick = ordMode ? null : selMode ? function(){ if(Date.now() - selStamp > 600) toggleSel(k); }
                : function(){ openEpPage(k); };
-    onLongPress(li, function(){ if(!selMode) enterSel(k); }, function(target){ return target.closest && (target.closest('.play-btn') || target.closest('.info-btn')); });
+    if(!ordMode) onLongPress(li, function(){ if(!selMode) enterSel(k); }, function(target){ return target.closest && (target.closest('.play-btn') || target.closest('.info-btn')); });
     ul.appendChild(li);
   });
   scroll.appendChild(ul);
