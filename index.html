@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.43">
+<meta name="app-version" content="0.46.44">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -5321,7 +5321,7 @@ function renderMusicAll(){
     var e = all[id], m = e.m, np = nameParts(m.title, m.orig), ap = nameParts(m.artist, m.artistOrig);
     var li = el('li'), row = el('div', 'opt mu'), main = el('div', 'mu-main'), g = el('span', 'grow');
     g.appendChild(el('span', 'mk-note clamp2', np.main));
-    var meta = [e.kind === 'artist' ? '' : (m.ver || ''), e.kind === 'artist' ? '' : (m.part || ''), m.artist ? ap.main : '', e.ments.length > 1 ? '提到 ' + e.ments.length + ' 次' : ''].filter(Boolean).join(' · ');
+    var meta = [e.kind === 'artist' ? '' : (m.composer || ''), e.kind === 'artist' ? '' : (m.ver || ''), e.kind === 'artist' ? '' : (m.part || ''), m.artist ? ap.main : '', e.ments.length > 1 ? '提到 ' + e.ments.length + ' 次' : ''].filter(Boolean).join(' · ');
     if(meta) g.appendChild(el('small', 'mu-meta', meta));
     main.appendChild(muIcon(e.kind)); main.appendChild(g);
     var sub = el('ul', 'mu-ments'); sub.hidden = true;
@@ -5409,8 +5409,9 @@ function musicPrompt(text){
     '3. 人名：先用你自己的知识判断这个人的主业。主业是歌手、乐手、作曲家、乐队、音乐制作人，并且说话人在谈他的歌曲、演唱、演奏时，kind 填 artist，role 写他的主业。主业不是音乐的人（导演、作家、学者、演员、主持人、政治人物等，哪怕和音乐沾点边），kind 填 person，role 写主业（网页会把他们记进「非音乐人」名单，不会显示出来）。\n' +
     '   例子：「我是通过蔡明亮的电影知道葛兰、白光那个时候的歌曲的」——葛兰、白光是歌手，要列（artist，role 填「歌手」）；蔡明亮是导演（person，role 填「导演」）。同一句里有几个人，每个都要单独列。\n' +
     '4. 泛称（「音乐」「旋律」「歌曲」「古典乐」「爵士乐」）不算；拿不准就不要列。\n' +
+    '   古典乐的特别规定：说话人讲到某位作曲家的具体作品（如勃拉姆斯第一交响曲）、或某位指挥 / 乐团 / 独奏家的演绎和录音，都要列。作品列成一项 kind=piece：title 用文稿里的写法，orig 写这部作品在唱片上的标准英文名（如 Symphony No. 1 in C Minor, Op. 68），composer 写作曲家的原文全名（如 Johannes Brahms），artist / artistOrig 写演绎者（指挥加乐团，如 Herbert von Karajan, Berliner Philharmoniker），ver 写录音年份和唱片公司（如 1963 DG）。作曲家、指挥本人也各列一项 kind=artist（role 写「作曲家」「指挥家」）。一集里讲了同一位指挥的好几部作品，每部作品单独列一项。\n' +
     (kn ? '5. 参考（以前听过的节目里已经确定的）：' + kn + '。这些人按已知身份处理，不用再判断。\n' : '') +
-    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"kind":"song 或 album 或 artist 或 piece 或 person","title":"作品名（kind 是 artist / person 时填人名，用文稿里的写法）","orig":"作品名或人名的原文写法：外国的必须写成原文（日本、韩国等非拉丁文字的音乐人，写他在 Apple Music 上通行的罗马字名字，如 Ryuichi Sakamoto），并用它通行的写法——首字母大写、介词小写（不要全大写），数字用阿拉伯数字（如 Kayhan Kalhor、Kind of Blue、Music for 18 Musicians），中文的写中文","artist":"创作者或演唱者（文稿里的写法），不知道就留空","artistOrig":"创作者或演唱者的原文写法，外国的必须写原文","role":"kind 是 artist / person 时写这个人的主业，其他留空","ver":"这个作品所放的版本信息：年份、唱片公司、演奏者或指挥、获奖等（如 1997 Nonesuch、卡拉扬 1963），没提到就留空，不要猜","part":"放的是其中哪个乐章或段落，按说话人说的写，数字用阿拉伯数字（说的是 Section Four 就写 Section 4，第二乐章写 第2乐章），没提到就留空","said":"文稿里提到它时原样的写法，必须和文稿里的文字一字不差","why":"文稿里能证明说话人在把它当音乐说的那几个字（如「这首歌」「专辑」「演奏」「歌曲」），必须是文稿里的原话","t":提到它的那一句的时间（秒，整数）}。\n' +
+    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"kind":"song 或 album 或 artist 或 piece 或 person","title":"作品名（kind 是 artist / person 时填人名，用文稿里的写法）","orig":"作品名或人名的原文写法：外国的必须写成原文（日本、韩国等非拉丁文字的音乐人，写他在 Apple Music 上通行的罗马字名字，如 Ryuichi Sakamoto），并用它通行的写法——首字母大写、介词小写（不要全大写），数字用阿拉伯数字（如 Kayhan Kalhor、Kind of Blue、Music for 18 Musicians），中文的写中文","artist":"创作者或演唱者（文稿里的写法），不知道就留空","artistOrig":"创作者或演唱者的原文写法，外国的必须写原文","role":"kind 是 artist / person 时写这个人的主业，其他留空","ver":"这个作品所放的版本信息：年份、唱片公司、演奏者或指挥、获奖等（如 1997 Nonesuch、卡拉扬 1963），没提到就留空，不要猜","composer":"古典乐作品的作曲家原文全名（如 Johannes Brahms），不是古典乐作品就留空","part":"放的是其中哪个乐章或段落，按说话人说的写，数字用阿拉伯数字（说的是 Section Four 就写 Section 4，第二乐章写 第2乐章），没提到就留空","said":"文稿里提到它时原样的写法，必须和文稿里的文字一字不差","why":"文稿里能证明说话人在把它当音乐说的那几个字（如「这首歌」「专辑」「演奏」「歌曲」），必须是文稿里的原话","t":提到它的那一句的时间（秒，整数）}。\n' +
     '版本信息经常在说出作品名【之后的几句话里】才详细介绍（「我要介绍的是 1997 年 Nonesuch 唱片的版本……现在就来听其中第四部分」），要把前后几句里说的这个版本的年份、唱片公司、演奏者、乐章合并填进 ver / part，但每项只写关键词，不要写成长句。\n' +
     '同一个作品或人只列一次；没有就输出 []。\n\n文稿：\n' + text;
 }
@@ -5439,8 +5440,9 @@ function parseMusic(txt){
     var orig = fixCase(clean(String(x.orig || '')).slice(0, 80)), aorig = fixCase(clean(String(x.artistOrig || '')).slice(0, 80)), isP = kind === 'artist' || kind === 'person';
     // Apple Music 里要用原文搜（「卡扬卡霍」搜不到，Kayhan Kalhor 才行）
     var ver = isP ? '' : clean(String(x.ver || '')).slice(0, 40), part = isP ? '' : clean(String(x.part || '')).slice(0, 30);
-    var term = isP ? (orig || title) : (((aorig || artist) ? (aorig || artist) + ' ' : '') + (orig || title)).trim();
-    out.push({kind:kind, title:title, orig:orig, artist:isP ? '' : artist, artistOrig:isP ? '' : aorig, said:clean(String(x.said || '')).slice(0, 80), why:clean(String(x.why || '')).slice(0, 60), role:clean(String(x.role || '')).slice(0, 20), ver:ver, part:part, t:Math.max(0, Math.floor(+x.t) || 0), url:'https://music.apple.com/search?term=' + encodeURIComponent(term)});
+    var comp = isP ? '' : clean(String(x.composer || '')).slice(0, 40);
+    var term = isP ? (orig || title) : comp ? classicalTerm({composer:comp, orig:orig, title:title, artistOrig:aorig, artist:artist}) : (((aorig || artist) ? (aorig || artist) + ' ' : '') + (orig || title)).trim();
+    out.push({kind:kind, title:title, orig:orig, artist:isP ? '' : artist, artistOrig:isP ? '' : aorig, said:clean(String(x.said || '')).slice(0, 80), why:clean(String(x.why || '')).slice(0, 60), role:clean(String(x.role || '')).slice(0, 20), ver:ver, part:part, composer:isP ? '' : clean(String(x.composer || '')).slice(0, 40), t:Math.max(0, Math.floor(+x.t) || 0), url:'https://music.apple.com/search?term=' + encodeURIComponent(term)});
   });
   return out;
 }
@@ -5462,7 +5464,7 @@ function musicIndex(tr, m){
 }
 function musicTime(tr, m){ var i = musicIndex(tr, m); return i >= 0 ? tr.segments[i].t : m.t; }
 // 再核对一遍：这个名字附近的几句话里，有没有真的在说音乐的词。名字碰巧和歌名一样、或者只是个顺便提到的人，附近不会有这些词
-var MUSIC_WORDS = /歌|曲|专辑|唱|演奏|演唱|乐队|乐手|作曲|编曲|音乐人|音乐家|旋律|钢琴|吉他|小提琴|大提琴|萨克斯|鼓手|贝斯|交响|协奏|奏鸣|歌剧|爵士|摇滚|民谣|说唱|嘻哈|播放|放一|听一|首歌|单曲|歌词|歌手|录音|唱片|演唱会|音乐会|album|song|track|band|concert|jazz|piano|guitar/i;
+var MUSIC_WORDS = /歌|曲|专辑|唱|演奏|演唱|乐队|乐手|作曲|编曲|音乐人|音乐家|旋律|钢琴|吉他|小提琴|大提琴|萨克斯|鼓手|贝斯|交响|协奏|奏鸣|歌剧|指挥|乐团|乐章|古典|爵士|摇滚|民谣|说唱|嘻哈|播放|放一|听一|首歌|单曲|歌词|歌手|录音|唱片|演唱会|音乐会|album|song|track|band|concert|jazz|piano|guitar/i;
 var MUSICIAN_WORDS = /歌手|音乐人|音乐家|乐队|乐手|作曲|编曲|演唱|演奏|唱片|专辑|首歌|的歌|唱过|主唱|歌曲|钢琴家|吉他手|鼓手|指挥|singer|musician|band|composer|album/i;
 var ROLE_OK = /歌手|歌唱|音乐|作曲|作词|编曲|乐手|乐队|主唱|指挥|演奏|钢琴|吉他|提琴|萨克斯|鼓|贝斯|制作人|DJ|说唱|singer|musician|composer|band|rapper|vocal|pianist|guitar/i;
 function musicContextOk(tr, m, i){
@@ -5565,6 +5567,60 @@ function musicRun(key){
 }
 // 用 iTunes Search 找这首音乐（人）的准确页面；结果要和名字对得上才用，查到的缓存在本机
 var MLINK_KEY = 'lpp.mlink.v1', mlink = load(MLINK_KEY, {});
+// 古典乐：Apple Music 里的曲目名是「作品 + 乐章」、艺人是「指挥 + 乐团」，所以不能拿作品名逐字比；改成认作曲家姓、作品类型和编号、作品号（Op.）、演绎者的姓
+var CL_TYPES = 'symphony|concerto|sonata|quartet|quintet|trio|suite|overture|requiem|mass|serenade|variations|rhapsody|partita|fugue|prelude|etude|nocturne|polonaise|cantata|oratorio|opera';
+function classicalInfo(m){
+  var comp = String(m.composer || '').trim(), words = comp.split(/\s+/).filter(Boolean);
+  var surname = (words[words.length - 1] || '').toLowerCase();
+  var name = String(m.orig || m.title || '');
+  var tm = new RegExp('(' + CL_TYPES + ')s?\\b', 'i').exec(name), nm = /(?:no\.?|nr\.?|number|n[°o]\.?)\s*(\d{1,3})/i.exec(name) || /\b(\d{1,3})(?:st|nd|rd|th)\b/i.exec(name), op = /\b(?:op\.?|k\.?|bwv|d\.?|hob\.?)\s*(\d{1,4})/i.exec(name);
+  var perf = String(m.artistOrig || m.artist || '').split(/[,&/、，]|\band\b|\bwith\b|和/i).join(' ').split(/\s+/).filter(function(w){
+    return /^[A-Za-zÀ-ÿ'-]{5,}$/.test(w) && !/^(orchestra|philharmonic|philharmoniker|symphony|chamber|ensemble|quartet|choir|chorus|national|royal|london|berliner|wiener|vienna|berlin)$/i.test(w);
+  }).map(function(w){ return w.toLowerCase(); });
+  return {surname:surname, type:tm ? tm[1].toLowerCase() : '', n:nm ? +nm[1] : 0, op:op ? +op[1] : 0, perf:perf};
+}
+function classicalTerm(m){
+  var ci = classicalInfo(m);
+  return [ci.surname, ci.type, ci.n ? 'No. ' + ci.n : (m.orig || m.title || ''), ci.perf[ci.perf.length - 1] || ''].filter(Boolean).join(' ').trim();
+}
+function classicalLink(m){
+  var ci = classicalInfo(m);
+  if(!ci.surname) return Promise.resolve('');
+  var term = classicalTerm(m), ver = m.ver || '', yr = (/(1[5-9]\d\d|20\d\d)/.exec(ver) || [])[1];
+  var labels = ver.replace(/(1[5-9]\d\d|20\d\d)/g, ' ').split(/[\s,，、·/]+/).filter(function(w){ return /^[A-Za-z]{2,}$/.test(w); }).map(function(w){ return w.toLowerCase(); });
+  var ck = 'cl|' + term + '|' + ver;
+  if(mlink[ck]) return Promise.resolve(mlink[ck]);
+  function score(x){
+    var hay = (String(x.collectionName || '') + ' ' + String(x.artistName || '')).toLowerCase(), sc = 0, y = String(x.releaseDate || '').slice(0, 4), cr = String(x.copyright || '').toLowerCase();
+    if(hay.indexOf(ci.surname) < 0) return -1;   // 作曲家都不对，不要
+    sc += 3;
+    if(ci.type){
+      if(hay.indexOf(ci.type.slice(0, 6)) >= 0){
+        sc += 1;
+        if(ci.n){
+          var one = new RegExp('(?:no\\.?|nr\\.?)\\s*' + ci.n + '(?!\\d)', 'i').test(hay);
+          var range = /nos?\.?\s*(\d{1,2})\s*(?:[-–—&,]|to|and|and no\.?)\s*(?:no\.?\s*)?(\d{1,2})/i.exec(hay);
+          if(one) sc += 4; else if(range && +range[1] <= ci.n && ci.n <= +range[2]) sc += 3;
+          else if(/(complete|symphonies|concertos|sonatas|quartets)/i.test(hay)) sc += 1;   // 全集
+          else sc -= 2;
+        }
+      }else sc -= 1;
+    }
+    if(ci.op && new RegExp('op\\.?\\s*' + ci.op + '(?!\\d)', 'i').test(hay)) sc += 2;
+    ci.perf.forEach(function(w){ if(hay.indexOf(w) >= 0) sc += 3; });
+    labels.forEach(function(w){ if(cr.indexOf(w) >= 0) sc += 2; });
+    if(yr){ var d = Math.min(Math.abs(+y - +yr) || 0, 99); if(y === yr) sc += 2; else if(y && d <= 2) sc += 1; }
+    return sc;
+  }
+  return fetch('https://itunes.apple.com/search?limit=40&entity=album&term=' + encodeURIComponent(term)).then(function(r){ return r.json(); }).then(function(j){
+    var best = null, bs = -99;
+    ((j && j.results) || []).forEach(function(x){ var sc = score(x); if(sc > bs){ bs = sc; best = x; } });
+    var need = 3 + (ci.type ? 2 : 0) + (ci.perf.length ? 3 : 0);   // 至少要对上作曲家 + 作品类型 + 演绎者（有的话）
+    var u = best && bs >= need && (best.collectionViewUrl || best.trackViewUrl);
+    if(u){ mlink[ck] = u; save(MLINK_KEY, mlink); }
+    return u || '';
+  }).catch(function(){ return ''; });
+}
 // 乐章 / 段落说法统一成数字：Section Four / IV / 4 / 第四部分 → 4
 function partNum(part){
   if(!part) return 0;
@@ -5582,6 +5638,7 @@ function partNum(part){
   return 0;
 }
 function musicLink(m){
+  if(m.composer && m.kind !== 'artist') return classicalLink(m);
   var orig = (m.orig || m.title), isP = m.kind === 'artist', ver = m.ver || '', part = m.part || '';
   var ent = m.kind === 'album' ? 'album' : isP ? 'musicArtist' : 'song';
   var term = isP ? orig : (((m.artistOrig || m.artist) ? (m.artistOrig || m.artist) + ' ' : '') + orig + (part ? ' ' + part : ''));
@@ -5639,12 +5696,12 @@ function openMusicSheet(key){
     var g = el('span', 'grow');
     var np = nameParts(m.title, m.orig), ap = nameParts(m.artist, m.artistOrig);
     g.appendChild(el('span', 'mk-note clamp2', np.main));
-    var meta = [m.ver || '', m.part || '', m.artist ? ap.main : ''].filter(Boolean).join(' · ');   // 音乐列表只显示原文，不附中文译名
+    var meta = [m.composer || '', m.ver || '', m.part || '', m.artist ? ap.main : ''].filter(Boolean).join(' · ');   // 音乐列表只显示原文，不附中文译名
     if(meta) g.appendChild(el('small', 'mu-meta', meta));
     a.appendChild(muIcon(m.kind)); a.appendChild(g); a.appendChild(el('span', 'mu-go', '↗'));
     row.appendChild(tb); row.appendChild(a);
     var li = el('li'); li.appendChild(row); ul.appendChild(li);
-    var base = m.kind === 'artist' ? (m.orig || m.title) : (((m.artistOrig || m.artist) ? (m.artistOrig || m.artist) + ' ' : '') + (m.orig || m.title));
+    var base = m.kind === 'artist' ? (m.orig || m.title) : m.composer ? classicalTerm(m) : (((m.artistOrig || m.artist) ? (m.artistOrig || m.artist) + ' ' : '') + (m.orig || m.title));
     a.href = 'https://music.apple.com/search?term=' + encodeURIComponent(base);   // 查不到准确链接时才用搜索页，搜索词只带创作者和名字
     musicLink(m).then(function(u){ if(u) a.href = u; });
   });

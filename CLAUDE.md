@@ -68,3 +68,4 @@
 - 不自动续播（0.46.40）：所有「要播放」都必须走 `play()`（会记 `playIntent`），`audio` 的 `play` 事件如果距上次 `play()` 超过 3 秒就立刻 `pause()`——防止被别的软件打断后系统自己恢复播放。不要在别处直接调 `audio.play()`。
 - 试过「点状态栏回顶部」（0.46.41）但用户不要，0.46.42 已去掉；页面仍是 `html{overflow:hidden}` 固定一屏，别再加。**改 `sw.js` 的版本号时先读后写**（不要 `open(f,'w').write(open(f).read()…)`，会把文件清空；0.46.2–0.46.41 就是这样丢了离线缓存），改完要确认 `sw.js` 不是空的。
 - 回到顶部小圆钮 `#bTop`（0.46.43，fixed 在右边缘，`topTarget()` = 当前 `.list-scroll` 或 `#view`，`scrollTop>400` 时显示，`render()` 末尾和 `scroll` 捕获监听里 `topUpdate()`）：文稿页里叠在 `.tr-loc` 上面（`body.ep-page #bTop` 的 bottom 比定位球高 48px），点它会设 `trTouch` 暂停跟随。
+- 古典乐（0.46.44）：音乐项多了 `composer`（作曲家原文全名；有它就走 `classicalLink` 而不是 `musicLink` 的逐字对名）；`classicalInfo` 取作曲家姓 / 作品类型和编号 / 作品号 / 演绎者的姓，`classicalTerm` 拼搜索词，`classicalLink` 用 iTunes `entity=album` 打分选专辑（`need` = 作曲家 3 + 类型 2 + 演绎者 3），对不上退回搜索页。`musicPrompt` 里有古典乐的专门规定。
