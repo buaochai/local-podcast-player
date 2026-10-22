@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.44">
+<meta name="app-version" content="0.46.45">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -629,6 +629,23 @@ input[type=file]{display:none}
         <label class="check"><input type="checkbox" id="aiTerms"><span>说话人用外语说的词写成外文，第一次出现时后面括号注中文（识别完自动处理）</span></label>
         <button class="btn block" id="bLlmTest">测试文本模型连接</button>
         <p id="llmTestResult"></p>
+      </div>
+
+      <h3>③ 音乐识别模型（可选）</h3>
+      <p>找文稿里提到的音乐、音乐人要认得歌名、作曲家、作品编号和版本，选一个更懂音乐的模型效果更好。不设置就用上面的文本模型。</p>
+      <div class="sec">服务商</div>
+      <select class="input" id="musicProvider"></select>
+      <div id="musicFields" hidden>
+        <p id="musicHelp"></p>
+        <div class="sec">API Key</div>
+        <input class="input" id="musicKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="粘贴你的 API Key">
+        <div class="sec">模型</div>
+        <input class="input" id="musicModel" list="musicModels" autocapitalize="off" spellcheck="false" placeholder="模型名称">
+        <datalist id="musicModels"></datalist>
+        <div class="sec">接口地址</div>
+        <input class="input" id="musicBase" autocapitalize="off" spellcheck="false" placeholder="https://…/v1">
+        <button class="btn block" id="bMusicTest">测试音乐识别模型连接</button>
+        <p id="musicTestResult"></p>
       </div>
 
       <button class="btn primary block" id="bAiSave">保存</button>
@@ -4162,6 +4179,13 @@ function llmCfg(){
   return {provider:c.provider, style:pr.style, name:pr.name, key:c.key || '', base:(c.base || pr.base || '').replace(/\/+$/, ''), model:c.model || pr.model || ''};
 }
 function llmReady(){ var c = llmCfg(); return !!(c && c.key && c.base && c.model); }
+// 找音乐用的模型：单独设置了（ai.music）就用它，没设置就用上面的文本模型
+function musicCfg(){
+  var m = ai.music, pr = m && LLM_PROVIDERS[m.provider];
+  if(pr && m.key) return {provider:m.provider, style:pr.style, name:pr.name, key:m.key, base:(m.base || pr.base || '').replace(/\/+$/, ''), model:m.model || pr.model || ''};
+  return llmCfg();
+}
+function musicReady(){ var c = musicCfg(); return !!(c && c.key && c.base && c.model); }
 /* ---- 语音识别可以存两套接口（比如国内版 / 新加坡版各一个 Key），在「关于」里一键切换用哪套 ----
    ai.asrProfiles = [{provider,key,base,model,wav} × 2]，ai.asrSel = 当前用的那套；
    识别代码照旧读 ai.provider / key / base / model / wav，切换时把选中的那套抄过去 */
@@ -4204,7 +4228,7 @@ function showAiStatus(){
   var l = llmCfg();
   $('peopleStatus').textContent = '音乐人 ' + Object.keys(people.m).length + ' · 非音乐人 ' + Object.keys(people.o).length;
   renderAsrSwitch();
-  $('aiStatus').textContent = '语音识别：' + (aiReady() ? aiProv().name + ' · ' + aiModel() : '还没有设置') + '\n分章节：' + (llmReady() ? l.name + ' · ' + l.model : '还没有设置');
+  $('aiStatus').textContent = '语音识别：' + (aiReady() ? aiProv().name + ' · ' + aiModel() : '还没有设置') + '\n分章节：' + (llmReady() ? l.name + ' · ' + l.model : '还没有设置') + (ai.music && ai.music.key && LLM_PROVIDERS[ai.music.provider] ? '\n找音乐：' + musicCfg().name + ' · ' + musicCfg().model : '');
 }
 
 /* ---- 设置界面 ---- */
@@ -4285,6 +4309,27 @@ function llmFormFill(id){
   (pr.models || []).forEach(function(m){ var o = document.createElement('option'); o.value = m; $('llmModels').appendChild(o); });
   $('llmHelp').textContent = pr.help;
 }
+function musicFormFill(id){
+  var pr = LLM_PROVIDERS[id], m = ai.music || {};
+  $('musicProvider').value = id || '';
+  $('musicFields').hidden = !pr; $('musicTestResult').textContent = '';
+  if(!pr) return;
+  var same = m.provider === id;
+  var other = (ai.chat && ai.chat.provider === id && ai.chat.key) || '';   // 和文本模型同一家时，Key 先借过来
+  $('musicKey').value = (same && m.key) || other || '';
+  $('musicBase').value = (same && m.base) || pr.base;
+  $('musicModel').value = (same && m.model) || pr.model;
+  $('musicModels').innerHTML = '';
+  (pr.models || []).forEach(function(x){ var o = document.createElement('option'); o.value = x; $('musicModels').appendChild(o); });
+  $('musicHelp').textContent = pr.help || '';
+}
+function readMusicForm(){ return {provider:$('musicProvider').value, key:clean($('musicKey').value).replace(/\s/g, ''), base:clean($('musicBase').value), model:clean($('musicModel').value)}; }
+$('musicProvider').addEventListener('change', function(){ musicFormFill(this.value); });
+$('bMusicTest').onclick = function(){
+  var g = readMusicForm();
+  if(!g.provider){ $('musicTestResult').textContent = '先选一个服务商'; return; }
+  testConn(g, LLM_PROVIDERS[g.provider].style, LLM_PROVIDERS[g.provider].testPath, $('musicTestResult'), this);
+};
 function openAiSettings(){
   var sel = $('aiProvider');
   if(!sel.children.length) Object.keys(AI_PROVIDERS).forEach(function(k){ var o = document.createElement('option'); o.value = k; o.textContent = AI_PROVIDERS[k].name; sel.appendChild(o); });
@@ -4293,6 +4338,12 @@ function openAiSettings(){
     var none = document.createElement('option'); none.value = ''; none.textContent = '（不用，不自动分章节）'; lsel.appendChild(none);
     Object.keys(LLM_PROVIDERS).forEach(function(k){ var o = document.createElement('option'); o.value = k; o.textContent = LLM_PROVIDERS[k].name; lsel.appendChild(o); });
   }
+  var msel = $('musicProvider');
+  if(!msel.children.length){
+    var mn = document.createElement('option'); mn.value = ''; mn.textContent = '（不单独设置，用上面的文本模型）'; msel.appendChild(mn);
+    Object.keys(LLM_PROVIDERS).forEach(function(k){ var o = document.createElement('option'); o.value = k; o.textContent = LLM_PROVIDERS[k].name; msel.appendChild(o); });
+  }
+  musicFormFill(ai.music && LLM_PROVIDERS[ai.music.provider] && ai.music.key ? ai.music.provider : '');
   aiDraft = {asr:{}, llm:{}}; aiCur = ''; llmCur = '';
   $('aiTerms').checked = !ai.termsOff; $('aiMusic').checked = !ai.musicOff;
   $('aiLang').value = ai.lang == null ? 'zh' : ai.lang;
@@ -4323,6 +4374,10 @@ $('bAiSave').onclick = function(){
   if(useAsr && !f.model){ toast('语音识别：请填模型名称'); return; }
   if(useLlm && !g.base){ toast('分章节：请填接口地址'); return; }
   if(useLlm && !g.model){ toast('分章节：请填模型名称'); return; }
+  var mf = readMusicForm();
+  if(mf.provider && !mf.key){ toast('音乐识别：请填 API Key（或把服务商改回「不单独设置」）'); return; }
+  if(mf.provider && !mf.base){ toast('音乐识别：请填接口地址'); return; }
+  if(mf.provider && !mf.model){ toast('音乐识别：请填模型名称'); return; }
   var pr = AI_PROVIDERS[f.provider];
   ai.provider = f.provider; ai.key = f.key; ai.lang = f.lang; ai.wav = f.wav;
   ai.chunkMin = +$('aiChunk').value || 20;
@@ -4331,6 +4386,8 @@ $('bAiSave').onclick = function(){
   var lp = LLM_PROVIDERS[g.provider];
   ai.chat = useLlm ? {provider:g.provider, key:g.key, base:g.base === lp.base ? '' : g.base, model:g.model === lp.model ? '' : g.model}
                    : {provider:g.provider || '', key:'', base:'', model:''};
+  var mp = LLM_PROVIDERS[mf.provider];
+  if(mp) ai.music = {provider:mf.provider, key:mf.key, base:mf.base === mp.base ? '' : mf.base, model:mf.model === mp.model ? '' : mf.model}; else delete ai.music;
   if($('aiTerms').checked) delete ai.termsOff; else ai.termsOff = true;
   if($('aiMusic').checked) delete ai.musicOff; else ai.musicOff = true;
   // 两套语音识别接口：把表单里正在看的那套也记下来，再存两套；「保存」后用的是现在看的这一套
@@ -4359,7 +4416,7 @@ $('bAiSave').onclick = function(){
 };
 $('bAiClear').onclick = function(){
   if(!confirm('清除保存在这台手机上的所有 API Key？')) return;
-  ai.key = ''; if(ai.chat) ai.chat.key = '';
+  ai.key = ''; if(ai.chat) ai.chat.key = ''; if(ai.music) ai.music.key = '';
   (ai.asrProfiles || []).forEach(function(x){ x.key = ''; }); aiProfDraft = [null, null];
   ai.saved = {asr:{}, llm:{}}; aiDraft = {asr:{}, llm:{}};
   saveAi(); $('aiKey').value = ''; $('llmKey').value = ''; showAiStatus(); toast('已清除 API Key');
@@ -5044,8 +5101,8 @@ function postRaw(url, headers, body, signal){
   });
 }
 // 返回模型回复的文字。Claude 走 /v1/messages（浏览器直连要加 anthropic-dangerous-direct-browser-access），其余走 /chat/completions
-function llmCall(system, user, signal){
-  var c = llmCfg();
+function llmCall(system, user, signal, cfg){
+  var c = cfg || llmCfg();
   if(c.style === 'anthropic'){
     return postRaw(c.base.replace(/\/v1$/, '') + '/v1/messages',
       {'Content-Type':'application/json', 'x-api-key':c.key, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true'},
@@ -5529,7 +5586,7 @@ function musicify(key, signal){
   var all = [], seen = {};
   return chunks.reduce(function(p, text){
     return p.then(function(){
-      return withRetry(function(){ return llmCall('你是熟悉各类音乐的播客文稿编辑。', musicPrompt(text), signal); }, signal, 3).then(function(txt){
+      return withRetry(function(){ return llmCall('你是熟悉各类音乐的播客文稿编辑，尤其了解古典乐的作曲家、作品编号和各版本录音。', musicPrompt(text), signal, musicCfg()); }, signal, 3).then(function(txt){
         parseMusic(txt).forEach(function(x){ var id = (x.title + '|' + x.artist).toLowerCase(); if(!seen[id]){ seen[id] = 1; all.push(x); } });
       });
     });
@@ -5554,14 +5611,14 @@ function musicify(key, signal){
   });
 }
 function autoMusic(key){
-  if(!llmReady() || ai.musicOff) return Promise.resolve();
+  if(!musicReady() || ai.musicOff) return Promise.resolve();
   trJob.sentAt = 0; trJob.msg = (trJob.batch ? '第 ' + trJob.batch.i + ' / ' + trJob.batch.n + ' 集 · ' : '') + '正在找文稿里提到的音乐…'; trRender();
   return musicify(key, trJob.abort.signal).then(function(){}, function(err){ if(err && err.cancelled) throw err; });   // 失败不影响文稿
 }
 var musicBusy = null;
 function musicRun(key){
   if(musicBusy || chapBusy || termBusy || trJob){ toast('正在处理，请稍等'); return; }
-  if(!llmReady()){ toast('先设置文本模型'); openAiSettings(); return; }
+  if(!musicReady()){ toast('先设置文本模型（或音乐识别模型）'); openAiSettings(); return; }
   musicBusy = key; toast('正在找文稿里提到的音乐…', 30000); render();
   musicify(key, new AbortController().signal).then(function(n){ toast(n ? '找到 ' + n + ' 个提到的音乐' : '没有找到提到的音乐'); }, function(err){ toast('没找成：' + aiErrMsg(err), 5000); }).then(function(){ musicBusy = null; render(); });
 }
@@ -5721,7 +5778,7 @@ function tidyRun(key){
   toast(useLlm ? '正在整理文稿…（外文标注要问文本模型，请稍等）' : '正在整理文稿…', 20000);
   (useLlm ? termify(key, new AbortController().signal) : trPut(tr).then(function(){ return 0; })).then(function(n){
     toast(text() !== before ? '已整理文稿' + (n ? '，标注外文 ' + n + ' 处' : '') : '已经是按最新规则整理的，没有要改的');
-    if(useLlm && !ai.musicOff) return musicify(key, new AbortController().signal).catch(function(){});   // 顺便重新找一遍提到的音乐
+    if(musicReady() && !ai.musicOff) return musicify(key, new AbortController().signal).catch(function(){});   // 顺便重新找一遍提到的音乐
   }).then(function(){ if(useLlm && tr.mand) return mandarinize(key, new AbortController().signal).catch(function(){}); }, function(err){
     trPut(tr);   // 外文标注失败，前面的整理照样保存
     toast('繁简和重复句已整理；外文标注失败：' + aiErrMsg(err), 5000);
@@ -5744,7 +5801,7 @@ function refreshAllTr(){
         tr.simp = false; trSimp(tr);
         var sig = new AbortController().signal;
         var p = useLlm && !ai.termsOff ? termify(k, sig) : trPut(tr);
-        return p.then(function(){ return useLlm && !ai.musicOff ? musicify(k, sig) : 0; }).then(function(){ done++; }, function(){ return trPut(tr).catch(function(){}); });
+        return p.then(function(){ return musicReady() && !ai.musicOff ? musicify(k, sig) : 0; }).then(function(){ done++; }, function(){ return trPut(tr).catch(function(){}); });
       }).then(step, step);
     }
     return step().then(function(){ toast((refreshAllStop ? '已停止，' : '') + '已刷新 ' + done + ' 篇文稿' + (useLlm ? '' : '（没设置文本模型，只整理了繁简和重复句）'), 5000); });
@@ -6384,7 +6441,7 @@ function showTrMore(key){
     items.push({label:tr.chapters && tr.chapters.length ? '重新分章节' : 'AI 分章节', note:llmReady() ? '用 ' + lc.name + ' · ' + lc.model : '要先设置文本模型', pick:function(){
       closeSheet('trMoreSheet'); if(llmReady()) chapterRun(key); else openAiSettings();
     }});
-    items.push({label:tr.musicAt ? '重新找提到的音乐' : '找提到的音乐', note:llmReady() ? '用 ' + lc.name + ' · ' + lc.model + '，找出歌曲、专辑、音乐人，生成 Apple Music 链接' : '要先设置文本模型', pick:function(){ closeSheet('trMoreSheet'); musicRun(key); }});
+    items.push({label:tr.musicAt ? '重新找提到的音乐' : '找提到的音乐', note:musicReady() ? '用 ' + musicCfg().name + ' · ' + musicCfg().model + '，找出歌曲、专辑、音乐人，生成 Apple Music 链接' : '要先设置文本模型', pick:function(){ closeSheet('trMoreSheet'); musicRun(key); }});
     items.push({label:mandValid(tr) ? '重新转成国语' : '转成国语版本', note:llmReady() ? '粤语（或其他方言）文稿整理成国语的意思，原文保留，顶部「粤 / 国」键切换（用 ' + lc.name + ' · ' + lc.model + '）' : '要先设置文本模型', pick:function(){
       closeSheet('trMoreSheet'); mandRun(key);
     }});
