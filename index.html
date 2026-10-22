@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.45">
+<meta name="app-version" content="0.46.46">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -5468,7 +5468,7 @@ function musicPrompt(text){
     '4. 泛称（「音乐」「旋律」「歌曲」「古典乐」「爵士乐」）不算；拿不准就不要列。\n' +
     '   古典乐的特别规定：说话人讲到某位作曲家的具体作品（如勃拉姆斯第一交响曲）、或某位指挥 / 乐团 / 独奏家的演绎和录音，都要列。作品列成一项 kind=piece：title 用文稿里的写法，orig 写这部作品在唱片上的标准英文名（如 Symphony No. 1 in C Minor, Op. 68），composer 写作曲家的原文全名（如 Johannes Brahms），artist / artistOrig 写演绎者（指挥加乐团，如 Herbert von Karajan, Berliner Philharmoniker），ver 写录音年份和唱片公司（如 1963 DG）。作曲家、指挥本人也各列一项 kind=artist（role 写「作曲家」「指挥家」）。一集里讲了同一位指挥的好几部作品，每部作品单独列一项。\n' +
     (kn ? '5. 参考（以前听过的节目里已经确定的）：' + kn + '。这些人按已知身份处理，不用再判断。\n' : '') +
-    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"kind":"song 或 album 或 artist 或 piece 或 person","title":"作品名（kind 是 artist / person 时填人名，用文稿里的写法）","orig":"作品名或人名的原文写法：外国的必须写成原文（日本、韩国等非拉丁文字的音乐人，写他在 Apple Music 上通行的罗马字名字，如 Ryuichi Sakamoto），并用它通行的写法——首字母大写、介词小写（不要全大写），数字用阿拉伯数字（如 Kayhan Kalhor、Kind of Blue、Music for 18 Musicians），中文的写中文","artist":"创作者或演唱者（文稿里的写法），不知道就留空","artistOrig":"创作者或演唱者的原文写法，外国的必须写原文","role":"kind 是 artist / person 时写这个人的主业，其他留空","ver":"这个作品所放的版本信息：年份、唱片公司、演奏者或指挥、获奖等（如 1997 Nonesuch、卡拉扬 1963），没提到就留空，不要猜","composer":"古典乐作品的作曲家原文全名（如 Johannes Brahms），不是古典乐作品就留空","part":"放的是其中哪个乐章或段落，按说话人说的写，数字用阿拉伯数字（说的是 Section Four 就写 Section 4，第二乐章写 第2乐章），没提到就留空","said":"文稿里提到它时原样的写法，必须和文稿里的文字一字不差","why":"文稿里能证明说话人在把它当音乐说的那几个字（如「这首歌」「专辑」「演奏」「歌曲」），必须是文稿里的原话","t":提到它的那一句的时间（秒，整数）}。\n' +
+    '只输出一个 JSON 数组，不要任何别的文字。每一项：{"kind":"song 或 album 或 artist 或 piece 或 person","title":"作品名（kind 是 artist / person 时填人名，用文稿里的写法）","orig":"作品名或人名的原文写法：外国的必须写成原文（日本、韩国等非拉丁文字的音乐人，写他在 Apple Music 上通行的罗马字名字，如 Ryuichi Sakamoto），并用它通行的写法——首字母大写、介词小写（不要全大写），数字用阿拉伯数字（如 Kayhan Kalhor、Kind of Blue、Music for 18 Musicians），中文的写中文","artist":"创作者或演唱者（文稿里的写法），不知道就留空","artistOrig":"创作者或演唱者的原文写法，外国的必须写原文","role":"kind 是 artist / person 时写这个人的主业，其他留空","ver":"这个作品所放的版本信息，一律用英文 / 原文写，方便在 Apple Music 里搜：年份、唱片公司、版本类型（如 1997 Nonesuch、1963 DG、Live、Remastered、Mono），没提到就留空，不要猜","composer":"古典乐作品的作曲家原文全名（如 Johannes Brahms），不是古典乐作品就留空","part":"放的是其中哪个乐章或段落，一律用英文 / 原文写，方便搜索（不要写中文）：第一乐章写 1st movement，知道唱片上的标准乐章名就写标准名（如 I. Un poco sostenuto），说的是 Section Four 就写 Section 4，开头 / 开场写 Opening 或 Introduction，序曲 Overture，终曲 Finale，没提到就留空","said":"文稿里提到它时原样的写法，必须和文稿里的文字一字不差","why":"文稿里能证明说话人在把它当音乐说的那几个字（如「这首歌」「专辑」「演奏」「歌曲」），必须是文稿里的原话","t":提到它的那一句的时间（秒，整数）}。\n' +
     '版本信息经常在说出作品名【之后的几句话里】才详细介绍（「我要介绍的是 1997 年 Nonesuch 唱片的版本……现在就来听其中第四部分」），要把前后几句里说的这个版本的年份、唱片公司、演奏者、乐章合并填进 ver / part，但每项只写关键词，不要写成长句。\n' +
     '同一个作品或人只列一次；没有就输出 []。\n\n文稿：\n' + text;
 }
@@ -5485,6 +5485,23 @@ function fixCase(t){
     return low.replace(/(^|[-'’(])([a-zà-ÿ])/g, function(_, a, b){ return a + b.toUpperCase(); });
   }).join(' ');
 }
+// 版本、乐章一律用英文：模型偶尔还是写成中文（「第四乐章」「开头」「现场版」），在这里换成英文，旧数据显示时也换
+var EN_ORD = ['', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th'];
+function enPart(t){
+  t = String(t || '').trim(); if(!/[\u4e00-\u9fff]/.test(t)) return t;
+  var n = (/第\s*([0-9一二三四五六七八九十]+)\s*(乐章|章|部分|段|幕|首|曲)/.exec(t) || [])[1];
+  if(n){ n = /^\d+$/.test(n) ? +n : partNum('第' + n + '部分'); var kind = /乐章|章/.test(t) ? 'movement' : /幕/.test(t) ? 'Act' : /首|曲/.test(t) ? 'No.' : 'Part';
+    return kind === 'movement' ? (EN_ORD[n] || n + 'th') + ' movement' : kind + ' ' + n; }
+  var map = [[/序曲|前奏曲?/, 'Overture'], [/开头|开场|开篇|引子|引言/, 'Opening'], [/尾声|结尾|结束|终曲|末乐章/, 'Finale'], [/间奏曲?/, 'Intermezzo'], [/慢板/, 'Adagio'], [/快板/, 'Allegro'], [/谐谑曲/, 'Scherzo'], [/咏叹调/, 'Aria']];
+  for(var i = 0; i < map.length; i++) if(map[i][0].test(t)) return map[i][1];
+  return t;
+}
+function enVer(t){
+  t = String(t || '').trim(); if(!/[\u4e00-\u9fff]/.test(t)) return t;
+  var map = [[/现场(版|演出|录音|演奏)?/g, 'Live'], [/重制(版)?|重新制作|数码修复版?/g, 'Remastered'], [/单声道/g, 'Mono'], [/立体声/g, 'Stereo'], [/原版|原声|首版/g, 'Original'], [/录音室(版)?/g, 'Studio'], [/格莱美奖?|葛莱美奖?|格拉美奖?/g, 'Grammy'], [/唱片公司?|唱片/g, '']];
+  map.forEach(function(x){ t = t.replace(x[0], ' ' + x[1] + ' '); });
+  return t.replace(/\s+/g, ' ').trim();
+}
 function parseMusic(txt){
   var m = /\[[\s\S]*\]/.exec(txt || ''), arr = [], seen = {};
   try{ arr = JSON.parse(m ? m[0] : '[]'); }catch(e){ arr = []; }
@@ -5496,7 +5513,7 @@ function parseMusic(txt){
     var id = (kind + '|' + title + '|' + artist).toLowerCase(); if(seen[id]) return; seen[id] = 1;
     var orig = fixCase(clean(String(x.orig || '')).slice(0, 80)), aorig = fixCase(clean(String(x.artistOrig || '')).slice(0, 80)), isP = kind === 'artist' || kind === 'person';
     // Apple Music 里要用原文搜（「卡扬卡霍」搜不到，Kayhan Kalhor 才行）
-    var ver = isP ? '' : clean(String(x.ver || '')).slice(0, 40), part = isP ? '' : clean(String(x.part || '')).slice(0, 30);
+    var ver = isP ? '' : enVer(clean(String(x.ver || ''))).slice(0, 40), part = isP ? '' : enPart(clean(String(x.part || ''))).slice(0, 40);
     var comp = isP ? '' : clean(String(x.composer || '')).slice(0, 40);
     var term = isP ? (orig || title) : comp ? classicalTerm({composer:comp, orig:orig, title:title, artistOrig:aorig, artist:artist}) : (((aorig || artist) ? (aorig || artist) + ' ' : '') + (orig || title)).trim();
     out.push({kind:kind, title:title, orig:orig, artist:isP ? '' : artist, artistOrig:isP ? '' : aorig, said:clean(String(x.said || '')).slice(0, 80), why:clean(String(x.why || '')).slice(0, 60), role:clean(String(x.role || '')).slice(0, 20), ver:ver, part:part, composer:isP ? '' : clean(String(x.composer || '')).slice(0, 40), t:Math.max(0, Math.floor(+x.t) || 0), url:'https://music.apple.com/search?term=' + encodeURIComponent(term)});
@@ -5569,7 +5586,7 @@ function musicList(tr){
   tr.music.forEach(function(m){
     var i = musicIndex(tr, m);
     if(!musicContextOk(tr, m, i)) return;
-    var c = Object.assign({}, m); c.t = tr.segments[i].t; out.push(c);
+    var c = Object.assign({}, m); c.t = tr.segments[i].t; if(c.ver) c.ver = enVer(c.ver); if(c.part) c.part = enPart(c.part); out.push(c);
   });
   out = musicMerge(out);
   out.sort(function(a, b){ return a.t - b.t; });
