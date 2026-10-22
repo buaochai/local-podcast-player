@@ -71,3 +71,4 @@
 - 古典乐（0.46.44）：音乐项多了 `composer`（作曲家原文全名；有它就走 `classicalLink` 而不是 `musicLink` 的逐字对名）；`classicalInfo` 取作曲家姓 / 作品类型和编号 / 作品号 / 演绎者的姓，`classicalTerm` 拼搜索词，`classicalLink` 用 iTunes `entity=album` 打分选专辑（`need` = 作曲家 3 + 类型 2 + 演绎者 3），对不上退回搜索页。`musicPrompt` 里有古典乐的专门规定。
 - 音乐识别单独的模型（0.46.45）：`ai.music={provider,key,base,model}`（服务商取自 `LLM_PROVIDERS`；不设就删掉），`musicCfg()` 有它就用它、没有退回 `llmCfg()`，`musicReady()` 判断可不可用；`llmCall(system,user,signal,cfg)` 第四个参数可指定配置；`musicify` / `autoMusic` / `musicRun` / 刷新全部文稿 / `tidyRun` 里的找音乐都用 `musicCfg()`，其他文本功能仍用 `llmCfg()`。设置表单在 AI 设置「③」（`musicProvider`/`musicKey`/`musicModel`/`musicBase`，`musicFormFill`/`readMusicForm`，保存时写 `ai.music`）。
 - 音乐的 `ver` / `part` 一律英文（0.46.46）：`musicPrompt` 要求英文，`enVer` / `enPart` 把中文说法换成英文（`parseMusic` 存之前换，`musicList` 显示时对旧数据也换）。
+- 列表行的「有文稿」「收藏」不再用文字（0.46.47）：`epMarks` 里 `doc`（`hasTr[k]`）和 `mark`（`marksOf(k)`，≥2 个带数字 `<b>`）图标，主题色（`i.hl`），排在云 / 手机 / RSS 前面；进度条右边留的空随图标个数（`.mk1`–`.mk5`）。

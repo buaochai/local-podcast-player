@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="app-version" content="0.46.46">
+<meta name="app-version" content="0.46.47">
 <meta name="theme-color" content="#1f6f5c">
 <title>本地播客</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -148,12 +148,20 @@ header.searching > :not(#searchIn):not(#bSearch):not(#bAbout):not(#bEpMore):not(
 .ord-seq input{position:absolute;right:0;bottom:0;width:48px;height:24px;padding:0;margin:0;font-size:16px;text-align:center;border:1px solid var(--accent);border-radius:7px;background:var(--card);color:var(--text);transform:scale(.625);transform-origin:right bottom;pointer-events:auto;-webkit-appearance:none;appearance:none;font-variant-numeric:tabular-nums}   /* 16px 是为了 iOS 点进去不放大页面，再缩到 10px 大小，和普通序号一样 */
 .item.ordmode .ep-tail{pointer-events:auto}
 .ep-marks{height:14px;display:flex;align-items:center;gap:4px;color:var(--muted)}
-.ep-marks i{display:flex;width:11px;height:11px}
+.ep-marks i{display:flex;align-items:center;height:11px;font-style:normal}
+.ep-marks i.hl{color:var(--accent)}
+.ep-marks i b{font-size:9px;font-weight:600;line-height:11px;margin-left:1px}
 .ep-marks svg{width:11px;height:11px;fill:currentColor;opacity:.8}
 .item.mk1 .prog{margin-right:24px}
 .item.mk2 .prog{margin-right:38px}
+.item.mk3 .prog{margin-right:52px}
+.item.mk4 .prog{margin-right:66px}
+.item.mk5 .prog{margin-right:80px}
 .item.selmode.mk1 .prog{margin-right:52px}
 .item.selmode.mk2 .prog{margin-right:66px}
+.item.selmode.mk3 .prog{margin-right:76px}
+.item.selmode.mk4 .prog{margin-right:90px}
+.item.selmode.mk5 .prog{margin-right:104px}
 .ep-seq{flex:none;min-width:16px;padding:2px 4px 0;border:1px solid var(--line);border-radius:4px;font-size:10px;line-height:12px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums;pointer-events:none}
 .item.cur{background:var(--accent-soft)}
 .item-main{flex:1;min-width:0}
@@ -1258,10 +1266,14 @@ function feedAsc(show){ var f = feedOfShow(show); return !!f && feedLayout(f).as
 var MK_SVG = {
   cloud:'<svg viewBox="0 0 24 24"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>',
   phone:'<svg viewBox="0 0 24 24"><path d="M17 1H7a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2zm0 17H7V5h10z"/></svg>',
+  doc:'<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>',
+  mark:'<svg viewBox="0 0 24 24"><path d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2z"/></svg>',
   rss:'<svg viewBox="0 0 24 24"><path d="M6.18 15.64a2.18 2.18 0 1 1 0 4.36 2.18 2.18 0 0 1 0-4.36zM4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27zm0 5.66A9.9 9.9 0 0 1 13.9 20h-2.83A7.07 7.07 0 0 0 4 12.93z"/></svg>'
 };
 function epMarks(k, ep, r){
-  var list = [];
+  var list = [], nm = marksOf(k).length;
+  if(hasTr[k]) list.push(['doc', '有文稿', 'hl']);          // 有文稿、有收藏：小图标（收藏带个数）
+  if(nm) list.push(['mark', '收藏 ' + nm, 'hl', nm > 1 ? nm : 0]);
   if(ep && ep.rss) list.push(['rss', '订阅']);
   else{
     if((r && r.cloud) || (ep && ep.cloud)) list.push(['cloud', '在云端']);
@@ -1269,7 +1281,7 @@ function epMarks(k, ep, r){
   }
   if(!list.length) return null;
   var box = el('span', 'ep-marks');
-  list.forEach(function(x){ var i = el('i'); i.innerHTML = MK_SVG[x[0]]; i.setAttribute('aria-label', x[1]); box.appendChild(i); });
+  list.forEach(function(x){ var i = el('i', x[2] || ''); i.innerHTML = MK_SVG[x[0]] + (x[3] ? '<b>' + x[3] + '</b>' : ''); i.setAttribute('aria-label', x[1]); box.appendChild(i); });
   return box;
 }
 function sortNameOf(key){   // 订阅专辑里：订阅的集按日期排（方向见 feedLayout），补充的本地文件按集号插到合适的位置，没集号的放最后
@@ -4053,9 +4065,9 @@ function renderShow(box){
     main.appendChild(el('div', 'item-name clamp2', titleOf(k)));
     var mk = marksOf(k).length;
     // 信息分成几段，放不下就整段换行，不再用省略号把后面的挤掉
-    var mp = [mk ? '收藏 ' + mk : '', hasTr[k] ? '有文稿' : '', progressText(r), r && r.updated ? fmtDate(r.updated) : ep && ep.pub ? new Date(ep.pub).toLocaleDateString('zh-CN') : ''];
+    var mp = [progressText(r), r && r.updated ? fmtDate(r.updated) : ep && ep.pub ? new Date(ep.pub).toLocaleDateString('zh-CN') : ''];   // 「有文稿」「收藏」改成右下角的小图标（epMarks）
     var mel = el('div', 'item-meta wrap');
-    mp.forEach(function(t, i){ if(t) mel.appendChild(el('span', i === 0 || i === 1 ? 'hl' : i === 2 ? 'pg' : null, t)); });
+    mp.forEach(function(t, i){ if(t) mel.appendChild(el('span', i === 0 ? 'pg' : null, t)); });
     main.appendChild(mel);
     main.appendChild(progressBar(r));
     li.appendChild(main);
